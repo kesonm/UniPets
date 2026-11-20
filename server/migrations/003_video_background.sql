@@ -1,0 +1,1 @@
+ALTER TABLE assets ADD COLUMN background_removed BOOLEAN NOT NULL DEFAULT FALSE;

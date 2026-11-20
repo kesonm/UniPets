@@ -1,0 +1,111 @@
+{
+  "pages": [
+    {
+      "path": "pages/home/index",
+      "style": {
+        "navigationBarTitleText": "宠云"
+      }
+    },
+    {
+      "path": "pages/pets/index",
+      "style": {
+        "navigationBarTitleText": "我的宠物"
+      }
+    },
+    {
+      "path": "pages/discover/index",
+      "style": {
+        "navigationBarTitleText": "发现"
+      }
+    },
+    {
+      "path": "pages/account/index",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    },
+    {
+      "path": "pages/pet-edit/index",
+      "style": {
+        "navigationBarTitleText": "宠物档案"
+      }
+    },
+    {
+      "path": "pages/pet/index",
+      "style": {
+        "navigationBarTitleText": "宠物手帐"
+      }
+    },
+    {
+      "path": "pages/feed/index",
+      "style": {
+        "navigationBarTitleText": "社区动态"
+      }
+    },
+    {
+      "path": "pages/stories/index",
+      "style": {
+        "navigationBarTitleText": "宠物故事"
+      }
+    },
+    {
+      "path": "pages/directory/index",
+      "style": {
+        "navigationBarTitleText": "服务与好物"
+      }
+    },
+    {
+      "path": "pages/social/index",
+      "style": {
+        "navigationBarTitleText": "宠友圈"
+      }
+    },
+    {
+      "path": "pages/orders/index",
+      "style": {
+        "navigationBarTitleText": "购物袋与订单"
+      }
+    },
+    {
+      "path": "pages/activity/index",
+      "style": {
+        "navigationBarTitleText": "我的参与"
+      }
+    },
+    {
+      "path": "pages/demo/index",
+      "style": {
+        "navigationBarTitleText": "云上宠物"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarBackgroundColor": "#fff9ed",
+    "backgroundColor": "#f7f5ef"
+  },
+  "tabBar": {
+    "color": "#716c60",
+    "selectedColor": "#725019",
+    "backgroundColor": "#fffcf5",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/home/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/pets/index",
+        "text": "宠物档案"
+      },
+      {
+        "pagePath": "pages/discover/index",
+        "text": "发现"
+      },
+      {
+        "pagePath": "pages/account/index",
+        "text": "我的"
+      }
+    ]
+  }
+}

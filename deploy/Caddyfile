@@ -1,0 +1,68 @@
+(frontend) {
+	root * /srv
+	encode gzip
+	header X-Content-Type-Options nosniff
+	redir /h5/ /h5 308
+	@entry path / /h5
+	rewrite @entry /index.html
+	file_server
+}
+
+http://:8080 {
+	@miniCommunity {
+		header X-PetCloud-Client miniprogram
+		path /api/h5/posts /api/h5/posts/* /api/h5/events/* /api/h5/catalog/* /api/h5/engagements /api/h5/engagements/* /api/h5/orders /api/h5/orders/* /api/h5/stories /api/h5/stories/* /api/h5/my-stories /api/h5/my-story-reactions /api/h5/my-matches /api/h5/my-matches/* /api/h5/friend-requests /api/h5/friend-requests/* /api/h5/groups/* /api/h5/community-progress /api/h5/creator-account /api/h5/my-comments/*
+	}
+	handle @miniCommunity {
+		reverse_proxy api:3008
+	}
+	@account path /api/auth/* /api/dashboard /api/pets /api/pets/* /api/assets /api/assets/* /api/memories /api/memories/* /api/h5/me /api/h5/pet-records/* /api/h5/wallet
+	@petMotion {
+		method GET HEAD
+		path_regexp "^/api/motions/[0-9a-fA-F-]{36}$"
+	}
+	@guest {
+		method GET HEAD
+		path /api/health /api/h5/demo-pets /api/h5/demo-pets/* /api/h5/posts /api/h5/posts/* /api/h5/events /api/h5/training /api/h5/catalog /api/h5/stories /api/h5/matches /api/h5/creators
+	}
+	@eventDetail {
+		method GET HEAD
+		path_regexp "^/api/h5/events/[0-9a-fA-F-]{36}$"
+	}
+	@publishedDetail {
+		method GET HEAD
+		path_regexp "^/api/h5/((catalog|creators)/[0-9a-fA-F-]{36}|stories/[0-9a-fA-F-]{36}(/cover)?)$"
+	}
+	handle @account {
+		reverse_proxy api:3008
+	}
+	handle @petMotion {
+		reverse_proxy api:3008
+	}
+	handle @guest {
+		reverse_proxy api:3008
+	}
+	handle @eventDetail {
+		reverse_proxy api:3008
+	}
+	handle @publishedDetail {
+		reverse_proxy api:3008
+	}
+	handle /api/* {
+		header Content-Type application/json
+		header Cache-Control no-store
+		respond `{"error":"该功能暂未在公网开放"}` 403
+	}
+	handle {
+		import frontend
+	}
+}
+
+http://:8081 {
+	handle /api/* {
+		reverse_proxy api:3008
+	}
+	handle {
+		import frontend
+	}
+}

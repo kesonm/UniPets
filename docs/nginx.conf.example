@@ -1,0 +1,15 @@
+server {
+    listen 443 ssl;
+    server_name pets.example.com;
+    # Configure ssl_certificate and ssl_certificate_key for your domain.
+    root /srv/petcloud/dist;
+    index index.html;
+    client_max_body_size 12m;
+    location /api/ {
+        proxy_pass http://127.0.0.1:3008;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+    location / { try_files $uri $uri/ /index.html; }
+}

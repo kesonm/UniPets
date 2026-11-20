@@ -1,0 +1,37 @@
+{
+  "name": "petcloud-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:mp-weixin": "pnpm --dir miniapp dev:mp-weixin",
+    "dev:legacy": "node scripts/dev.mjs --web",
+    "dev:web": "vite --port 4173 --strictPort",
+    "dev:server": "pnpm --dir server dev",
+    "db:migrate": "pnpm --dir server db:migrate",
+    "db:local": "node scripts/mysql-local.mjs",
+    "check": "vue-tsc -b && pnpm --dir server check && pnpm --dir miniapp check",
+    "test:api": "pnpm --dir server test",
+    "test:wechat": "pnpm --dir server exec node --import tsx --test test/wechat.test.ts",
+    "test:h5": "pnpm --dir server exec node --import tsx --test test/h5.test.ts test/h5-programs.test.ts test/h5-business.test.ts",
+    "test:sprites": "node --test shared/test/*.test.mjs",
+    "test:video": "pnpm --dir server test:video",
+    "test:video-jobs": "pnpm --dir server test:video-jobs",
+    "test:motion-batch": "pnpm --dir server exec node --import tsx --test test/motion-batch.test.ts",
+    "build": "pnpm --dir miniapp build:mp-weixin",
+    "build:web": "vue-tsc -b && vite build",
+    "preview": "vite preview --port 4173 --strictPort"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "element-plus": "^2.9.11",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "typescript": "~5.7.2",
+    "vite": "^6.0.7",
+    "vue-tsc": "^2.2.0"
+  }
+}

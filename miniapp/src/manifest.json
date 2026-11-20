@@ -1,0 +1,14 @@
+{
+  "name": "宠云",
+  "appid": "__UNI__50E7C1D",
+  "description": "宠云宠物档案与社区",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "vueVersion": "3",
+  "uniStatistics": { "enable": false },
+  "mp-weixin": {
+    "appid": "wx0d7d45eb04511857",
+    "setting": { "urlCheck": true, "es6": true, "minified": true },
+    "usingComponents": true
+  }
+}

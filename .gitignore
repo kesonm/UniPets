@@ -1,0 +1,27 @@
+node_modules/
+.pnpm-store/
+dist/
+server/dist/
+.env
+.env.local
+.env.*.local
+project.private.config.json
+.runtime.env
+deploy/ffmpeg-linux-amd64.tar.xz
+server/.env
+.local/
+noseprint-models/
+server/storage/
+*.tsbuildinfo
+*.log
+.DS_Store
+
+# Offline Blender working files and generated artwork.
+模型/
+anime_tabby_cat/blender/
+anime_tabby_cat/exports/
+anime_tabby_cat/renders/
+anime_tabby_cat/textures/
+anime_tabby_cat/references/
+anime_tabby_cat/reports/
+__pycache__/

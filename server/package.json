@@ -1,0 +1,6 @@
+{
+  "name": "@petcloud/server", "version": "1.0.0", "private": true, "type": "module",
+  "scripts": { "dev": "tsx watch src/index.ts", "start": "node dist/index.js", "build": "tsc", "check": "tsc --noEmit", "db:migrate": "tsx src/migrate.ts", "video:cutout": "tsx src/backfill-video.ts", "test": "node --import tsx --test test/api.test.ts", "test:video": "node --import tsx --test test/video.test.ts", "test:video-jobs": "node --import tsx --test test/video-jobs.test.ts" },
+  "dependencies": { "dotenv": "^16.6.1", "express": "^5.1.0", "express-rate-limit": "^8.1.0", "mysql2": "^3.15.3", "sharp": "^0.34.4", "zod": "^3.25.76" },
+  "devDependencies": { "@types/express": "^5.0.3", "@types/node": "^24.0.0", "tsx": "^4.20.6", "typescript": "~5.7.2" }
+}

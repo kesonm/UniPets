@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS pet_identity_number_pool (
+  id TINYINT UNSIGNED PRIMARY KEY,
+  issued INT UNSIGNED NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO pet_identity_number_pool (id,issued) VALUES (1,0);
+
+CREATE TABLE IF NOT EXISTS pet_identity_number_swaps (
+  slot INT UNSIGNED PRIMARY KEY,
+  number_value INT UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS pet_identities (
+  pet_id CHAR(36) PRIMARY KEY,
+  identity_number VARCHAR(7) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,
+  capture_digest BINARY(32) NOT NULL UNIQUE,
+  feature_version VARCHAR(96) CHARACTER SET ascii NOT NULL,
+  nose_template BLOB NOT NULL,
+  issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
