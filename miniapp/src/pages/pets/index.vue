@@ -11,7 +11,7 @@ import LoadState from '../../components/LoadState.vue'
 import PetImage from '../../components/PetImage.vue'
 import UiIcon from '../../components/UiIcon.vue'
 
-const tabInset = useTabPage('pages/pets/index')
+const tabLayout = useTabPage('pages/pets/index')
 const pets = ref<CloudPet[]>([])
 const selectedId = ref('')
 const models = ref<string[]>([])
@@ -59,8 +59,8 @@ function enroll(pet: CloudPet) {
 </script>
 
 <template>
-  <view class="screen tab-screen identity-page" :style="{ '--tab-inset': tabInset + 'px' }">
-    <view class="identity-tools">
+  <view class="screen tab-screen identity-page" :style="tabLayout">
+    <view class="tab-leading identity-tools">
       <scroll-view v-if="pets.length" scroll-x class="identity-scroll">
         <view class="identity-choices">
           <button
@@ -112,13 +112,13 @@ function enroll(pet: CloudPet) {
         <button class="text-button" @tap="details(selected)">查看详情<UiIcon name="right" :size="13" /></button>
       </view>
     </view>
-    <view v-else-if="!loading && !error" class="card empty-card">暂无宠物档案</view>
+    <view v-else-if="user && !loading && !error" class="card empty-card">暂无宠物档案</view>
     <LoginCard v-if="!user" />
   </view>
 </template>
 
 <style scoped>
-.identity-tools { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 12px -3px; }
+.identity-tools { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .identity-scroll { flex: 1; width: 0; min-width: 0; }
 .identity-choices { display: flex; align-items: flex-start; gap: 5px; }
 .pet-choice {
@@ -138,7 +138,7 @@ function enroll(pet: CloudPet) {
 .pet-ring { padding: 3px; border: 2px solid transparent; border-radius: 18px; }
 .pet-choice.active { color: #41320f; }
 .pet-choice.active .pet-ring { border-color: #ffdc36; background: #fff6cc; }
-.identity-create { display: flex; align-items: center; gap: 5px; flex: none; margin-left: auto; min-height: 34px; white-space: nowrap; }
+.identity-create { display: flex; align-items: center; gap: 5px; flex: none; min-height: 36px; white-space: nowrap; }
 .identity-card { padding: 15px 16px 13px; border-color: #ebdfbc; border-radius: 19px; background: linear-gradient(135deg, #fffdf7 55%, #fff3c6); }
 .identity-header { display: flex; align-items: center; justify-content: space-between; gap: 9px; min-height: 31px; padding-bottom: 9px; }
 .identity-title { display: flex; align-items: center; gap: 6px; color: #584317; font-size: 15px; font-weight: 800; }

@@ -19,10 +19,13 @@ page, view, text, input, textarea, picker, button, image, swiper, swiper-item, s
   padding: 14px 14px 24px;
 }
 .tab-screen {
-  padding-top: var(--tab-inset, 0px);
   padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
 }
-.screen.tab-screen { padding-top: calc(14px + var(--tab-inset, 0px)); }
+.screen.tab-screen { padding-top: var(--tab-start, 14px); }
+.tab-screen .tab-leading {
+  min-height: var(--tab-row-height, 40px);
+  margin-right: max(0px, calc(var(--tab-clearance, 0px) - 14px));
+}
 .card, .sheet {
   min-width: 0;
   margin: 0 0 10px;

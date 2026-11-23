@@ -22,7 +22,7 @@ const entries = [
   { id: 'help', title: '帮助与客服', page: '' },
   { id: 'settings', title: '账号与隐私', page: '' },
 ] as const
-const tabInset = useTabPage('pages/account/index')
+const tabLayout = useTabPage('pages/account/index')
 const nickname = ref('')
 const settings = ref(false)
 const help = ref(false)
@@ -64,15 +64,19 @@ function signOut() {
 </script>
 
 <template>
-  <view class="account-page tab-screen" :style="{ '--tab-inset': tabInset + 'px' }">
+  <view class="account-page tab-screen" :style="tabLayout">
     <view class="account-head">
-      <view class="account-avatar"><UiIcon name="account-avatar" :size="24" /></view>
-      <view class="grow">
-        <text class="account-name">{{ user?.displayName || '欢迎来到云上空间' }}</text>
-        <text class="sub">{{ user ? '微信账号' : '登录后创建自己的宠物档案' }}</text>
+      <view class="tab-leading account-profile">
+        <view class="account-avatar"><UiIcon name="account-avatar" :size="23" /></view>
+        <view class="grow">
+          <text class="account-name">{{ user?.displayName || '欢迎来到云上空间' }}</text>
+          <text class="sub">{{ user ? '微信账号' : '登录后创建自己的宠物档案' }}</text>
+        </view>
       </view>
-      <button v-if="!user" class="primary account-login" :loading="loggingIn" :disabled="loggingIn" @tap="login">登录 / 注册</button>
-      <button v-else class="text-button" @tap="openSettings">账号设置</button>
+      <view class="account-actions">
+        <button v-if="!user" class="small primary account-action account-login" :loading="loggingIn" :disabled="loggingIn" @tap="login">登录 / 注册</button>
+        <button v-else class="text-button account-action" @tap="openSettings"><UiIcon name="account-settings" :size="15" />账号设置</button>
+      </view>
     </view>
     <view class="account-content">
       <text v-if="!user && loginError" class="error">{{ loginError }}</text>
@@ -120,12 +124,15 @@ function signOut() {
 
 <style scoped>
 .account-page { max-width: 500px; margin: auto; }
-.account-head { display: flex; align-items: center; gap: 9px; min-height: 122px; padding: 0 14px; background: linear-gradient(#ffe35b, #fff0b1); }
-.account-avatar { display: flex; align-items: center; justify-content: center; flex: none; width: 48px; height: 48px; border-radius: 50%; background: #fff8da; }
-.account-name { display: block; overflow-wrap: anywhere; font-size: 20px; font-weight: 850; }
+.account-head { padding: var(--tab-start, 8px) 14px 5px; background: linear-gradient(#ffe78a, #fff2bf 78%, #f5f4f1); }
+.account-profile { display: flex; align-items: center; gap: 9px; }
+.account-avatar { display: flex; align-items: center; justify-content: center; flex: none; width: 42px; height: 42px; border-radius: 50%; background: #fff8da; }
+.account-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 18px; font-weight: 850; }
 .account-head .sub { color: #65531c; font-size: 11px; }
-.account-login { flex: none; padding-inline: 9px; }
-.account-content { padding: 12px 14px 0; }
+.account-actions { display: flex; justify-content: flex-end; padding: 2px 0 4px; }
+.account-actions .account-action { min-height: 34px; }
+.account-login { flex: none; padding-inline: 11px; }
+.account-content { padding: 5px 14px 0; }
 .account-archives { display: flex; align-items: center; gap: 4px; padding: 0 10px; margin-bottom: 12px; }
 .account-archives .account-link { flex: 1; min-width: 0; border: 0; color: #44340e; }
 .account-count { font-weight: 850; }

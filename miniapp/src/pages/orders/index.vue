@@ -9,7 +9,7 @@ import { useTabPage } from '../../lib/tab-page'
 import LoginCard from '../../components/LoginCard.vue'
 import LoadState from '../../components/LoadState.vue'
 import UiIcon from '../../components/UiIcon.vue'
-const tabInset = useTabPage('pages/orders/index')
+const tabLayout = useTabPage('pages/orders/index')
 const orders = ref<H5Order[]>([]),
   support = ref(''),
   text = ref('')
@@ -56,13 +56,13 @@ function help(id: string) {
 }
 </script>
 <template>
-  <view class="screen tab-screen" :style="{ '--tab-inset': tabInset + 'px' }">
-    <text v-if="actionError" class="error">{{ actionError }}</text>
-    <view class="spread cart-toolbar">
-      <button v-if="orderPanel === 'cart'" class="text-button" @tap="shop">继续选购</button>
-      <button v-else class="text-button" @tap="orderPanel = 'cart'">返回购物车</button>
-      <button v-if="orderPanel === 'cart'" class="text-button" @tap="orderPanel = 'orders'">订单与售后</button>
+  <view class="screen tab-screen" :style="tabLayout">
+    <view class="tab-leading cart-toolbar">
+      <button v-if="orderPanel === 'cart'" class="text-button cart-action" @tap="shop"><UiIcon name="entry-shop" :size="14" />继续选购</button>
+      <button v-else class="text-button cart-action" @tap="orderPanel = 'cart'"><UiIcon name="nav-cart" :size="14" />返回购物车</button>
+      <button v-if="orderPanel === 'cart'" class="text-button cart-action" @tap="orderPanel = 'orders'"><UiIcon name="account-orders" :size="14" />订单与售后</button>
     </view>
+    <text v-if="actionError" class="error">{{ actionError }}</text>
     <template v-if="orderPanel === 'cart'">
       <view v-if="!cart.items.length" class="card empty-card">
         <UiIcon name="empty-cart" :size="25" />
@@ -122,7 +122,8 @@ function help(id: string) {
   </view>
 </template>
 <style scoped>
-.cart-toolbar { margin: 0 0 9px; }
+.cart-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 8px; margin-bottom: 9px; }
+.cart-toolbar .cart-action { min-height: 34px; padding: 5px 9px; border: 1px solid #f0e7ca; border-radius: 18px; background: #fffdf5; font-size: 12px; }
 .cart-empty-title { color: #262422; font-weight: 800; }
 .cart-summary { margin-top: 10px; }
 .cart-total { color: #9a531d; font-size: 18px; font-weight: 850; }

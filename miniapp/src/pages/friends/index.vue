@@ -20,7 +20,7 @@ const sections = [
 type Section = (typeof sections)[number]['id']
 type Progress = { posts: number; comments: number; groups: number }
 const section = ref<Section>('feed')
-const tabInset = useTabPage('pages/friends/index')
+const tabLayout = useTabPage('pages/friends/index')
 const active = ref(false)
 const areaPicker = ref(false)
 const matches = ref<H5Match[]>([])
@@ -72,8 +72,8 @@ function openGroup(id: string) {
 </script>
 
 <template>
-  <view class="screen tab-screen" :style="{ '--tab-inset': tabInset + 'px' }">
-    <view class="card friend-tabs" aria-label="交友栏目">
+  <view class="screen tab-screen" :style="tabLayout">
+    <view class="card tab-leading friend-tabs" aria-label="交友栏目">
       <button
         v-for="item in sections"
         :key="item.id"
@@ -145,10 +145,24 @@ function openGroup(id: string) {
 </template>
 
 <style scoped>
-.friend-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; padding: 4px; border-radius: 13px; }
-.friend-tabs button { min-height: 39px; border: 0; border-radius: 9px; padding: 3px 1px; color: #645743; background: transparent; font-size: 12px; font-weight: 700; }
+.friend-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; padding: 3px; border-radius: 13px; }
+.friend-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  min-width: 0;
+  padding: 2px 1px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #645743;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+}
 .friend-tabs button.active { background: #ffed9a; color: #4f3709; }
 .match-toolbar { margin: 0 0 9px; }
 .friend-link { width: 100%; text-align: left; }
-@media (max-width: 370px) { .friend-tabs button { font-size: 11px; } }
+@media (max-width: 350px) { .friend-tabs button { font-size: 10px; white-space: normal; } }
 </style>

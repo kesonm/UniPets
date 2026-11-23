@@ -15,7 +15,7 @@ import UiIcon from '../../components/UiIcon.vue'
 type Destination = (typeof homeEntries)[number]['id'] | (typeof homeSlides)[number]['action']
 type SearchKind = (typeof homeSearchKinds)[number]['id']
 
-const tabInset = useTabPage('pages/home/index')
+const tabLayout = useTabPage('pages/home/index')
 const active = ref(false)
 const areaPicker = ref(false)
 const slide = ref(0)
@@ -23,6 +23,7 @@ const queryInput = ref('')
 const query = ref('')
 const kind = ref<SearchKind>('shop')
 const areaName = computed(() => areaLabel(selectedArea.value) || '选择商圈')
+const areaCaption = computed(() => selectedArea.value ? areaName.value.split(' · ').pop() : '商圈')
 const listings = ref<Listing[]>([])
 const stories = ref<StorySummary[]>([])
 const loading = ref(false)
@@ -75,18 +76,20 @@ watch([query, kind, selectedArea, retry], async ([term, target, area], _, onClea
 </script>
 
 <template>
-  <view class="market-home tab-screen" :style="{ '--tab-inset': tabInset + 'px' }">
+  <view class="market-home tab-screen" :style="tabLayout">
     <view class="market-top">
-      <view class="market-search">
-        <UiIcon name="search" :size="17" />
-        <input v-model="queryInput" maxlength="60" placeholder="搜服务、商品或动态" confirm-type="search" aria-label="搜索" @confirm="search" />
-        <button @tap="search">搜索</button>
+      <view class="tab-leading market-controls">
+        <view class="market-search">
+          <UiIcon name="search" :size="15" />
+          <input v-model="queryInput" maxlength="60" placeholder="服务、商品、动态" confirm-type="search" aria-label="搜索服务、商品或动态" @confirm="search" />
+          <button @tap="search">搜索</button>
+        </view>
+        <button class="market-location" :aria-label="'切换商圈，' + areaName" @tap="areaPicker = true">
+          <UiIcon name="location" :size="13" />
+          <text>{{ areaCaption }}</text>
+          <UiIcon name="down" :size="10" />
+        </button>
       </view>
-      <button class="market-location" :aria-label="'切换商圈，' + areaName" @tap="areaPicker = true">
-        <UiIcon name="location" :size="14" />
-        <text>{{ areaName }}</text>
-        <UiIcon name="down" :size="13" />
-      </button>
     </view>
 
     <template v-if="!query">
@@ -172,20 +175,22 @@ watch([query, kind, selectedArea, retry], async ([term, target, area], _, onClea
 <style scoped>
 .market-home { max-width: 500px; margin: auto; }
 .market-top {
+  padding: var(--tab-start, 8px) 14px 5px;
+  background: #ffe34e;
+}
+.market-controls {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 14px 14px 9px;
-  background: #ffe34e;
+  gap: 6px;
 }
 .market-search {
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   min-width: 0;
-  min-height: 41px;
-  padding: 4px 4px 4px 12px;
+  min-height: 37px;
+  padding: 3px 4px 3px 9px;
   border-radius: 30px;
   background: #fff;
 }
@@ -193,37 +198,44 @@ watch([query, kind, selectedArea, retry], async ([term, target, area], _, onClea
   flex: 1;
   width: 0;
   min-width: 0;
-  min-height: 30px;
+  min-height: 28px;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
-  font-size: 13px;
+  font-size: 12px;
 }
 .market-search button {
   flex: none;
-  padding: 5px 11px;
+  padding: 5px 8px;
   border: 0;
   border-radius: 20px;
   background: #ffde3f;
   color: #262422;
+  font-size: 12px;
 }
 .market-location {
   display: flex;
   flex: none;
   align-items: center;
   gap: 3px;
-  min-height: 34px;
-  max-width: 132px;
-  padding: 6px 8px;
+  min-height: 36px;
+  max-width: 92px;
+  padding: 5px 7px;
   border: 0;
   border-radius: 22px;
   background: #fff0a0;
   color: #3f350d;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 .market-location text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 350px) {
+  .market-controls { gap: 4px; }
+  .market-search { gap: 4px; padding-left: 7px; }
+  .market-search input { font-size: 11px; }
+  .market-search button { padding-inline: 6px; }
+}
 .market-entrances-wrap { padding: 8px 14px 0; background: linear-gradient(#ffe34e, #fff2ad 39px, #f5f4f1 115px); }
 .market-entrances {
   display: grid;
