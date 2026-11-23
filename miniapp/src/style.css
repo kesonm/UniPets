@@ -21,8 +21,8 @@ page, view, text, input, textarea, picker, button, image, swiper, swiper-item, s
 .tab-screen {
   padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
 }
-.screen.tab-screen { padding-top: var(--tab-start, 14px); }
-.tab-screen .tab-leading {
+.screen.tab-screen, .screen.menu-screen { padding-top: var(--tab-start, 14px); }
+.tab-screen .tab-leading, .menu-screen .tab-leading {
   min-height: var(--tab-row-height, 40px);
   margin-right: max(0px, calc(var(--tab-clearance, 0px) - 14px));
 }

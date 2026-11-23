@@ -65,6 +65,13 @@
       }
     },
     {
+      "path": "pages/immortality/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#f5f4f1"
+      }
+    },
+    {
       "path": "pages/social/index",
       "style": {
         "navigationBarTitleText": "宠友圈"

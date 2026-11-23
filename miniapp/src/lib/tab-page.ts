@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { onResize, onShow } from '@dcloudio/uni-app'
 
-function tabLayout() {
+function menuLayout() {
   // #ifdef MP-WEIXIN
   const metrics = uni.getWindowInfo?.()
   const width = metrics?.windowWidth || 375
@@ -24,11 +24,17 @@ function tabLayout() {
   return { '--tab-start': '8px', '--tab-clearance': '0px', '--tab-row-height': '40px' }
 }
 
+export function useMenuLayout() {
+  const layout = ref(menuLayout())
+  const update = () => { layout.value = menuLayout() }
+  onResize(update)
+  onShow(update)
+  return layout
+}
+
 export function useTabPage(route: string) {
-  const layout = ref(tabLayout())
-  onResize(() => { layout.value = tabLayout() })
+  const layout = useMenuLayout()
   onShow(() => {
-    layout.value = tabLayout()
     // #ifdef MP-WEIXIN
     function selectTab() {
       const pages = getCurrentPages()

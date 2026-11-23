@@ -7,9 +7,11 @@ import type { Pet } from '../../../../src/lib/types'
 import { api, user, go, toast } from '../../lib/client'
 import { listPets } from '../../lib/pets'
 import { addProduct, money } from '../../lib/cart'
+import { searchListings } from '../../lib/directory'
 import { pageLoad, submitAction } from '../../lib/page'
 import { selectedArea } from '../../lib/area'
 import AreaPicker from '../../components/AreaPicker.vue'
+import DirectoryListing from '../../components/DirectoryListing.vue'
 import LoginCard from '../../components/LoginCard.vue'
 import LoadState from '../../components/LoadState.vue'
 import PetPicker from '../../components/PetPicker.vue'
@@ -21,14 +23,6 @@ const names: Record<string, string> = {
   friends: '宠友社群',
   shop: '宠物品牌超市',
   ...Object.fromEntries(Object.entries(businessModules).map(([id, module]) => [id, module.title])),
-}
-const kindNames: Record<string, string> = {
-  article: '文章',
-  appointment: '预约',
-  enrollment: '报名',
-  group: '社群',
-  product: '商品',
-  link: '官方入口',
 }
 const eventStatus = { open: '报名中', closed: '报名结束', upcoming: '即将开放' }
 const section = ref('services'),
@@ -46,6 +40,7 @@ const pets = ref<Pet[]>([]),
   petId = ref('')
 const category = ref('')
 const areaPicker = ref(false)
+const forwarding = ref(false)
 const categories = computed(() => isBusinessModule(section.value) ? businessModules[section.value].categories : [])
 const displayed = computed(() => category.value ? items.value.filter(item => item.category === category.value) : items.value)
 const needsPet = computed(
@@ -58,9 +53,22 @@ const date = (s?: string | null) => (s ? s.slice(0, 10) : '待公布')
 onLoad((o) => {
   section.value = o?.module && names[o.module] ? o.module : 'services'
   id.value = o?.id || ''
+  if (section.value === 'immortality' && !id.value) {
+    forwarding.value = true
+    uni.redirectTo({
+      url: '/pages/immortality/index',
+      fail() {
+        forwarding.value = false
+        uni.setNavigationBarTitle({ title: names[section.value] })
+        void refresh()
+      },
+    })
+    return
+  }
   uni.setNavigationBarTitle({ title: names[section.value] })
 })
 async function load() {
+  if (forwarding.value) return
   if (section.value === 'events') {
     if (id.value) {
       event.value = (await api<{ event: H5Event & { rules: string } }>('/h5/events/' + id.value)).event
@@ -74,13 +82,7 @@ async function load() {
   else if (id.value) item.value = (await api<{ listing: Listing }>('/h5/catalog/' + id.value)).listing
   else if (section.value === 'shop')
     items.value = (await api<{ listings: Listing[] }>('/h5/catalog?kind=product')).listings
-  else
-    items.value = (
-      await api<{ listings: Listing[] }>(
-        '/h5/catalog?module=' + section.value + '&q=' + encodeURIComponent(q.value) +
-          (selectedArea.value ? '&area=' + selectedArea.value : ''),
-      )
-    ).listings
+  else items.value = await searchListings(section.value, q.value, selectedArea.value)
   if (user.value && id.value && needsPet.value) {
     pets.value = await listPets()
     if (!pets.value.some((p) => p.id === petId.value)) petId.value = pets.value[0]?.id || ''
@@ -124,7 +126,7 @@ function copyLink() {
 }
 </script>
 <template>
-  <view class="screen">
+  <view v-if="!forwarding" class="screen">
     <LoadState :loading="loading" :error="error" @retry="refresh" />
     <text v-if="actionError" class="error">{{ actionError }}</text>
     <template v-if="!id">
@@ -133,14 +135,6 @@ function copyLink() {
         <view v-if="section === 'shop'" class="actions">
           <button class="text-button" @tap="go('orders')"><UiIcon name="nav-cart" />购物车</button>
         </view>
-      </view>
-      <view v-if="section === 'immortality'" class="card spread">
-        <view>
-          <text class="heading">云上空间</text>
-          <text class="sub">查看宠物档案与珍藏的回忆</text>
-        </view>
-        <button class="small primary" @tap="go('pets')">打开云上空间</button>
-        <button class="text-button" @tap="go('demo')">浏览共享宠物</button>
       </view>
       <template v-if="section === 'events'">
         <view v-for="e in events" :key="e.id" class="card" @tap="open(e.id)">
@@ -183,11 +177,7 @@ function copyLink() {
               >{{ option.label }}</button>
             </view>
           </view>
-          <button v-for="i in displayed" :key="i.id" class="card program-listing" @tap="open(i.id)">
-            <text class="heading">{{ i.title }}</text>
-            <text class="sub">{{ [kindNames[i.kind], i.provider, areaLabel(i.area)].filter(Boolean).join(' · ') }}</text>
-            <text v-if="i.priceCents" class="body">{{ money(i.priceCents) }}</text>
-          </button>
+          <DirectoryListing v-for="item in displayed" :key="item.id" :listing="item" />
         </template>
       </template>
       <view v-if="section !== 'shop' && !loading && !error && !displayed.length && !events.length && !courses.length" class="card empty-card">
@@ -245,5 +235,4 @@ function copyLink() {
 .program-search { display: flex; align-items: center; gap: 8px; }
 .program-search input { flex: 1; min-width: 0; }
 .program-search button { flex: none; min-height: 34px; }
-.program-listing { width: 100%; text-align: left; }
 </style>

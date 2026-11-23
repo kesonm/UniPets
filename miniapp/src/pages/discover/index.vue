@@ -27,7 +27,7 @@ const sections = [
       { name: '医疗护理', page: 'directory', module: 'medical' },
       { name: '带宠出行', page: 'directory', module: 'travel' },
       { name: '公益领养', page: 'directory', module: 'charity' },
-      { name: '生命纪念', page: 'directory', module: 'immortality' },
+      { name: '生命纪念', page: 'immortality' },
     ],
   },
 ]

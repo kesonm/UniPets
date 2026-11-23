@@ -34,7 +34,7 @@ onShow(() => { active.value = true })
 onHide(() => { active.value = false; areaPicker.value = false })
 
 function openEntry(id: Destination) {
-  if (id === 'friends' || id === 'stories') go(id)
+  if (id === 'friends' || id === 'stories' || id === 'immortality') go(id)
   else go('directory', { module: id })
 }
 
