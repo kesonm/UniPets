@@ -19,7 +19,9 @@ function apiOrigin() {
   throw new Error('请配置小程序的 HTTPS 服务域名')
 }
 export function apiUrl(path: string) {
-  return apiOrigin() + '/api' + path
+  const prefix = (import.meta.env.VITE_PETCLOUD_API_PREFIX || '').trim().replace(/\/+$/, '')
+  if (!/^(?:\/[a-z\d_-]+)*$/i.test(prefix)) throw new Error('小程序 API 路径配置无效')
+  return apiOrigin() + prefix + '/api' + path
 }
 export function publicImage(path: string) {
   try {
