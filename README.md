@@ -67,7 +67,7 @@ pnpm dev
 
 本地模拟器默认访问 `http://127.0.0.1:3008`，在开发者工具的「详情 → 本地设置」中勾选「不校验合法域名」。进入「宠物档案」即可微信登录和建档。开发者工具需登录具有此 AppID 开发权限的微信账号。
 
-真机或体验版使用已在微信公众平台配置为 request 和 downloadFile 合法域名的 HTTPS 服务地址。在 `miniapp/.env.local` 设置 `VITE_PETCLOUD_API_ORIGIN`，值只写协议和域名，随后重新编译。执行 `pnpm build` 可生成 `miniapp/dist/build/mp-weixin/`，直接导入微信开发者工具。
+`pnpm build` 生成的微信小程序默认访问 `https://pet.uniwork.top`。在微信公众平台将该地址配置为 `request` 和 `downloadFile` 合法域名，再将 `miniapp/dist/build/mp-weixin/` 导入微信开发者工具。需要连接其他服务时，在 `miniapp/.env.production.local` 设置 `VITE_PETCLOUD_API_ORIGIN` 后重新构建。
 
 旧版网页与 API 可通过 `pnpm dev:legacy` 同时启动。网页默认端口为 4173，API 为 3008。
 
