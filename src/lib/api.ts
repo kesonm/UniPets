@@ -1,5 +1,7 @@
 export class ApiError extends Error { constructor(public status: number, message: string) { super(message) } }
-const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+const base = import.meta.env.BASE_URL === '/pet/'
+  ? '/pet'
+  : (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
 export const apiUrl = (path: string) => `${base}/api${path}`
 export async function api<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
   const method = options.method || 'GET'

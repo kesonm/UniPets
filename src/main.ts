@@ -4,7 +4,7 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'element-plus/dist/index.css'
 import './style.css'
 const view = new URLSearchParams(location.search).get('view')
-const admin = location.pathname.replace(/\/$/, '') === '/admin'
+const admin = ['/admin', '/pet'].includes(location.pathname.replace(/\/$/, ''))
 const h5 = !admin && (view==='h5' || location.pathname.endsWith('/h5') || (view!=='workbench' && matchMedia('(max-width: 680px)').matches))
 if (h5) {
   document.body.classList.add('h5-body')

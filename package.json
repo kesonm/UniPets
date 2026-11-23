@@ -22,6 +22,7 @@
     "test:motion-batch": "pnpm --dir server exec node --import tsx --test test/motion-batch.test.ts",
     "build": "pnpm --dir miniapp build:mp-weixin",
     "build:web": "vue-tsc -b && vite build",
+    "build:admin": "vue-tsc -b && vite build --base /pet/ --outDir dist/admin",
     "preview": "vite preview --port 4173 --strictPort"
   },
   "dependencies": {
