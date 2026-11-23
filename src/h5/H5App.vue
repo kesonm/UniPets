@@ -21,14 +21,12 @@ import H5Stories from './H5Stories.vue'
 import H5Training from './H5Training.vue'
 import { productFromListing, type CatalogCategory, type Product } from './catalog'
 import { areaLabel, isBusinessModule, type AccountPanel, type Listing, type StorySummary } from './business'
+import { examplePosts, feedSorting as sorting, homeEntries, homeSearchKinds as searchKinds, homeSlides } from './home'
 import { useShopping } from './shopping'
 import type { CloudPet, CloudSection, DemoPet, FeedOrder, H5Post, H5Social, H5Tab, PostTopic } from './types'
 import './h5.css'
 
-const assetBase=import.meta.env.BASE_URL
-const hero=`${assetBase}assets/h5-hero.webp`
-const communityImage=`${assetBase}assets/pet-hero.png`
-const trainingImage=`${assetBase}assets/h5-training.webp`
+const asset=(image:string)=>`${import.meta.env.BASE_URL}assets/${image}`
 const tabs=[
   {id:'home',label:'首页',icon:House},
   {id:'friends',label:'交友',icon:ChatDotRound},
@@ -36,26 +34,10 @@ const tabs=[
   {id:'identity',label:'宠物身份证',icon:Postcard},
   {id:'me',label:'我的',icon:UserIcon},
 ] as const
-const sorting=[{id:'recommended',name:'推荐'},{id:'latest',name:'最新'},{id:'hot',name:'最热'},{id:'near',name:'最近'}] as const
-const searchKinds=[{id:'shop',name:'商品'},{id:'services',name:'服务'},{id:'stories',name:'短剧'},{id:'feed',name:'动态'}] as const
-const entrances=[
-  {id:'immortality',label:'宠物数字永生',icon:Sunny,tone:'gold'},
-  {id:'services',label:'宠物周边服务',icon:LocationFilled,tone:'cyan'},
-  {id:'friends',label:'宠物相亲交友',icon:ChatDotRound,tone:'pink'},
-  {id:'stories',label:'宠物漫剧短剧',icon:Film,tone:'violet'},
-  {id:'charity',label:'宠物公益慈善',icon:Star,tone:'coral'},
-  {id:'shop',label:'宠物品牌超市',icon:ShoppingBag,tone:'orange'},
-  {id:'medical',label:'宠物医疗医药',icon:FirstAidKit,tone:'green'},
-  {id:'travel',label:'宠物旅游出行',icon:Compass,tone:'blue'},
-  {id:'education',label:'宠物升学教育',icon:Reading,tone:'yellow'},
-] as const
-const slides=[{title:'宠物培训与考证',line:'美容洗护 · 行为训导 · 赛事执裁',cta:'查看课程和考期',image:trainingImage,action:'training'},
-  {title:'宠物数字永生',line:'在云端保存照片、故事与回忆',cta:'打开纪念空间',image:hero,action:'immortality'},
-  {title:'宠物赛事',line:'查看赛程、参赛规则和报名时间',cta:'查看赛事',image:communityImage,action:'events'}] as const
-const examples: H5Post[] = [
-  {id:'example-nap',title:'找到了最暖和的午睡位',body:'下午的阳光刚好落在窗边，小猫趴了一整个午后。',petName:'布丁',author:'示例动态',species:'cat',createdAt:'',area:null,likes:0,hasImage:true,exampleImage:hero},
-  {id:'example-friends',title:'和小伙伴一起过周末',body:'两只小家伙挨在一起，等着出门散步。',petName:'小满',author:'示例动态',species:'dog',createdAt:'',area:null,likes:0,hasImage:true,exampleImage:communityImage},
-]
+const entryIcons={Sunny,LocationFilled,ChatDotRound,Film,Star,ShoppingBag,FirstAidKit,Compass,Reading}
+const entrances=homeEntries.map(item=>({...item,icon:entryIcons[item.icon]}))
+const slides=homeSlides.map(item=>({...item,image:asset(item.image)}))
+const examples=examplePosts.map(post=>({...post,exampleImage:asset(post.exampleImage)}))
 const emptySocial=():H5Social=>({published:[],favorites:[],likedIds:[],savedIds:[]})
 
 function tabFromHash(): H5Tab {

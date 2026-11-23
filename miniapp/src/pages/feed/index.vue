@@ -2,15 +2,18 @@
 import { ref, computed, watch } from 'vue'
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import type { H5Post, H5Comment, H5Social } from '../../../../src/h5/types'
+import { examplePosts, feedSorting } from '../../../../src/h5/home'
 import type { Pet, Asset } from '../../../../src/lib/types'
 import { h5Areas } from '../../../../shared/h5-areas.mjs'
 import { api, user, go, publicImage, confirm, toast } from '../../lib/client'
 import { listPets } from '../../lib/pets'
 import { pageLoad, submitAction } from '../../lib/page'
+import { homeImage } from '../../lib/home'
 import LoadState from '../../components/LoadState.vue'
 import LoginCard from '../../components/LoginCard.vue'
 import PetPicker from '../../components/PetPicker.vue'
 import ChoiceField from '../../components/ChoiceField.vue'
+import PostGrid from '../../components/PostGrid.vue'
 const mode = ref('all'),
   id = ref(''),
   query = ref(''),
@@ -18,12 +21,7 @@ const mode = ref('all'),
   area = ref(''),
   page = ref(1),
   more = ref(false)
-const sortOptions = [
-  { id: 'recommended', label: '推荐' },
-  { id: 'latest', label: '最新' },
-  { id: 'hot', label: '热门' },
-  { id: 'near', label: '附近' },
-]
+const example = computed(() => examplePosts.find((post) => post.id === id.value))
 const areas = [{ id: '', label: '不限地区' }, ...h5Areas],
   topic = ref('daily'),
   topics = [
@@ -59,6 +57,8 @@ watch(petId, () => {
 onLoad((q) => {
   id.value = q?.id || ''
   mode.value = q?.mode || (id.value ? 'detail' : 'all')
+  if (q?.tab === 'favorites') mineTab.value = 'favorites'
+  if (q?.area && h5Areas.some((item) => item.id === q.area)) area.value = q.area
 })
 onShareAppMessage(() => ({
   title: current.value?.title || '宠云社区',
@@ -87,6 +87,10 @@ async function load() {
     if (!p.some((x) => x.id === petId.value)) petId.value = p[0]?.id || ''
   }
   if (mode.value === 'detail') {
+    if (example.value) {
+      current.value = example.value
+      return
+    }
     const [p, c] = await Promise.all([
       api<{ post: H5Post }>('/h5/posts/' + id.value),
       api<{ comments: H5Comment[] }>('/h5/posts/' + id.value + '/comments'),
@@ -170,12 +174,12 @@ const owned = computed(() => social.value?.published.some((p) => p.id === id.val
       />
       <view class="chips">
         <button
-          v-for="s in sortOptions"
+          v-for="s in feedSorting"
           :key="s.id"
           :class="['chip', { active: sort === s.id }]"
           @tap="setSort(s.id)"
         >
-          {{ s.label }}
+          {{ s.name }}
         </button>
       </view>
       <template v-if="sort === 'near'">
@@ -184,20 +188,12 @@ const owned = computed(() => social.value?.published.some((p) => p.id === id.val
       <button class="small" @tap="refresh">搜索</button>
     </view>
     <view v-if="mode === 'mine' && user" class="chips">
-      <button class="chip" @tap="mineTab = 'published'">我的动态</button>
-      <button class="chip" @tap="mineTab = 'favorites'">我的收藏</button>
+      <button :class="['chip', { active: mineTab === 'published' }]" @tap="mineTab = 'published'">我的发布</button>
+      <button :class="['chip', { active: mineTab === 'favorites' }]" @tap="mineTab = 'favorites'">收藏</button>
+      <button v-if="mineTab === 'favorites'" class="chip" @tap="go('stories', { mode: 'mine', tab: 'favorites' })">短剧收藏</button>
     </view>
     <template v-if="mode === 'all' || (mode === 'mine' && user)">
-      <view v-for="p in visiblePosts" :key="p.id" class="card" @tap="go('feed', { id: p.id })">
-        <image
-          v-if="p.hasImage"
-          class="photo"
-          mode="aspectFill"
-          :src="publicImage('/h5/posts/' + p.id + '/image')"
-        />
-        <text class="heading">{{ p.title }}</text>
-        <text class="sub">{{ p.petName }} · {{ p.author }} · {{ p.likes }} 赞</text>
-      </view>
+      <PostGrid :posts="visiblePosts" @view="go('feed', { id: $event.id })" />
       <text v-if="!loading && !error && !visiblePosts.length" class="empty">暂无动态</text>
       <button v-if="more && mode === 'all'" :disabled="busy" @tap="run(() => fetchPage(page + 1))">
         加载更多
@@ -228,10 +224,10 @@ const owned = computed(() => social.value?.published.some((p) => p.id === id.val
           v-if="current.hasImage"
           class="photo"
           mode="aspectFill"
-          :src="publicImage('/h5/posts/' + id + '/image')"
+          :src="current.exampleImage ? homeImage(current.exampleImage) : publicImage('/h5/posts/' + id + '/image')"
         />
         <text class="body">{{ current.body }}</text>
-        <view class="actions">
+        <view v-if="!example" class="actions">
           <button v-if="user" class="small" :disabled="busy" @tap="react('like')">
             {{ social?.likedIds.includes(id) ? '已赞' : '赞' }} {{ current.likes }}
           </button>
@@ -242,8 +238,8 @@ const owned = computed(() => social.value?.published.some((p) => p.id === id.val
           <button v-if="owned" class="small danger" :disabled="busy" @tap="remove()">删除</button>
         </view>
       </view>
-      <LoginCard v-if="!user" />
-      <view class="card">
+      <LoginCard v-if="!user && !example" />
+      <view v-if="!example" class="card">
         <text class="heading">评论</text>
         <template v-if="user">
           <input v-model="reply" maxlength="500" placeholder="写条评论" />

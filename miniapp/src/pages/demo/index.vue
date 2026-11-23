@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import type { DemoPet } from '../../../../src/h5/types'
 import type { MotionPreviewAsset } from '../../../../src/lib/types'
 import { api, publicImage, speciesNames } from '../../lib/client'
@@ -10,7 +11,13 @@ const pets = ref<DemoPet[]>([]),
   selected = ref(''),
   clips = ref<MotionPreviewAsset[]>([]),
   clipId = ref(''),
-  room = ref(false)
+  room = ref(false),
+  focus = ref('')
+onLoad((q) => { focus.value = q?.id || '' })
+const displayed = computed(() => {
+  const match = pets.value.find(pet => pet.id === focus.value)
+  return match ? [match] : pets.value
+})
 const clip = computed(() => clips.value.find((c) => c.id === clipId.value) || clips.value[0])
 const { loading, error, refresh } = pageLoad(async () => {
   pets.value = (await api<{ pets: DemoPet[] }>('/h5/demo-pets')).pets
@@ -34,7 +41,7 @@ function open(p: DemoPet, interactive: boolean) {
   <view class="screen">
     <LoadState :error="error" :loading="loading" @retry="refresh" />
     <text v-if="!loading && !error && !pets.length" class="empty">还没有共享宠物</text>
-    <view v-for="p in pets" :key="p.id" class="card">
+    <view v-for="p in displayed" :key="p.id" class="card">
       <image
         v-if="p.hasCover"
         class="photo"

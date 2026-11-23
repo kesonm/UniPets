@@ -34,14 +34,19 @@ export function message(error: unknown) {
 export function toast(title: string) {
   uni.showToast({ title, icon: 'none' })
 }
+const tabPages = new Set(['home', 'friends', 'orders', 'pets', 'account'])
 export function go(page: string, args: Record<string, string> = {}) {
+  if (tabPages.has(page)) {
+    uni.switchTab({ url: '/pages/' + page + '/index' })
+    return
+  }
   const query = Object.entries(args)
     .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v))
     .join('&')
   uni.navigateTo({ url: '/pages/' + page + '/index' + (query ? '?' + query : '') })
 }
 export function petsTab() {
-  uni.switchTab({ url: '/pages/pets/index' })
+  go('pets')
 }
 export function confirm(title: string, content: string) {
   return new Promise<boolean>((resolve) =>

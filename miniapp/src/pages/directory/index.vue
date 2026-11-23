@@ -1,27 +1,26 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import type { Listing } from '../../../../src/h5/business'
+import { areaLabel, businessModules, isBusinessModule, type Listing } from '../../../../src/h5/business'
 import type { H5Event, H5EventRegistration, H5TrainingCourse } from '../../../../src/h5/types'
 import type { Pet } from '../../../../src/lib/types'
 import { api, user, go, toast } from '../../lib/client'
 import { listPets } from '../../lib/pets'
 import { addProduct, money } from '../../lib/cart'
 import { pageLoad, submitAction } from '../../lib/page'
+import { selectedArea } from '../../lib/area'
+import AreaPicker from '../../components/AreaPicker.vue'
 import LoginCard from '../../components/LoginCard.vue'
 import LoadState from '../../components/LoadState.vue'
 import PetPicker from '../../components/PetPicker.vue'
+import ShopShelf from '../../components/ShopShelf.vue'
+import UiIcon from '../../components/UiIcon.vue'
 const names: Record<string, string> = {
   events: '宠物赛事',
-  training: '培训课程',
-  education: '升学教育',
+  training: '宠物培训与考证',
   friends: '宠友社群',
-  services: '周边服务',
-  shop: '宠物好物',
-  medical: '医疗护理',
-  travel: '带宠出行',
-  charity: '公益领养',
-  immortality: '生命纪念',
+  shop: '宠物品牌超市',
+  ...Object.fromEntries(Object.entries(businessModules).map(([id, module]) => [id, module.title])),
 }
 const kindNames: Record<string, string> = {
   article: '文章',
@@ -35,6 +34,7 @@ const eventStatus = { open: '报名中', closed: '报名结束', upcoming: '即�
 const section = ref('services'),
   id = ref(''),
   q = ref(''),
+  shopQuery = ref(''),
   note = ref(''),
   items = ref<Listing[]>([]),
   item = ref<Listing>()
@@ -44,6 +44,10 @@ const events = ref<H5Event[]>([]),
   registrations = ref<H5EventRegistration[]>([])
 const pets = ref<Pet[]>([]),
   petId = ref('')
+const category = ref('')
+const areaPicker = ref(false)
+const categories = computed(() => isBusinessModule(section.value) ? businessModules[section.value].categories : [])
+const displayed = computed(() => category.value ? items.value.filter(item => item.category === category.value) : items.value)
 const needsPet = computed(
   () => !!event.value || (item.value?.kind !== 'group' && item.value?.module !== 'charity'),
 )
@@ -68,10 +72,13 @@ async function load() {
   } else if (section.value === 'training')
     courses.value = (await api<{ courses: H5TrainingCourse[] }>('/h5/training')).courses
   else if (id.value) item.value = (await api<{ listing: Listing }>('/h5/catalog/' + id.value)).listing
+  else if (section.value === 'shop')
+    items.value = (await api<{ listings: Listing[] }>('/h5/catalog?kind=product')).listings
   else
     items.value = (
       await api<{ listings: Listing[] }>(
-        '/h5/catalog?module=' + section.value + '&q=' + encodeURIComponent(q.value),
+        '/h5/catalog?module=' + section.value + '&q=' + encodeURIComponent(q.value) +
+          (selectedArea.value ? '&area=' + selectedArea.value : ''),
       )
     ).listings
   if (user.value && id.value && needsPet.value) {
@@ -87,6 +94,10 @@ const { error, loading, refresh } = pageLoad(load, () => {
 const { run, busy, error: actionError } = submitAction()
 function open(key: string) {
   go('directory', { module: section.value, id: key })
+}
+function search() {
+  if (section.value === 'shop') shopQuery.value = q.value.trim()
+  else void refresh()
 }
 function join() {
   return run(async () => {
@@ -104,7 +115,7 @@ function add() {
   return run(async () => {
     if (item.value) {
       addProduct(item.value)
-      toast('已加入购物袋')
+      toast('已加入购物车')
     }
   })
 }
@@ -117,11 +128,19 @@ function copyLink() {
     <LoadState :loading="loading" :error="error" @retry="refresh" />
     <text v-if="actionError" class="error">{{ actionError }}</text>
     <template v-if="!id">
-      <view class="sheet">
+      <view class="program-heading">
         <text class="title">{{ names[section] }}</text>
         <view v-if="section === 'shop'" class="actions">
-          <button class="small" @tap="go('orders')">打开购物袋</button>
+          <button class="text-button" @tap="go('orders')"><UiIcon name="nav-cart" />购物车</button>
         </view>
+      </view>
+      <view v-if="section === 'immortality'" class="card spread">
+        <view>
+          <text class="heading">云上空间</text>
+          <text class="sub">查看宠物档案与珍藏的回忆</text>
+        </view>
+        <button class="small primary" @tap="go('pets')">打开云上空间</button>
+        <button class="text-button" @tap="go('demo')">浏览共享宠物</button>
       </view>
       <template v-if="section === 'events'">
         <view v-for="e in events" :key="e.id" class="card" @tap="open(e.id)">
@@ -141,25 +160,39 @@ function copyLink() {
         </view>
       </template>
       <template v-else>
-        <view class="card">
+        <view class="card program-search">
           <input
             v-model="q"
             maxlength="60"
             placeholder="搜索名称、机构或地点"
             confirm-type="search"
-            @confirm="refresh"
+            @confirm="search"
           />
-          <view class="actions"><button class="small" @tap="refresh">搜索</button></view>
+          <button class="small primary" @tap="search">搜索</button>
         </view>
-        <view v-for="i in items" :key="i.id" class="card" @tap="open(i.id)">
-          <text class="sub">{{ kindNames[i.kind] }} · {{ i.provider }}</text>
-          <text class="heading">{{ i.title }}</text>
-          <text v-if="i.priceCents" class="body">{{ money(i.priceCents) }}</text>
-        </view>
+        <ShopShelf v-if="section === 'shop' && !loading && !error" :listings="items" :query="shopQuery" filter @area="areaPicker = true" />
+        <template v-else-if="section !== 'shop'">
+          <view v-if="categories.length" class="card">
+            <button class="text-button" @tap="areaPicker = true"><UiIcon name="location" />{{ areaLabel(selectedArea) || '选择商圈' }}</button>
+            <view class="chips">
+              <button :class="['chip', { active: !category }]" @tap="category = ''">全部</button>
+              <button
+                v-for="option in categories" :key="option.id"
+                :class="['chip', { active: category === option.id }]"
+                @tap="category = option.id"
+              >{{ option.label }}</button>
+            </view>
+          </view>
+          <button v-for="i in displayed" :key="i.id" class="card program-listing" @tap="open(i.id)">
+            <text class="heading">{{ i.title }}</text>
+            <text class="sub">{{ [kindNames[i.kind], i.provider, areaLabel(i.area)].filter(Boolean).join(' · ') }}</text>
+            <text v-if="i.priceCents" class="body">{{ money(i.priceCents) }}</text>
+          </button>
+        </template>
       </template>
-      <text v-if="!loading && !error && !items.length && !events.length && !courses.length" class="empty">
-        暂时没有已发布的内容
-      </text>
+      <view v-if="section !== 'shop' && !loading && !error && !displayed.length && !events.length && !courses.length" class="card empty-card">
+        当前分类暂无已发布的项目
+      </view>
     </template>
     <template v-if="event || item">
       <view class="card">
@@ -199,9 +232,18 @@ function copyLink() {
         <text v-for="r in registrations" :key="r.petId" class="line">{{ r.petName }} 已报名</text>
       </view>
       <view v-if="user && item?.kind === 'product'" class="actions">
-        <button class="primary" :disabled="busy || !item.stock" @tap="add">加入购物袋</button>
-        <button @tap="go('orders')">查看购物袋</button>
+        <button class="primary" :disabled="busy || !item.stock" @tap="add">加入购物车</button>
+        <button @tap="go('orders')">查看购物车</button>
       </view>
     </template>
+    <AreaPicker v-if="areaPicker" @close="areaPicker = false; refresh()" />
   </view>
 </template>
+<style scoped>
+.program-heading { display: flex; justify-content: space-between; align-items: center; gap: 9px; padding: 4px 0 13px; }
+.program-heading .actions { margin: 0; flex: none; }
+.program-search { display: flex; align-items: center; gap: 8px; }
+.program-search input { flex: 1; min-width: 0; }
+.program-search button { flex: none; min-height: 34px; }
+.program-listing { width: 100%; text-align: left; }
+</style>

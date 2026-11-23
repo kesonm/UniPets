@@ -3,13 +3,22 @@
     {
       "path": "pages/home/index",
       "style": {
-        "navigationBarTitleText": "宠云"
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#f5f4f1"
       }
     },
     {
       "path": "pages/pets/index",
       "style": {
-        "navigationBarTitleText": "我的宠物"
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#f5f4f1"
+      }
+    },
+    {
+      "path": "pages/friends/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#f5f4f1"
       }
     },
     {
@@ -21,7 +30,8 @@
     {
       "path": "pages/account/index",
       "style": {
-        "navigationBarTitleText": "我的"
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#f5f4f1"
       }
     },
     {
@@ -63,7 +73,8 @@
     {
       "path": "pages/orders/index",
       "style": {
-        "navigationBarTitleText": "购物袋与订单"
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#f5f4f1"
       }
     },
     {
@@ -81,30 +92,45 @@
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    "navigationBarBackgroundColor": "#fff9ed",
-    "backgroundColor": "#f7f5ef"
+    "navigationBarBackgroundColor": "#ffe34e",
+    "backgroundColor": "#f5f4f1"
   },
   "tabBar": {
-    "color": "#716c60",
-    "selectedColor": "#725019",
-    "backgroundColor": "#fffcf5",
+    "custom": true,
+    "color": "#61594b",
+    "selectedColor": "#2c230c",
+    "backgroundColor": "#ffffff",
     "borderStyle": "white",
     "list": [
       {
         "pagePath": "pages/home/index",
-        "text": "首页"
+        "text": "首页",
+        "iconPath": "static/icons/nav-home.png",
+        "selectedIconPath": "static/icons/nav-home-selected.png"
+      },
+      {
+        "pagePath": "pages/friends/index",
+        "text": "交友",
+        "iconPath": "static/icons/nav-friends.png",
+        "selectedIconPath": "static/icons/nav-friends-selected.png"
+      },
+      {
+        "pagePath": "pages/orders/index",
+        "text": "购物车",
+        "iconPath": "static/icons/nav-cart.png",
+        "selectedIconPath": "static/icons/nav-cart-selected.png"
       },
       {
         "pagePath": "pages/pets/index",
-        "text": "宠物档案"
-      },
-      {
-        "pagePath": "pages/discover/index",
-        "text": "发现"
+        "text": "宠物身份证",
+        "iconPath": "static/icons/nav-identity.png",
+        "selectedIconPath": "static/icons/nav-identity-selected.png"
       },
       {
         "pagePath": "pages/account/index",
-        "text": "我的"
+        "text": "我的",
+        "iconPath": "static/icons/nav-me.png",
+        "selectedIconPath": "static/icons/nav-me-selected.png"
       }
     ]
   }

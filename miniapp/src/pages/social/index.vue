@@ -41,6 +41,8 @@ const available = computed(() => matches.value.filter((m) => !pets.value.some((p
 onLoad((o) => {
   group.value = o?.group || ''
   creatorId.value = o?.creator || ''
+  if (o?.panel && tabs.includes(o.panel)) tab.value = o.panel
+  if (o?.area && areas.some((item) => item.id === o.area)) filter.value = o.area
 })
 function fill() {
   area.value = profile.value?.area || areas[0].id

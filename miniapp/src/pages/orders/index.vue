@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { onHide } from '@dcloudio/uni-app'
 import type { H5Order } from '../../../../src/h5/business'
 import { api, user, go, confirm, toast } from '../../lib/client'
-import { cart, quantity, checkout, money, statusName } from '../../lib/cart'
+import { cart, orderPanel, quantity, checkout, money, statusName } from '../../lib/cart'
 import { pageLoad, submitAction } from '../../lib/page'
+import { useTabPage } from '../../lib/tab-page'
 import LoginCard from '../../components/LoginCard.vue'
 import LoadState from '../../components/LoadState.vue'
+import UiIcon from '../../components/UiIcon.vue'
+const tabInset = useTabPage('pages/orders/index')
 const orders = ref<H5Order[]>([]),
   support = ref(''),
   text = ref('')
@@ -19,6 +23,8 @@ const { error, loading, refresh } = pageLoad(load, () => {
   text.value = ''
 })
 const { run, busy, error: actionError } = submitAction()
+onHide(() => { orderPanel.value = 'cart' })
+function shop() { go('directory', { module: 'shop' }) }
 function openSupport(order: H5Order) {
   support.value = order.id
   text.value = order.supportMessage || ''
@@ -28,6 +34,7 @@ function order() {
     if (!(await confirm('提交订单', '合计 ' + money(total.value) + '，提交后等待商家确认。'))) return
     await checkout()
     await load()
+    orderPanel.value = 'orders'
     toast('订单已提交')
   })
 }
@@ -49,13 +56,20 @@ function help(id: string) {
 }
 </script>
 <template>
-  <view class="screen">
-    <LoginCard v-if="!user" />
-    <template v-else>
-      <text v-if="actionError" class="error">{{ actionError }}</text>
-      <view class="card">
-        <text class="heading">购物袋</text>
-        <text v-if="!cart.items.length" class="empty">购物袋还是空的</text>
+  <view class="screen tab-screen" :style="{ '--tab-inset': tabInset + 'px' }">
+    <text v-if="actionError" class="error">{{ actionError }}</text>
+    <view class="spread cart-toolbar">
+      <button v-if="orderPanel === 'cart'" class="text-button" @tap="shop">继续选购</button>
+      <button v-else class="text-button" @tap="orderPanel = 'cart'">返回购物车</button>
+      <button v-if="orderPanel === 'cart'" class="text-button" @tap="orderPanel = 'orders'">订单与售后</button>
+    </view>
+    <template v-if="orderPanel === 'cart'">
+      <view v-if="!cart.items.length" class="card empty-card">
+        <UiIcon name="empty-cart" :size="25" />
+        <text class="cart-empty-title">购物车还是空的</text>
+        <button class="primary" @tap="shop">去商城</button>
+      </view>
+      <view v-else class="card">
         <view v-for="i in cart.items" :key="i.itemId" class="line">
           <text>{{ i.title }} · {{ money(i.unitCents) }}</text>
           <view class="actions">
@@ -70,14 +84,17 @@ function help(id: string) {
             </button>
           </view>
         </view>
-        <view class="actions">
-          <button class="small" @tap="go('directory', { module: 'shop' })">逛好物</button>
-          <button v-if="cart.items.length" class="primary" :disabled="busy" @tap="order">
-            提交订单 · {{ money(total) }}
+        <view class="spread cart-summary">
+          <text>平台商品合计 <text class="cart-total">{{ money(total) }}</text></text>
+          <button class="primary" :disabled="busy" @tap="order">
+            合并提交订单
           </button>
         </view>
       </view>
-      <text class="heading">我的订单</text>
+    </template>
+    <LoginCard v-else-if="!user" />
+    <template v-else>
+      <text class="heading">订单与售后</text>
       <LoadState :loading="loading" :error="error" @retry="refresh" />
       <text v-if="!loading && !error && !orders.length" class="empty">暂无订单</text>
       <view v-for="o in orders" :key="o.id" class="card">
@@ -104,3 +121,9 @@ function help(id: string) {
     </template>
   </view>
 </template>
+<style scoped>
+.cart-toolbar { margin: 0 0 9px; }
+.cart-empty-title { color: #262422; font-weight: 800; }
+.cart-summary { margin-top: 10px; }
+.cart-total { color: #9a531d; font-size: 18px; font-weight: 850; }
+</style>

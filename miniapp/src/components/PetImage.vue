@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { downloadAsset, user } from '../lib/client'
-const props = defineProps<{ assetId?: string | null; large?: boolean }>()
+const props = withDefaults(defineProps<{
+  assetId?: string | null
+  source?: string
+  large?: boolean
+  size?: number
+  previewable?: boolean
+}>(), { previewable: true })
 const src = ref('')
 watch(
   [() => props.assetId, () => user.value?.id],
@@ -22,14 +28,16 @@ watch(
   { immediate: true },
 )
 function preview() {
-  if (src.value) uni.previewImage({ urls: [src.value] })
+  const url = src.value || props.source
+  if (props.previewable && url) uni.previewImage({ urls: [url] })
 }
 </script>
 <template>
   <image
     :class="large ? 'photo' : 'thumb'"
+    :style="size ? { width: size + 'px', height: size + 'px' } : undefined"
     mode="aspectFill"
-    :src="src || '/static/brand-mark.png'"
+    :src="src || source || '/static/brand-mark.png'"
     @tap="preview"
   />
 </template>

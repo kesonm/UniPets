@@ -172,7 +172,7 @@ function addTribute() {
           <text class="heading">宠物身份证</text>
           <text class="line">生日　{{ pet.birthday || '未填写' }}</text>
           <text class="line">性别　{{ genderNames[pet.gender] }}</text>
-          <text class="line" selectable>鼻纹编号　{{ pet.identityNumber || '未登记' }}</text>
+          <text class="line" user-select>鼻纹编号　{{ pet.identityNumber || '未登记' }}</text>
           <text v-if="pet.notes" class="body">{{ pet.notes }}</text>
           <view class="actions">
             <button class="primary" @tap="go('pet-edit', { id })">编辑档案</button>

@@ -33,6 +33,7 @@ const list = computed(() => (mode.value === 'all' ? stories.value : showFav.valu
 onLoad((o) => {
   id.value = o?.id || ''
   mode.value = o?.mode || (id.value ? 'read' : 'all')
+  showFav.value = o?.tab === 'favorites'
 })
 onShareAppMessage(() => ({
   title: story.value?.title || '宠物故事',

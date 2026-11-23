@@ -5,17 +5,27 @@ type Line = { itemId: string; title: string; unitCents: number; quantity: number
 type Cart = { items: Line[]; requestKey: string }
 const fresh = (): Cart => ({ items: [], requestKey: '' })
 export const cart = ref<Cart>(fresh())
+export const orderPanel = ref<'cart' | 'orders'>('cart')
 let storage = ''
+function refreshBadge() {
+  // #ifdef MP-WEIXIN
+  const pages = getCurrentPages()
+  const page = pages[pages.length - 1] as { getTabBar?: () => { setData(data: { cartCount: number }): void } } | undefined
+  page?.getTabBar?.()?.setData({ cartCount: cart.value.items.reduce((sum, line) => sum + line.quantity, 0) })
+  // #endif
+}
 watch(
   () => user.value?.id,
   (id) => {
     storage = id ? 'petcloud.cart.' + id : ''
     cart.value = (storage && uni.getStorageSync(storage)) || fresh()
+    refreshBadge()
   },
   { immediate: true, flush: 'sync' },
 )
 function save() {
   if (storage) uni.setStorageSync(storage, cart.value)
+  refreshBadge()
 }
 export function quantity(id: string, n: number) {
   const line = cart.value.items.find((i) => i.itemId === id)
