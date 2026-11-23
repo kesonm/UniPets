@@ -65,14 +65,14 @@ export function updateUser(value: User) {
   uni.setStorageSync(sessionKey, { user: value, token })
 }
 export type Method = 'GET' | 'POST' | 'PUT' | 'DELETE'
-export function api<T>(path: string, method: Method = 'GET', data?: Record<string, unknown>): Promise<T> {
+export function api<T>(path: string, method: Method = 'GET', data?: Record<string, unknown>, timeout = 18000): Promise<T> {
   const usedToken = token
   return new Promise((resolve, reject) =>
     uni.request({
       url: apiUrl(path),
       method,
       data: method === 'GET' ? undefined : data || {},
-      timeout: 18000,
+      timeout,
       header: {
         'Content-Type': 'application/json',
         'X-PetCloud-Client': 'miniprogram',
@@ -126,19 +126,25 @@ export async function logout() {
   await api('/auth/logout', 'POST')
   forget()
 }
-export function downloadAsset(id: string): Promise<string> {
+function downloadImage(path: string, label: string): Promise<string> {
   const usedToken = token
   return new Promise((resolve, reject) =>
     uni.downloadFile({
-      url: apiUrl('/assets/' + id + '/file'),
+      url: apiUrl(path),
       header: { Authorization: 'Bearer ' + usedToken },
       success: (r) =>
         r.statusCode === 200 && token === usedToken
           ? resolve(r.tempFilePath)
-          : reject(new Error('照片暂时无法读取')),
-      fail: () => reject(new Error('照片下载失败')),
+          : reject(new Error(label + '暂时无法读取')),
+      fail: () => reject(new Error(label + '下载失败')),
     }),
   )
+}
+export function downloadAsset(id: string) {
+  return downloadImage('/assets/' + id + '/file', '照片')
+}
+export function downloadIdentityCode(id: string, kind: 'barcode'|'qrcode') {
+  return downloadImage('/pets/' + id + '/identity/codes/' + kind, '身份证识别码')
 }
 export function today() {
   const d = new Date()

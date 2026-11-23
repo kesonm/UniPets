@@ -20,6 +20,7 @@
 | GET / POST | /pets | 列出本人档案 / 新建普通档案，必填 `name`、`species`，每个账号最多 3 份 |
 | GET / POST | /pets/identity | 查询已配置的识别物种 / 上传 `nosePrintImage` 并创建档案和数字身份证 |
 | POST | /pets/:id/identity | 上传 `nosePrintImage`，为已有档案登记鼻纹并签发身份证 |
+| GET | /pets/:id/identity/codes/:kind | 下载已签发的本人宠物身份证号编码图片。`kind` 为 `barcode` 或 `qrcode`，响应为 PNG |
 | PUT 或 PATCH / DELETE | /pets/:id | 编辑完整档案 / 删除档案及关联素材、任务、记忆 |
 | GET | /assets?petId=&kind= | 本人资产列表，最多 500 个 |
 | POST | /assets | petId, name, image（JPG/PNG/WebP data URL，解码后不超过 8MB） |

@@ -70,6 +70,9 @@ importers:
 
   server:
     dependencies:
+      '@bwip-js/node':
+        specifier: 4.11.4
+        version: 4.11.4
       dotenv:
         specifier: ^16.6.1
         version: 16.6.1
@@ -669,6 +672,9 @@ packages:
   '@babel/types@7.29.8':
     resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
     engines: {node: '>=6.9.0'}
+
+  '@bwip-js/node@4.11.4':
+    resolution: {integrity: sha512-EIdaQskEGlY+sWQQljoAdzZri+nDp8eZKIa4RQtb1/w0wm0VvCNdlR7AMhakGL9xqHEwMTZhz8qIV3lvoUiR1Q==}
 
   '@ctrl/tinycolor@4.2.1':
     resolution: {integrity: sha512-Vh5uy9Y1JBMId6J1f68TMXnZrTCvNdo9Fu2k0d1YnJngR+sM5kWTKl441c/3TFs+cG0NWOjRWgQ/iaWhbYx+7A==}
@@ -4211,6 +4217,8 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
+
+  '@bwip-js/node@4.11.4': {}
 
   '@ctrl/tinycolor@4.2.1': {}
 

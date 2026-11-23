@@ -4,12 +4,13 @@ import { onLoad } from '@dcloudio/uni-app'
 import type { Asset, Memory, Pet } from '../../../../src/lib/types'
 import type { PetRecords } from '../../../../src/h5/business'
 import { api, confirm, genderNames, go, petsTab, speciesNames, toast, today, user } from '../../lib/client'
-import { getPet, petFields } from '../../lib/pets'
+import { getPet, petFields, scanPetIdentity } from '../../lib/pets'
 import { choosePhoto } from '../../lib/photo'
 import { pageLoad, submitAction } from '../../lib/page'
 import LoginCard from '../../components/LoginCard.vue'
 import LoadState from '../../components/LoadState.vue'
 import PetImage from '../../components/PetImage.vue'
+import PetIdentityCodes from '../../components/PetIdentityCodes.vue'
 import ChoiceField from '../../components/ChoiceField.vue'
 import MotionPlayer from '../../components/MotionPlayer.vue'
 const id = ref(''),
@@ -46,7 +47,8 @@ onLoad((q) => {
   id.value = q?.id || ''
 })
 async function load() {
-  if (!user.value) return
+  const owner = user.value?.id
+  if (!owner) return
   const [p, a, m, r, s] = await Promise.all([
     getPet(id.value),
     api<{ assets: Asset[] }>('/assets?petId=' + id.value),
@@ -54,6 +56,7 @@ async function load() {
     api<PetRecords>('/h5/pet-records/' + id.value),
     api<{ species: string[] }>('/pets/identity'),
   ])
+  if (user.value?.id !== owner) return
   pet.value = p
   assets.value = a.assets
   memories.value = m.memories.filter((x) => x.petId === id.value)
@@ -81,14 +84,20 @@ function removePet() {
     petsTab()
   })
 }
-function upload(nose = false) {
+function enroll() {
+  return run(async () => {
+    const updated = await scanPetIdentity(id.value)
+    if (!updated) return
+    pet.value = updated
+    toast('宠物身份证已生成')
+  })
+}
+function upload() {
   return run(async () => {
     const image = await choosePhoto()
     if (!image) return
-    if (nose) await api('/pets/' + id.value + '/identity', 'POST', { nosePrintImage: image })
-    else
-      await api('/assets', 'POST', { petId: id.value, name: (pet.value?.name || '宠物') + '的照片', image })
-    await saved(nose ? '鼻纹已登记' : '照片已保存')
+    await api('/assets', 'POST', { petId: id.value, name: (pet.value?.name || '宠物') + '的照片', image })
+    await saved('照片已保存')
   })
 }
 function cover(assetId: string) {
@@ -169,19 +178,20 @@ function addTribute() {
         </view>
         <text v-if="actionError" class="error">{{ actionError }}</text>
         <view v-if="tab === '资料'" class="card">
-          <text class="heading">宠物身份证</text>
+          <text class="heading">{{ pet.identityNumber ? '宠物身份证' : '宠物档案' }}</text>
           <text class="line">生日　{{ pet.birthday || '未填写' }}</text>
           <text class="line">性别　{{ genderNames[pet.gender] }}</text>
-          <text class="line" user-select>鼻纹编号　{{ pet.identityNumber || '未登记' }}</text>
+          <text v-if="pet.identityNumber" class="line" user-select>身份证号　{{ pet.identityNumber }}</text>
+          <PetIdentityCodes v-if="pet.identityNumber" :pet-id="pet.id" :number="pet.identityNumber" />
           <text v-if="pet.notes" class="body">{{ pet.notes }}</text>
           <view class="actions">
             <button class="primary" @tap="go('pet-edit', { id })">编辑档案</button>
             <button
               v-if="!pet.identityNumber && models.includes(pet.species)"
               :disabled="busy"
-              @tap="upload(true)"
+              @tap="enroll"
             >
-              登记鼻纹
+              {{ busy ? '正在识别…' : '扫描鼻纹' }}
             </button>
             <button class="danger" :disabled="busy" @tap="removePet">删除档案</button>
           </view>

@@ -13,6 +13,7 @@ import { supportsForegroundRemoval } from './foreground.js'
 import { getMotionAssets, getMotionClipSteps, getMotionPoses } from './motion-batches.js'
 import { issuePetIdentity, type NosePrint } from './pet-identity.js'
 import { availableNosePrintSpecies, readNosePrint } from './pet-nose-print.js'
+import { renderIdentityCode } from './identity-codes.js'
 const uuid = z.string().uuid()
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式不正确').refine(value => {
   const parsed = new Date(`${value}T00:00:00Z`)
@@ -86,6 +87,14 @@ apiRouter.post('/pets/:id/identity', async (req,res) => {
     })
   }
   res.json({pet:(await listPets(owner)).find(item=>item.id===id)})
+})
+apiRouter.get('/pets/:id/identity/codes/:kind', async (req,res) => {
+  const id=uuid.parse(req.params.id)
+  const kind=z.enum(['barcode','qrcode']).parse(req.params.kind)
+  const [pet]=await rows<IdentityPet>(identityPetQuery,[id,req.user.id])
+  if (!pet?.identityNumber) throw new HttpError(404,'宠物身份证尚未签发或已删除')
+  const image=await renderIdentityCode(pet.identityNumber,kind)
+  res.type('png').send(image)
 })
 apiRouter.route('/pets/:id').patch(updatePet).put(updatePet)
 async function updatePet(req: Request, res: Response) {

@@ -87,11 +87,14 @@ test('WeChat code exchange, concurrent registration and private pet sessions', a
     assert.deepEqual(Object.keys(a.data).sort(), ['token', 'user'])
     assert.deepEqual(Object.keys(a.data.user).sort(), ['createdAt', 'displayName', 'id', 'username'])
     assert.match(a.data.token, /^[a-f0-9]{64}$/)
+    assert.deepEqual((await request('/pets', 'GET', undefined, a.data.token)).data, { pets: [] })
     assert.equal((await login('first')).status, 401)
     assert.equal((await request('/pets', 'POST', { name: '无会话', species: 'cat' })).status, 403)
     const pet = await request('/pets', 'POST', { name: '小云', species: 'cat' }, a.data.token)
     assert.equal(pet.status, 201)
     const id = pet.data.pet.id
+    assert.equal(pet.data.pet.identityNumber, null)
+    assert.equal((await request('/pets/'+id+'/identity/codes/qrcode', 'GET', undefined, a.data.token)).status, 404)
     const again = await login('returning'),
       other = await login('other')
     assert.equal(again.status, 200)
