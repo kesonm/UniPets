@@ -130,7 +130,8 @@ h5Router.get('/demo-pets/:id/room/:assetId/image', async (req,res) => {
 })
 
 const postSelect = `SELECT post.id,post.title,post.body,post.area,post.topic,post.created_at AS createdAt,
-  p.name AS petName,p.species,u.display_name AS author,(post.asset_id IS NOT NULL) AS hasImage,
+  p.name AS petName,p.species,u.display_name AS author,(post.asset_id IS NOT NULL AND post.hidden_at IS NULL) AS hasImage,
+  (post.hidden_at IS NOT NULL) AS hidden,
   (SELECT COUNT(*) FROM h5_reactions r WHERE r.post_id=post.id AND r.kind='like') AS likes
   FROM h5_posts post JOIN pets p ON p.id=post.pet_id JOIN users u ON u.id=post.user_id`
 
@@ -156,14 +157,15 @@ h5Router.get('/posts', async (req, res) => {
     order.push(...nearby.map(item => item.id),nearby.length+1)
   }
   const records = await rows(`${postSelect}
-    WHERE (? IS NULL OR post.topic=?) AND (?='' OR LOCATE(?,CONCAT_WS(' ',post.title,post.body,p.name,u.display_name))>0)
+    WHERE post.hidden_at IS NULL AND (? IS NULL OR post.topic=?)
+      AND (?='' OR LOCATE(?,CONCAT_WS(' ',post.title,post.body,p.name,u.display_name))>0)
     ORDER BY ${rank} post.created_at DESC,post.id DESC LIMIT ? OFFSET ?`,
   [query.topic??null,query.topic??null,query.q,query.q,...order,pageSize+1,(query.page-1)*pageSize])
   res.json({ posts:records.slice(0,pageSize), hasMore:records.length>pageSize })
 })
 
 h5Router.get('/posts/:id', async (req, res) => {
-  const [post] = await rows(`${postSelect} WHERE post.id=?`, [uuid.parse(req.params.id)])
+  const [post] = await rows(`${postSelect} WHERE post.id=? AND post.hidden_at IS NULL`, [uuid.parse(req.params.id)])
   if (!post) throw new HttpError(404, '动态不存在')
   res.json({post})
 })
@@ -171,7 +173,7 @@ h5Router.get('/posts/:id', async (req, res) => {
 h5Router.get('/posts/:id/image', async (req, res) => {
   const [image] = await rows<{fileKey:string}>(`SELECT a.file_key AS fileKey FROM h5_posts post
     JOIN assets a ON a.id=post.asset_id AND a.user_id=post.user_id AND a.pet_id=post.pet_id AND a.kind='photo'
-    WHERE post.id=?`, [uuid.parse(req.params.id)])
+    WHERE post.id=? AND post.hidden_at IS NULL`, [uuid.parse(req.params.id)])
   res.type('webp').send(await photoThumbnail(image?.fileKey, 960))
 })
 
@@ -182,8 +184,9 @@ h5Router.get('/me', async (req, res) => {
   const [published, favorites, reactions] = await Promise.all([
     rows(`${postSelect} WHERE post.user_id=? ORDER BY post.created_at DESC,post.id DESC LIMIT 100`, [owner]),
     rows(`${postSelect} JOIN h5_reactions saved ON saved.post_id=post.id AND saved.kind='favorite'
-      WHERE saved.user_id=? ORDER BY saved.created_at DESC,post.id DESC LIMIT 100`, [owner]),
-    rows<{id:string;kind:string}>(`SELECT post_id AS id,kind FROM h5_reactions WHERE user_id=?`, [owner]),
+      WHERE saved.user_id=? AND post.hidden_at IS NULL ORDER BY saved.created_at DESC,post.id DESC LIMIT 100`, [owner]),
+    rows<{id:string;kind:string}>(`SELECT r.post_id AS id,r.kind FROM h5_reactions r JOIN h5_posts post ON post.id=r.post_id
+      WHERE r.user_id=? AND post.hidden_at IS NULL`, [owner]),
   ])
   res.json({published,favorites,likedIds:reactions.filter(item=>item.kind==='like').map(item=>item.id),
     savedIds:reactions.filter(item=>item.kind==='favorite').map(item=>item.id)})
@@ -218,7 +221,7 @@ h5Router.put('/posts/:id/reaction', async (req, res) => {
   const {kind,active} = z.object({kind:z.enum(['like','favorite']),active:z.boolean()}).parse(req.body)
   const owner = req.user.id
   const likes = await transaction(async conn => {
-    const [found] = await conn.execute('SELECT id FROM h5_posts WHERE id=? FOR SHARE', [postId])
+    const [found] = await conn.execute('SELECT id FROM h5_posts WHERE id=? AND hidden_at IS NULL FOR SHARE', [postId])
     if (!(found as unknown[]).length) throw new HttpError(404,'动态不存在')
     if (active) await conn.execute(`INSERT INTO h5_reactions (post_id,user_id,kind,created_at)
       VALUES (?,?,?,UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE post_id=VALUES(post_id)`, [postId,owner,kind])

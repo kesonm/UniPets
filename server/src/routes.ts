@@ -18,7 +18,7 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式不正确').re
   const parsed = new Date(`${value}T00:00:00Z`)
   return !isNaN(parsed.getTime()) && parsed.toISOString().slice(0,10) === value
 }, '日期无效')
-const petSchema = z.object({
+export const petSchema = z.object({
   name: z.string().trim().min(1, '请输入宠物名字').max(40), species: z.enum(['dog','cat','other']),
   breed: z.string().trim().max(80).default(''), birthday: date.nullable().default(null),
   gender: z.enum(['unknown','male','female']).default('unknown'), notes: z.string().max(2000).default(''),
@@ -90,7 +90,12 @@ apiRouter.post('/pets/:id/identity', async (req,res) => {
 apiRouter.route('/pets/:id').patch(updatePet).put(updatePet)
 async function updatePet(req: Request, res: Response) {
   const id = uuid.parse(req.params.id), owner=req.user.id
-  const data = petSchema.parse(req.body)
+  await updatePetRecord(owner,id,petSchema.parse(req.body))
+  res.json({ pet: (await listPets(owner)).find(p => p.id === id) })
+}
+
+type PetEdit = Omit<z.infer<typeof petSchema>, 'avatarAssetId'> & { avatarAssetId?: string|null }
+export async function updatePetRecord(owner: string, id: string, data: PetEdit) {
   await transaction(async conn=>{
     await conn.execute('SELECT id FROM users WHERE id=? FOR UPDATE',[owner])
     const [[pet]]=await conn.execute<(RowDataPacket & IdentityPet)[]>(identityPetQuery,[id,owner])
@@ -101,9 +106,9 @@ async function updatePet(req: Request, res: Response) {
       if (!asset) throw new HttpError(404,'素材不存在')
       if (asset.petId!==id || asset.kind!=='photo') throw new HttpError(400,'封面必须是该宠物的照片')
     }
-    await conn.execute('UPDATE pets SET name=?,species=?,breed=?,birthday=?,gender=?,notes=?,avatar_asset_id=? WHERE id=? AND user_id=?', [data.name,data.species,data.breed,data.birthday,data.gender,data.notes,data.avatarAssetId,id,owner])
+    await conn.execute('UPDATE pets SET name=?,species=?,breed=?,birthday=?,gender=?,notes=?,avatar_asset_id=IF(?,avatar_asset_id,?) WHERE id=? AND user_id=?',
+      [data.name,data.species,data.breed,data.birthday,data.gender,data.notes,data.avatarAssetId===undefined,data.avatarAssetId??null,id,owner])
   })
-  res.json({ pet: (await listPets(owner)).find(p => p.id === id) })
 }
 apiRouter.delete('/pets/:id', async (req, res) => {
   const id = uuid.parse(req.params.id)

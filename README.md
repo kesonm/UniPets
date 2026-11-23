@@ -6,7 +6,7 @@
 
 ```text
 miniapp/              微信小程序页面、微信登录、宠物档案和社区
-src/                  旧版 Vue 网页工作台和 H5 客户端
+src/                  管理后台、旧版 Vue 网页工作台和 H5 客户端
 server/src/           账号、宠物、资产、生成任务和成长记忆接口
 server/migrations/    MySQL 表结构与迁移记录
 server/test/          真实 MySQL + 本地模型模拟服务的接口集成测试
@@ -71,6 +71,18 @@ pnpm dev
 
 旧版网页与 API 可通过 `pnpm dev:legacy` 同时启动。网页默认端口为 4173，API 为 3008。
 
+## 管理后台
+
+后台入口为 `/admin`。侧栏包含用户、门店、商品、宠物、服务、动态和创作管理。商品与服务沿用小程序业务目录，可关联门店。门店停用后，已上架的关联项目暂停公开展示；恢复营业后会按原上架状态显示。动态和已发布的宠物故事支持隐藏和恢复。
+
+本地运行 `pnpm db:migrate` 和 `pnpm dev:legacy`，通过网页首页注册一个专用账号。使用下列命令授予该账号管理员权限，然后在 `http://localhost:4173/admin` 登录。撤销权限时将 `grant` 改为 `revoke`。
+
+```bash
+pnpm --dir server admin:account grant <网页用户名>
+```
+
+Docker 部署将管理入口绑定在服务器本机的 `13000` 端口。使用 SSH 转发，例如 `ssh -N -L 13000:127.0.0.1:13000 fixagent`，在浏览器访问 `http://localhost:13000/admin`。保留原有 `FRONTEND_ORIGINS` 并加入 `http://localhost:13000`。容器内的授权命令为 `docker compose -f deploy/compose.yaml exec api node server/dist/admin-account.js grant <网页用户名>`。
+
 ## 手机 H5
 
 `/h5` 和 `/?view=h5` 打开移动工作台，手机访问首页时默认显示 H5。宽屏工作台可通过 `/?view=workbench` 打开。
@@ -116,6 +128,7 @@ pnpm test:wechat
 pnpm test:sprites
 pnpm test:video
 pnpm test:api
+pnpm test:admin
 pnpm test:h5
 pnpm test:video-jobs
 ```

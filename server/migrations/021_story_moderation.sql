@@ -1,0 +1,1 @@
+ALTER TABLE h5_stories ADD COLUMN hidden_at DATETIME(3) NULL;

@@ -17,7 +17,8 @@ const commentFields = `SELECT c.id,c.body,c.created_at AS createdAt,u.display_na
 
 h5SocialPagesRouter.get('/posts/:id/comments', async (req,res) => {
   const postId = uuid.parse(req.params.id)
-  const comments = await rows(`${commentFields} WHERE c.post_id=? ORDER BY c.created_at DESC,c.id LIMIT 60`,[postId])
+  const comments = await rows(`${commentFields} JOIN h5_posts post ON post.id=c.post_id AND post.hidden_at IS NULL
+    WHERE c.post_id=? ORDER BY c.created_at DESC,c.id LIMIT 60`,[postId])
   res.json({comments})
 })
 
@@ -32,7 +33,7 @@ h5SocialPagesRouter.post('/posts/:id/comments', requireAuth, async (req,res) => 
   const {body} = message.parse(req.body)
   const id = randomUUID()
   const [result] = await db.execute<ResultSetHeader>(`INSERT INTO h5_post_comments (id,post_id,user_id,body)
-    SELECT ?,id,?,? FROM h5_posts WHERE id=?`, [id,req.user.id,body,postId])
+    SELECT ?,id,?,? FROM h5_posts WHERE id=? AND hidden_at IS NULL`, [id,req.user.id,body,postId])
   if (!result.affectedRows) throw new HttpError(404,'动态不存在')
   const [comment] = await rows(`${commentFields} WHERE c.id=?`,[id])
   res.status(201).json({comment})
@@ -150,7 +151,7 @@ h5SocialPagesRouter.post('/groups/:id/messages', requireAuth, async (req,res) =>
 })
 
 const creatorFields = `SELECT c.id,c.bio,c.featured,u.display_name AS name,
-  (SELECT COUNT(*) FROM h5_posts p WHERE p.user_id=c.user_id) AS postCount
+  (SELECT COUNT(*) FROM h5_posts p WHERE p.user_id=c.user_id AND p.hidden_at IS NULL) AS postCount
   FROM h5_creators c JOIN users u ON u.id=c.user_id`
 h5SocialPagesRouter.get('/creators', async (_req,res) => {
   const creators = await rows(`${creatorFields} WHERE c.published=TRUE ORDER BY c.featured DESC,c.id LIMIT 60`)
@@ -162,7 +163,8 @@ h5SocialPagesRouter.get('/creators/:id', async (req,res) => {
   const [creator] = await rows(`${creatorFields} WHERE c.id=? AND c.published=TRUE`,[id])
   if (!creator) throw new HttpError(404,'这个达人主页暂未发布')
   const posts = await rows(`SELECT p.id,p.title,p.created_at AS createdAt FROM h5_posts p
-    JOIN h5_creators c ON c.user_id=p.user_id WHERE c.id=? AND c.published=TRUE ORDER BY p.created_at DESC,p.id LIMIT 60`,[id])
+    JOIN h5_creators c ON c.user_id=p.user_id WHERE c.id=? AND c.published=TRUE AND p.hidden_at IS NULL
+    ORDER BY p.created_at DESC,p.id LIMIT 60`,[id])
   res.json({creator,posts})
 })
 

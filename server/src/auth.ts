@@ -2,6 +2,7 @@ import { randomBytes, randomUUID, createHash, scrypt as scryptCallback, timingSa
 import { promisify } from 'node:util'
 import { Router, type Request, type Response, type NextFunction } from 'express'
 import { rateLimit } from 'express-rate-limit'
+import type { RowDataPacket } from 'mysql2/promise'
 import { z } from 'zod'
 import { db, rows, transaction } from './db.js'
 import { config } from './config.js'
@@ -9,7 +10,7 @@ import { HttpError } from './errors.js'
 import { exchangeWeChatCode } from './wechat.js'
 const scrypt = promisify(scryptCallback)
 export interface User { id: string; username: string; displayName: string; createdAt: string }
-declare global { namespace Express { interface Request { user: User; tokenHash: string } } }
+declare global { namespace Express { interface Request { user: User; tokenHash: string; isAdmin: boolean } } }
 export const userSelect = 'id, username, display_name AS displayName, created_at AS createdAt'
 const cookieName = 'petcloud_session'
 const digest = (value: string) => createHash('sha256').update(value).digest('hex')
@@ -40,22 +41,34 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
   const token = tokenFor(req)
   if (!/^[a-f0-9]{64}$/.test(token)) throw new HttpError(401, '请先登录')
   const tokenHash = digest(token)
-  const [user] = await rows<User>(`SELECT u.id, u.username, u.display_name AS displayName, u.created_at AS createdAt FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP(3)`, [tokenHash])
-  if (!user) throw new HttpError(401, '登录已过期，请重新登录')
-  req.user = user; req.tokenHash = tokenHash; next()
+  const [session] = await rows<User & {isAdmin: number}>(`SELECT u.id,u.username,u.display_name AS displayName,
+    u.created_at AS createdAt,u.is_admin AS isAdmin FROM sessions s JOIN users u ON u.id=s.user_id
+    WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP(3) AND u.disabled_at IS NULL`, [tokenHash])
+  if (!session) throw new HttpError(401, '登录已过期，请重新登录')
+  const {isAdmin,...user} = session
+  req.user = user
+  req.isAdmin = Boolean(isAdmin)
+  req.tokenHash = tokenHash
+  next()
 }
-async function issueSession(req: Request, res: Response, user: User, miniProgram = false) {
+async function issueSession(req: Request, res: Response, user: User, client: 'user'|'wechat'|'admin' = 'user') {
   const token = randomBytes(32).toString('hex')
-  await db.execute('INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 7 DAY))', [digest(token), user.id])
-  if (miniProgram || req.get('X-PetCloud-Client') === 'desktop') res.json({ user, token })
+  await transaction(async conn => {
+    const [[account]] = await conn.execute<RowDataPacket[]>(
+      'SELECT is_admin AS isAdmin,disabled_at AS disabledAt FROM users WHERE id=? FOR UPDATE', [user.id])
+    if (!account || account.disabledAt) throw new HttpError(403, '账号已停用')
+    if (client === 'admin' && !account.isAdmin) throw new HttpError(403, '当前账号没有管理员权限')
+    await conn.execute('INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 7 DAY))', [digest(token), user.id])
+  })
+  if (client === 'wechat' || (client === 'user' && req.get('X-PetCloud-Client') === 'desktop')) res.json({ user, token })
   else { res.cookie(cookieName, token, { ...sessionCookie(req), maxAge: 7 * 86400_000 }); res.json({ user }) }
 }
 const username = z.string().trim().regex(/^[a-zA-Z0-9_]{3,32}$/, '账号需为 3–32 位字母、数字或下划线')
 const password = z.string().min(8, '密码至少 8 位').max(128, '密码不能超过 128 位')
 export const authRouter = Router()
 authRouter.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next() })
-const limiter = rateLimit({ windowMs: 15 * 60_000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: '操作过于频繁，请 15 分钟后重试' } })
-authRouter.post('/wechat', limiter, async (req, res) => {
+export const authLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: '操作过于频繁，请 15 分钟后重试' } })
+authRouter.post('/wechat', authLimiter, async (req, res) => {
   const { code } = z.object({ code: z.string().trim().min(1).max(256) }).strict().parse(req.body)
   const openid = await exchangeWeChatCode(code)
   const findAccount = async () => (await rows<User>(
@@ -80,9 +93,9 @@ authRouter.post('/wechat', limiter, async (req, res) => {
     user = await findAccount()
     if (!user) throw new HttpError(503, '暂时无法创建账号，请重新登录')
   }
-  await issueSession(req, res, user, true)
+  await issueSession(req, res, user, 'wechat')
 })
-authRouter.post('/register', limiter, async (req, res) => {
+authRouter.post('/register', authLimiter, async (req, res) => {
   const data = z.object({ username, password, displayName: z.string().trim().max(40).optional() }).parse(req.body)
   const id = randomUUID(), hash = await hashPassword(data.password)
   try {
@@ -94,14 +107,20 @@ authRouter.post('/register', limiter, async (req, res) => {
   const [user] = await rows<User>(`SELECT ${userSelect} FROM users WHERE id=?`, [id])
   res.status(201); await issueSession(req, res, user)
 })
-authRouter.post('/login', limiter, async (req, res) => {
-  const data = z.object({ username: z.string().trim().min(1).max(64), password: z.string().max(128) }).parse(req.body)
+async function verifyLogin(body: unknown): Promise<User> {
+  const data = z.object({ username: z.string().trim().min(1).max(64), password: z.string().max(128) }).parse(body)
   const [user] = await rows<User & { passwordHash: string }>(`SELECT ${userSelect}, password_hash AS passwordHash FROM users WHERE username=?`, [data.username])
   const valid = await verifyPassword(data.password, user?.passwordHash || await dummyPassword)
   if (!user || !valid) throw new HttpError(401, '账号或密码错误')
   const { passwordHash: _, ...publicUser } = user
-  await issueSession(req, res, publicUser)
+  return publicUser
+}
+authRouter.post('/login', authLimiter, async (req, res) => {
+  await issueSession(req, res, await verifyLogin(req.body))
 })
+export async function adminLogin(req: Request, res: Response) {
+  await issueSession(req, res, await verifyLogin(req.body), 'admin')
+}
 authRouter.get('/me', requireAuth, (req, res) => res.json({ user: req.user }))
 authRouter.post('/logout', requireAuth, async (req, res) => {
   await db.execute('DELETE FROM sessions WHERE token_hash=?', [req.tokenHash])
@@ -113,7 +132,7 @@ async function updateProfile(req: Request, res: Response) {
   await db.execute('UPDATE users SET display_name=? WHERE id=?', [data.displayName, req.user.id])
   res.json({ user: { ...req.user, displayName: data.displayName } })
 }
-authRouter.post('/password', requireAuth, limiter, async (req, res) => {
+authRouter.post('/password', requireAuth, authLimiter, async (req, res) => {
   const data = z.object({ currentPassword: z.string().max(128), newPassword: password }).parse(req.body)
   const [user] = await rows<{ password_hash: string }>('SELECT password_hash FROM users WHERE id=?', [req.user.id])
   if (!await verifyPassword(data.currentPassword, user.password_hash)) throw new HttpError(400, '当前密码不正确')

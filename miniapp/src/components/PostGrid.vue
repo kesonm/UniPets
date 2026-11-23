@@ -32,6 +32,7 @@ function when(value: string) {
           <image v-else-if="post.hasImage" :src="publicImage('/h5/posts/' + post.id + '/image')" mode="aspectFill" lazy-load />
           <UiIcon v-else name="picture" :size="26" />
           <text v-if="post.exampleImage" class="post-example">示例动态</text>
+          <text v-else-if="post.hidden" class="post-example">已隐藏</text>
         </view>
         <text class="post-title">{{ post.title }}</text>
       </button>

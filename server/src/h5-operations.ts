@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
 import type { ResultSetHeader } from 'mysql2/promise'
 import { z } from 'zod'
@@ -6,35 +5,13 @@ import { requireAuth } from './auth.js'
 import { config } from './config.js'
 import { db, rows } from './db.js'
 import { HttpError } from './errors.js'
-import { catalogModules, engagementSelect, h5Area } from './h5-directory.js'
+import { catalogInput, createCatalogItem } from './catalog.js'
+import { engagementSelect } from './h5-directory.js'
 import { withOrderItems } from './h5-orders.js'
 
 export const h5OperationsRouter = Router()
 const uuid=z.string().uuid()
 const hasAccess=(id:string)=>config.h5OperatorIds.includes(id)
-const catalogInput=z.object({
-  module:catalogModules,category:z.string().regex(/^[a-z][a-z-]{0,31}$/),
-  kind:z.enum(['article','appointment','enrollment','product','group','link']),
-  title:z.string().trim().min(1).max(120),provider:z.string().trim().max(120),
-  description:z.string().trim().min(1).max(5000),area:h5Area.nullable(),
-  venue:z.string().trim().max(160).nullable(),startsAt:z.string().datetime().nullable(),closesAt:z.string().datetime().nullable(),
-  priceCents:z.number().int().min(1).max(10000000).nullable(),stock:z.number().int().min(0).max(100000).nullable(),
-  externalUrl:z.string().url().max(500).refine(value=>{
-    try {
-      const url=new URL(value)
-      return url.protocol==='https:'&&!url.username&&!url.password
-    } catch {return false}
-  },'请输入 HTTPS 官方链接').nullable(),
-  published:z.boolean(),
-}).strict().superRefine((item, context)=>{
-  const issue=(path:string,message:string)=>context.addIssue({code:'custom',path:[path],message})
-  if (item.kind==='product'&&(item.priceCents===null||item.stock===null)) issue('stock','商品需填写价格和库存')
-  if (item.kind==='appointment'&&!item.startsAt) issue('startsAt','预约项目需填写服务时间')
-  if (item.kind==='link'&&!item.externalUrl) issue('externalUrl','外链项目需填写官方链接')
-  if ((item.kind==='group')!==(item.module==='friends')) issue('module','交友项目请选择社群类型')
-  if (item.module==='shop'&&item.kind!=='product') issue('kind','品牌超市项目请选择商品类型')
-  if (item.startsAt&&item.closesAt&&Date.parse(item.closesAt)>Date.parse(item.startsAt)) issue('closesAt','报名截止不能晚于开始时间')
-})
 
 h5OperationsRouter.use(requireAuth)
 h5OperationsRouter.get('/access',(req,res)=>res.json({allowed:hasAccess(req.user.id)}))
@@ -49,13 +26,7 @@ h5OperationsRouter.get('/catalog',async (_req,res)=>{
   res.json({listings})
 })
 h5OperationsRouter.post('/catalog',async (req,res)=>{
-  const item=catalogInput.parse(req.body)
-  const id=randomUUID()
-  await db.execute(`INSERT INTO h5_catalog_items
-    (id,module,category,kind,title,provider,description,area,venue,starts_at,closes_at,price_cents,stock,external_url,published)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[id,item.module,item.category,item.kind,item.title,item.provider,
-    item.description,item.area,item.venue,item.startsAt?new Date(item.startsAt):null,item.closesAt?new Date(item.closesAt):null,
-    item.priceCents,item.stock,item.externalUrl,item.published])
+  const id=await createCatalogItem(catalogInput.parse(req.body))
   res.status(201).json({id})
 })
 h5OperationsRouter.patch('/catalog/:id',async (req,res)=>{

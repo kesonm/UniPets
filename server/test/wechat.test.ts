@@ -125,6 +125,10 @@ test('WeChat code exchange, concurrent registration and private pet sessions', a
       (await request('/dashboard', 'GET', undefined, again.data.token)).data.generationEnabled,
       false,
     )
+    await db.execute('UPDATE users SET disabled_at=UTC_TIMESTAMP(3) WHERE id=?',[a.data.user.id])
+    wechatCodes.set('disabled',first)
+    assert.equal((await login('disabled')).status,403)
+    assert.equal((await request('/auth/me','GET',undefined,again.data.token)).status,401)
   } finally {
     config.wechatAppId = originalApp
     config.wechatAppSecret = originalSecret

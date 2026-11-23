@@ -23,37 +23,38 @@ const storyInput = z.object({title:z.string().trim().min(1,'请填写作品标�
 h5StoriesRouter.get('/stories', async (req,res) => {
   const {q} = z.object({q:z.string().trim().max(60).default('')}).parse(req.query)
   const stories = await rows(`SELECT ${storyFields} ${storyFrom}
-    WHERE s.published_at IS NOT NULL AND (?='' OR LOCATE(?,CONCAT_WS(' ',s.title,p.name,u.display_name))>0)
+    WHERE s.published_at IS NOT NULL AND s.hidden_at IS NULL AND (?='' OR LOCATE(?,CONCAT_WS(' ',s.title,p.name,u.display_name))>0)
     ORDER BY s.published_at DESC,s.id LIMIT 60`, [q,q])
   res.json({stories})
 })
 
 h5StoriesRouter.get('/stories/:id', async (req,res) => {
   const [story] = await rows(`SELECT ${storyFields},s.scenes ${storyFrom}
-    WHERE s.id=? AND s.published_at IS NOT NULL`, [uuid.parse(req.params.id)])
+    WHERE s.id=? AND s.published_at IS NOT NULL AND s.hidden_at IS NULL`, [uuid.parse(req.params.id)])
   if (!story) throw new HttpError(404, '作品未发布或已撤回')
   res.json({story})
 })
 
 h5StoriesRouter.get('/stories/:id/cover', async (req,res) => {
   const [cover] = await rows<{fileKey:string}>(`SELECT a.file_key AS fileKey ${storyFrom}
-    WHERE s.id=? AND s.published_at IS NOT NULL`, [uuid.parse(req.params.id)])
+    WHERE s.id=? AND s.published_at IS NOT NULL AND s.hidden_at IS NULL`, [uuid.parse(req.params.id)])
   res.type('webp').send(await photoThumbnail(cover?.fileKey, 800))
 })
 
 h5StoriesRouter.get('/my-stories', requireAuth, async (req,res) => {
   const stories = await rows(`SELECT ${storyFields},s.pet_id AS petId,s.cover_asset_id AS coverAssetId,
-    s.scenes,s.updated_at AS updatedAt ${storyFrom} WHERE s.user_id=? ORDER BY s.updated_at DESC,s.id LIMIT 100`, [req.user.id])
+    s.scenes,s.updated_at AS updatedAt,(s.hidden_at IS NOT NULL) AS hidden ${storyFrom}
+    WHERE s.user_id=? ORDER BY s.updated_at DESC,s.id LIMIT 100`, [req.user.id])
   res.json({stories})
 })
 
 h5StoriesRouter.get('/my-story-reactions', requireAuth, async (req,res) => {
   const [favorites, likes] = await Promise.all([
     rows(`SELECT ${storyFields} ${storyFrom} JOIN h5_story_reactions saved ON saved.story_id=s.id
-      WHERE saved.user_id=? AND saved.kind='favorite' AND s.published_at IS NOT NULL
+      WHERE saved.user_id=? AND saved.kind='favorite' AND s.published_at IS NOT NULL AND s.hidden_at IS NULL
       ORDER BY s.published_at DESC,s.id LIMIT 100`, [req.user.id]),
     rows<{id:string}>(`SELECT r.story_id AS id FROM h5_story_reactions r JOIN h5_stories s ON s.id=r.story_id
-      WHERE r.user_id=? AND r.kind='like' AND s.published_at IS NOT NULL`, [req.user.id]),
+      WHERE r.user_id=? AND r.kind='like' AND s.published_at IS NOT NULL AND s.hidden_at IS NULL`, [req.user.id]),
   ])
   res.json({favorites,likedIds:likes.map(like => like.id)})
 })
@@ -78,14 +79,16 @@ h5StoriesRouter.put('/stories/:id', requireAuth, async (req,res) => {
   await db.execute(`UPDATE h5_stories SET title=?, scenes=?, cover_asset_id=?,
     published_at=IF(?,COALESCE(published_at,UTC_TIMESTAMP(3)),NULL) WHERE id=? AND user_id=?`,
   [input.title,JSON.stringify(input.scenes),input.coverAssetId,input.publish,id,req.user.id])
-  res.json({id})
+  const [saved] = await rows<{hidden:number}>('SELECT hidden_at IS NOT NULL AS hidden FROM h5_stories WHERE id=? AND user_id=?',[id,req.user.id])
+  res.json({id,hidden:Boolean(saved?.hidden)})
 })
 
 h5StoriesRouter.put('/stories/:id/reaction', requireAuth, async (req,res) => {
   const id = uuid.parse(req.params.id)
   const {kind,active} = z.object({kind:z.enum(['like','favorite']),active:z.boolean()}).strict().parse(req.body)
   const likes = await transaction(async conn => {
-    const [[story]] = await conn.execute<RowDataPacket[]>('SELECT id FROM h5_stories WHERE id=? AND published_at IS NOT NULL FOR SHARE', [id])
+    const [[story]] = await conn.execute<RowDataPacket[]>(
+      'SELECT id FROM h5_stories WHERE id=? AND published_at IS NOT NULL AND hidden_at IS NULL FOR SHARE', [id])
     if (!story) throw new HttpError(404, '作品未发布或已撤回')
     const params = [id,req.user.id,kind]
     if (active) await conn.execute(`INSERT INTO h5_story_reactions (story_id,user_id,kind) VALUES (?,?,?)

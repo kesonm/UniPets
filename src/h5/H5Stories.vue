@@ -54,7 +54,7 @@ async function load() {
 watch(()=>props.user?.id,()=>{
   personal.value=[];liked.value=[];saved.value=[];editor.value=false
   viewedPrivateCover.value=null
-  if (viewed.value && !viewed.value.publishedAt) viewer.value=false
+  if (viewed.value && (!viewed.value.publishedAt || viewed.value.hidden)) viewer.value=false
   void load()
 },{immediate:true})
 watch(()=>props.showMine,value=>{mine.value=value})
@@ -122,11 +122,11 @@ async function submit() {
   const owner=props.user.id
   busy.value=true
   try {
-    await api(id?'/h5/stories/'+id:'/h5/stories',{method:id?'PUT':'POST',body:id?body:{...body,petId:form.petId}})
+    const result = await api<{hidden?:boolean}>(id?'/h5/stories/'+id:'/h5/stories',{method:id?'PUT':'POST',body:id?body:{...body,petId:form.petId}})
     if (props.user?.id!==owner) return
     editor.value=false;mine.value=true
     await load();emit('changed')
-    ElMessage.success(body.publish?'作品已发布':'私密剧本已保存')
+    ElMessage.success(result.hidden?'作品已保存，目前仍处于隐藏状态':body.publish?'作品已发布':'私密剧本已保存')
   } catch(cause) {ElMessage.error(cause instanceof Error?cause.message:'作品保存失败')}
   finally {busy.value=false}
 }
@@ -176,7 +176,7 @@ async function share() {
       <template v-else-if="mine">
         <div v-if="!user" class="h5-empty h5-card"><strong>登录后查看自己的剧本</strong><button class="h5-primary" type="button" @click="emit('login')">登录</button></div>
         <article v-for="story in personal" :key="story.id" class="h5-card h5-program-card">
-          <div class="h5-event-heading"><strong>{{ story.title }}</strong><span class="h5-pill">{{ story.publishedAt?'已发布':'私密草稿' }}</span></div>
+          <div class="h5-event-heading"><strong>{{ story.title }}</strong><span class="h5-pill">{{ story.hidden?'已隐藏':story.publishedAt?'已发布':'私密草稿' }}</span></div>
           <p class="h5-muted">{{ story.petName }} · {{ story.sceneCount }} 幕</p>
           <div class="h5-business-actions"><button class="h5-text-button" type="button" @click="view(story,story.coverAssetId)">预览分镜</button><button class="h5-text-button" type="button" @click="edit(story)">编辑</button></div>
         </article>
@@ -208,7 +208,7 @@ async function share() {
       <article v-if="viewed" class="h5-program-stack">
         <div class="h5-story-frame">
           <AssetImage v-if="viewedPrivateCover" :id="viewedPrivateCover" alt="" />
-          <img v-else-if="viewed.publishedAt&&viewed.hasCover" :src="apiUrl('/h5/stories/'+viewed.id+'/cover')" alt="">
+          <img v-else-if="viewed.publishedAt&&viewed.hasCover&&!viewed.hidden" :src="apiUrl('/h5/stories/'+viewed.id+'/cover')" alt="">
           <p aria-live="polite">{{ viewed.scenes[scene] }}</p>
         </div>
         <div class="h5-business-toolbar">
@@ -218,7 +218,7 @@ async function share() {
         </div>
         <div class="h5-business-actions">
           <button v-if="sceneTotal>1" type="button" class="h5-action" @click="play"><el-icon><VideoPlay /></el-icon>{{ playing?'暂停':'连播分镜' }}</button>
-          <template v-if="viewed.publishedAt">
+          <template v-if="viewed.publishedAt&&!viewed.hidden">
             <button type="button" class="h5-action" :aria-pressed="liked.includes(viewed.id)" @click="react('like')">点赞 {{ viewed.likes }}</button>
             <button type="button" class="h5-action" :aria-pressed="saved.includes(viewed.id)" @click="react('favorite')">收藏</button>
             <button type="button" class="h5-text-button" @click="share">分享</button>

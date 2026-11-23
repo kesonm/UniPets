@@ -93,13 +93,13 @@ function save(publish: boolean) {
       publish,
     }
     if (!data.scenes.length) throw new Error('请至少填写一个分镜')
-    const r = await api<{ id: string }>(
+    const r = await api<{ id: string; hidden?: boolean }>(
       '/h5/stories' + (id.value ? '/' + id.value : ''),
       id.value ? 'PUT' : 'POST',
       id.value ? data : { ...data, petId: petId.value },
     )
-    toast(publish ? '故事已发布' : '草稿已保存')
-    uni.redirectTo({ url: '/pages/stories/index?' + (publish ? 'id=' + r.id : 'mode=mine') })
+    toast(r.hidden ? '故事已保存，目前仍隐藏' : publish ? '故事已发布' : '草稿已保存')
+    uni.redirectTo({ url: '/pages/stories/index?' + (publish && !r.hidden ? 'id=' + r.id : 'mode=mine') })
   })
 }
 function react(kind: 'like' | 'favorite') {
@@ -142,14 +142,14 @@ function open(s: StorySummary) {
       </view>
       <view v-for="s in list" :key="s.id" class="card" @tap="open(s)">
         <image
-          v-if="s.hasCover && s.publishedAt"
+          v-if="s.hasCover && s.publishedAt && !s.hidden"
           class="photo"
           mode="aspectFill"
           :src="publicImage('/h5/stories/' + s.id + '/cover')"
         />
         <text class="heading">{{ s.title }}</text>
         <text class="sub">
-          {{ s.petName }} · {{ s.sceneCount }} 个分镜 · {{ s.publishedAt ? '已发布' : '草稿' }}
+          {{ s.petName }} · {{ s.sceneCount }} 个分镜 · {{ s.hidden ? '已隐藏' : s.publishedAt ? '已发布' : '草稿' }}
         </text>
       </view>
       <text v-if="!list.length && !loading && !error" class="empty">暂无故事</text>

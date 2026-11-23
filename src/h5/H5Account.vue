@@ -104,7 +104,7 @@ async function logout() {
     <el-dialog v-model="open" :title="entries.find(item=>item.id===panel)?.title" class="h5-dialog" width="min(460px,92vw)" append-to-body destroy-on-close>
       <section v-if="panel==='published' || panel==='favorites'" class="h5-account-lists">
         <div v-if="(panel==='published'?social.published:social.favorites).length" class="h5-simple-list">
-          <button v-for="post in panel==='published'?social.published:social.favorites" :key="post.id" type="button" @click="open=false;emit('post',post)"><span><strong>{{ post.title }}</strong><small>{{ post.petName }} · 宠物动态</small></span><el-icon><ArrowRight /></el-icon></button>
+          <button v-for="post in panel==='published'?social.published:social.favorites" :key="post.id" type="button" @click="open=false;emit('post',post)"><span><strong>{{ post.title }}</strong><small>{{ post.petName }} · {{ post.hidden?'已隐藏':'宠物动态' }}</small></span><el-icon><ArrowRight /></el-icon></button>
         </div>
         <div v-if="panel==='favorites' && favorites.length" class="h5-simple-list"><button v-for="product in favorites" :key="product.id" type="button" @click="open=false;emit('product',product.name)"><span><strong>{{ product.name }}</strong><small>{{ product.merchant }}</small></span><el-icon><ArrowRight /></el-icon></button></div>
         <div v-if="panel==='favorites' && storyFavorites.length" class="h5-simple-list"><button v-for="story in storyFavorites" :key="story.id" type="button" @click="open=false;emit('story',story.id)"><span><strong>{{ story.title }}</strong><small>{{ story.petName }} · 短剧作品</small></span><el-icon><ArrowRight /></el-icon></button></div>

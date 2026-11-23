@@ -3,6 +3,7 @@ import { Router } from 'express'
 import type { RowDataPacket } from 'mysql2/promise'
 import { z } from 'zod'
 import { requireAuth } from './auth.js'
+import { catalogProvider, catalogStore, catalogVisible } from './catalog.js'
 import { rows, transaction } from './db.js'
 import { HttpError } from './errors.js'
 
@@ -70,8 +71,8 @@ h5OrdersRouter.post('/orders', requireAuth, async (req,res) => {
     const orderId = randomUUID()
     const snapshots: Array<(typeof items)[number] & {title:string; provider:string}> = []
     for (const item of sorted) {
-      const [[product]] = await conn.execute<RowDataPacket[]>(`SELECT title,provider,price_cents AS unitCents,stock
-        FROM h5_catalog_items WHERE id=? AND published=TRUE AND kind='product' FOR UPDATE`, [item.itemId])
+      const [[product]] = await conn.execute<RowDataPacket[]>(`SELECT i.title,${catalogProvider} AS provider,i.price_cents AS unitCents,i.stock
+        FROM h5_catalog_items i ${catalogStore} WHERE i.id=? AND ${catalogVisible} AND i.kind='product' FOR UPDATE OF i`, [item.itemId])
       if (!product) throw new HttpError(409, '购物车内有商品已下架，请重新选择')
       if (product.unitCents !== item.unitCents) throw new HttpError(409, `${product.title}的价格已更新，请刷新后再提交`)
       if (product.stock === null || product.stock < item.quantity) throw new HttpError(409, `${product.title}库存不足`)

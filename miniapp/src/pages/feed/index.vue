@@ -86,6 +86,12 @@ async function load() {
     assets.value = a.assets
     if (!p.some((x) => x.id === petId.value)) petId.value = p[0]?.id || ''
   }
+  if (mode.value === 'private') {
+    social.value = user.value ? await api<H5Social>('/h5/me') : undefined
+    current.value = social.value?.published.find(post => post.id === id.value)
+    if (!current.value && user.value) throw new Error('动态不存在')
+    return
+  }
   if (mode.value === 'detail') {
     if (example.value) {
       current.value = example.value
@@ -159,7 +165,7 @@ const owned = computed(() => social.value?.published.some((p) => p.id === id.val
   <view class="screen">
     <LoadState :error="error" :loading="loading" @retry="refresh" />
     <text v-if="actionError" class="error">{{ actionError }}</text>
-    <LoginCard v-if="!user && (mode === 'write' || mode === 'mine')" />
+    <LoginCard v-if="!user && (mode === 'write' || mode === 'mine' || mode === 'private')" />
     <view v-if="mode === 'all'" class="card">
       <view class="spread">
         <text class="heading">社区动态</text>
@@ -193,7 +199,7 @@ const owned = computed(() => social.value?.published.some((p) => p.id === id.val
       <button v-if="mineTab === 'favorites'" class="chip" @tap="go('stories', { mode: 'mine', tab: 'favorites' })">短剧收藏</button>
     </view>
     <template v-if="mode === 'all' || (mode === 'mine' && user)">
-      <PostGrid :posts="visiblePosts" @view="go('feed', { id: $event.id })" />
+      <PostGrid :posts="visiblePosts" @view="go('feed', { id: $event.id, mode: $event.hidden ? 'private' : 'detail' })" />
       <text v-if="!loading && !error && !visiblePosts.length" class="empty">暂无动态</text>
       <button v-if="more && mode === 'all'" :disabled="busy" @tap="run(() => fetchPage(page + 1))">
         加载更多
@@ -216,10 +222,11 @@ const owned = computed(() => social.value?.published.some((p) => p.id === id.val
         <button class="primary" :disabled="busy || !petId || !title.trim()" @tap="publish">发布动态</button>
       </view>
     </view>
-    <template v-if="mode === 'detail' && current">
+    <template v-if="current && (mode === 'detail' || (mode === 'private' && user))">
       <view class="card">
         <text class="title">{{ current.title }}</text>
         <text class="sub">{{ current.petName }} · {{ current.author }}</text>
+        <text v-if="current.hidden" class="sub">这条动态已隐藏</text>
         <image
           v-if="current.hasImage"
           class="photo"
@@ -228,18 +235,18 @@ const owned = computed(() => social.value?.published.some((p) => p.id === id.val
         />
         <text class="body">{{ current.body }}</text>
         <view v-if="!example" class="actions">
-          <button v-if="user" class="small" :disabled="busy" @tap="react('like')">
+          <button v-if="user && mode !== 'private'" class="small" :disabled="busy" @tap="react('like')">
             {{ social?.likedIds.includes(id) ? '已赞' : '赞' }} {{ current.likes }}
           </button>
-          <button v-if="user" class="small" :disabled="busy" @tap="react('favorite')">
+          <button v-if="user && mode !== 'private'" class="small" :disabled="busy" @tap="react('favorite')">
             {{ social?.savedIds.includes(id) ? '已收藏' : '收藏' }}
           </button>
-          <button class="small" open-type="share">分享</button>
+          <button v-if="mode !== 'private'" class="small" open-type="share">分享</button>
           <button v-if="owned" class="small danger" :disabled="busy" @tap="remove()">删除</button>
         </view>
       </view>
       <LoginCard v-if="!user && !example" />
-      <view v-if="!example" class="card">
+      <view v-if="!example && mode !== 'private'" class="card">
         <text class="heading">评论</text>
         <template v-if="user">
           <input v-model="reply" maxlength="500" placeholder="写条评论" />

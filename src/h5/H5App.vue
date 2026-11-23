@@ -601,15 +601,18 @@ onBeforeUnmount(()=>{
       <article v-if="detail" class="h5-post-detail">
         <img v-if="detail.hasImage||detail.exampleImage" :src="detail.exampleImage || apiUrl('/h5/posts/'+detail.id+'/image')" alt="宠物动态照片">
         <div class="h5-post-meta"><b>{{ detail.petName }}</b><span>{{ detail.author }}</span><span v-if="detail.area">{{ h5Areas.find(area=>area.id===detail?.area)?.label }}</span></div>
+        <p v-if="detail.hidden" class="h5-muted">这条动态已隐藏</p>
         <p v-if="detail.body">{{ detail.body }}</p>
         <div v-if="!detail.exampleImage" class="h5-post-actions">
-          <button type="button" class="h5-action" :aria-pressed="social.likedIds.includes(detail.id)" @click="reactTo(detail,'like')"><el-icon><component :is="social.likedIds.includes(detail.id)?StarFilled:Star" /></el-icon> 点赞 {{ detail.likes }}</button>
-          <button type="button" class="h5-action" :aria-pressed="social.savedIds.includes(detail.id)" @click="reactTo(detail,'favorite')"><el-icon><Collection /></el-icon> 收藏</button>
-          <button type="button" class="h5-action" @click="sharePost(detail)"><el-icon><Share /></el-icon> 分享</button>
+          <template v-if="!detail.hidden">
+            <button type="button" class="h5-action" :aria-pressed="social.likedIds.includes(detail.id)" @click="reactTo(detail,'like')"><el-icon><component :is="social.likedIds.includes(detail.id)?StarFilled:Star" /></el-icon> 点赞 {{ detail.likes }}</button>
+            <button type="button" class="h5-action" :aria-pressed="social.savedIds.includes(detail.id)" @click="reactTo(detail,'favorite')"><el-icon><Collection /></el-icon> 收藏</button>
+            <button type="button" class="h5-action" @click="sharePost(detail)"><el-icon><Share /></el-icon> 分享</button>
+          </template>
           <button v-if="ownsDetail" type="button" class="h5-text-button" @click="deletePost">删除</button>
         </div>
         <input v-if="shareLink" class="h5-share-link" aria-label="要分享的动态链接" :value="shareLink" readonly @focus="($event.target as HTMLInputElement).select()">
-        <H5Comments v-if="!detail.exampleImage" :key="detail.id" :post-id="detail.id" :user="user" @login="login" />
+        <H5Comments v-if="!detail.exampleImage&&!detail.hidden" :key="detail.id" :post-id="detail.id" :user="user" @login="login" />
       </article>
     </el-dialog>
   </div>

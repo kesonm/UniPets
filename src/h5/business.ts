@@ -114,6 +114,7 @@ export interface StorySummary {
   petName: string
   author: string
   hasCover: boolean|number
+  hidden?: boolean|number
   publishedAt: string|null
   sceneCount: number
   likes: number

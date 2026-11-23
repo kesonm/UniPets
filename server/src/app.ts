@@ -2,6 +2,7 @@ import express, { type ErrorRequestHandler } from 'express'
 import { rateLimit } from 'express-rate-limit'
 import { ZodError } from 'zod'
 import { authRouter, requireAuth } from './auth.js'
+import { adminRouter } from './admin.js'
 import { apiRouter } from './routes.js'
 import { h5Router } from './h5.js'
 import { config } from './config.js'
@@ -34,6 +35,7 @@ export function createApp(privateRoutes = apiRouter) {
   app.use(express.json({ limit: '12mb' }))
   app.get('/api/health', async (_req,res) => { await db.query('SELECT 1'); res.json({ ok: true, database: 'mysql' }) })
   app.use('/api/auth',authRouter)
+  app.use('/api/admin',adminRouter)
   app.use('/api/h5',h5Router)
   app.use('/api',requireAuth,privateRoutes)
   app.use((_req,res) => res.status(404).json({ error: '接口不存在' }))

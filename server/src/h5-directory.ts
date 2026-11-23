@@ -2,14 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { Router, type Request, type Response } from 'express'
 import type { RowDataPacket } from 'mysql2/promise'
 import { z } from 'zod'
-import { h5Areas } from '../../shared/h5-areas.mjs'
 import { requireAuth } from './auth.js'
+import { catalogArea, catalogKinds, catalogModules, catalogProvider, catalogStore, catalogVenue, catalogVisible, h5Area } from './catalog.js'
 import { rows, transaction } from './db.js'
 import { HttpError } from './errors.js'
 
 export const h5DirectoryRouter = Router()
-export const catalogModules = z.enum(['immortality','services','friends','charity','shop','medical','travel','education'])
-export const h5Area = z.string().refine(id => h5Areas.some(area => area.id === id), '请选择已有商圈')
+export { h5Area } from './catalog.js'
 const uuid = z.string().uuid()
 
 interface CatalogItem {
@@ -28,8 +27,10 @@ interface CatalogItem {
   stock: number|null
   externalUrl: string|null
 }
-const fields = `id, module, category, kind, title, provider, description, area, venue,
-  starts_at AS startsAt, closes_at AS closesAt, price_cents AS priceCents, stock, external_url AS externalUrl`
+const fields = `i.id,i.module,i.category,i.kind,i.title,${catalogProvider} AS provider,i.description,
+  ${catalogArea} AS area,${catalogVenue} AS venue,i.starts_at AS startsAt,i.closes_at AS closesAt,
+  i.price_cents AS priceCents,i.stock,i.external_url AS externalUrl`
+const from = `FROM h5_catalog_items i ${catalogStore}`
 
 function publicListing(item: CatalogItem) {
   let externalUrl: string|null = null
@@ -44,14 +45,14 @@ function publicListing(item: CatalogItem) {
 
 h5DirectoryRouter.get('/catalog', async (req, res) => {
   const filter = z.object({module:catalogModules.optional(), area:h5Area.optional(),
-    kind:z.enum(['article','appointment','enrollment','product','group','link']).optional(),
+    kind:catalogKinds.optional(),
     q:z.string().trim().max(60).default('')}).parse(req.query)
-  const listings = await rows<CatalogItem>(`SELECT ${fields} FROM h5_catalog_items WHERE published=TRUE
-    AND (? IS NULL OR module=?)
-    AND (? IS NULL OR kind=?)
-    AND (?='' OR LOCATE(?, CONCAT_WS(' ',title,provider,description,venue))>0)
-    ORDER BY COALESCE(area=?, FALSE) DESC, (starts_at IS NOT NULL AND starts_at < UTC_TIMESTAMP(3)),
-      starts_at, title, id LIMIT 200`,
+  const listings = await rows<CatalogItem>(`SELECT ${fields} ${from} WHERE ${catalogVisible}
+    AND (? IS NULL OR i.module=?)
+    AND (? IS NULL OR i.kind=?)
+    AND (?='' OR LOCATE(?, CONCAT_WS(' ',i.title,${catalogProvider},i.description,${catalogVenue}))>0)
+    ORDER BY COALESCE(${catalogArea}=?, FALSE) DESC, (i.starts_at IS NOT NULL AND i.starts_at < UTC_TIMESTAMP(3)),
+      i.starts_at,i.title,i.id LIMIT 200`,
   [filter.module ?? null, filter.module ?? null, filter.kind ?? null, filter.kind ?? null,
     filter.q, filter.q, filter.area ?? null])
   res.json({listings:listings.map(publicListing)})
@@ -59,15 +60,15 @@ h5DirectoryRouter.get('/catalog', async (req, res) => {
 
 h5DirectoryRouter.get('/catalog/:id', async (req, res) => {
   const [listing] = await rows<CatalogItem>(
-    `SELECT ${fields} FROM h5_catalog_items WHERE id=? AND published=TRUE`, [uuid.parse(req.params.id)])
+    `SELECT ${fields} ${from} WHERE i.id=? AND ${catalogVisible}`, [uuid.parse(req.params.id)])
   if (!listing) throw new HttpError(404, '项目未发布或已下架')
   res.json({listing:publicListing(listing)})
 })
 
 export const engagementSelect = `SELECT r.id, r.item_id AS itemId, r.pet_id AS petId,
-  i.module, i.category, i.kind, i.title, i.provider, i.venue, i.starts_at AS startsAt,
+  i.module,i.category,i.kind,i.title,${catalogProvider} AS provider,${catalogVenue} AS venue,i.starts_at AS startsAt,
   p.name AS petName, r.status, r.note, r.checked_in_at AS checkedInAt, r.created_at AS createdAt
-  FROM h5_engagements r JOIN h5_catalog_items i ON i.id=r.item_id LEFT JOIN pets p ON p.id=r.pet_id`
+  FROM h5_engagements r JOIN h5_catalog_items i ON i.id=r.item_id ${catalogStore} LEFT JOIN pets p ON p.id=r.pet_id`
 
 h5DirectoryRouter.get('/engagements', requireAuth, async (req, res) => {
   const engagements = await rows(`${engagementSelect} WHERE r.user_id=? ORDER BY r.created_at DESC,r.id LIMIT 150`, [req.user.id])
@@ -80,7 +81,7 @@ h5DirectoryRouter.post('/catalog/:id/participation', requireAuth, async (req, re
     note:z.string().trim().max(500).default('')}).strict().parse(req.body)
   const engagement = await transaction(async conn => {
     const [[item]] = await conn.execute<(CatalogItem & RowDataPacket)[]>(
-      `SELECT ${fields} FROM h5_catalog_items WHERE id=? AND published=TRUE FOR UPDATE`, [itemId])
+      `SELECT ${fields} ${from} WHERE i.id=? AND ${catalogVisible} FOR UPDATE OF i`, [itemId])
     if (!item) throw new HttpError(404, '这个项目已下架')
     if (!['appointment','enrollment','group'].includes(item.kind)) throw new HttpError(400, '这个项目暂不接受报名')
     const petRequired = item.kind !== 'group' && item.module !== 'charity'

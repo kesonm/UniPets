@@ -9,6 +9,10 @@
 }
 
 http://:8080 {
+	@adminPage path /admin /admin/*
+	handle @adminPage {
+		respond 404
+	}
 	@miniCommunity {
 		header X-PetCloud-Client miniprogram
 		path /api/h5/posts /api/h5/posts/* /api/h5/events/* /api/h5/catalog/* /api/h5/engagements /api/h5/engagements/* /api/h5/orders /api/h5/orders/* /api/h5/stories /api/h5/stories/* /api/h5/my-stories /api/h5/my-story-reactions /api/h5/my-matches /api/h5/my-matches/* /api/h5/friend-requests /api/h5/friend-requests/* /api/h5/groups/* /api/h5/community-progress /api/h5/creator-account /api/h5/my-comments/*
@@ -62,6 +66,8 @@ http://:8081 {
 	handle /api/* {
 		reverse_proxy api:3008
 	}
+	redir /admin/ /admin 308
+	rewrite /admin /index.html
 	handle {
 		import frontend
 	}

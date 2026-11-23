@@ -1,0 +1,1 @@
+ALTER TABLE h5_posts ADD COLUMN hidden_at DATETIME(3) NULL;

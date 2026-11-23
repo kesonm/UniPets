@@ -20,6 +20,7 @@ export interface H5Post {
   area: string|null
   likes: number
   hasImage: boolean|number
+  hidden?: boolean|number
   topic?: PostTopic
   exampleImage?: string
 }
