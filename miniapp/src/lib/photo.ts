@@ -15,13 +15,19 @@ export async function choosePhoto(sourceType: ('album'|'camera')[] = ['album', '
         )),
     }),
   )
-  if (!chosen) return null
+  return chosen ? readPhoto(chosen) : null
+}
+
+export function readPhoto(filePath: string): Promise<string> {
   return new Promise((resolve, reject) =>
     uni.getFileSystemManager().readFile({
-      filePath: chosen,
+      filePath,
       encoding: 'base64',
       success: (r) => {
         const b64 = String(r.data)
+        if (b64.length > 4 * Math.ceil((8 * 1024 * 1024) / 3)) {
+          return reject(new Error('请选择 8 MB 以内的照片'))
+        }
         const mime = b64.startsWith('/9j/')
           ? 'jpeg'
           : b64.startsWith('iVBOR')

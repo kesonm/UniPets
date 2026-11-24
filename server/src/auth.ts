@@ -3,15 +3,16 @@ import { promisify } from 'node:util'
 import { Router, type Request, type Response, type NextFunction } from 'express'
 import { rateLimit } from 'express-rate-limit'
 import type { RowDataPacket } from 'mysql2/promise'
+import sharp from 'sharp'
 import { z } from 'zod'
 import { db, rows, transaction } from './db.js'
 import { config } from './config.js'
 import { HttpError } from './errors.js'
 import { exchangeWeChatCode } from './wechat.js'
 const scrypt = promisify(scryptCallback)
-export interface User { id: string; username: string; displayName: string; createdAt: string }
+export interface User { id: string; username: string; displayName: string; createdAt: string; avatarVersion: string | null }
 declare global { namespace Express { interface Request { user: User; tokenHash: string; isAdmin: boolean } } }
-export const userSelect = 'id, username, display_name AS displayName, created_at AS createdAt'
+export const userSelect = 'id, username, display_name AS displayName, created_at AS createdAt, avatar_version AS avatarVersion'
 const cookieName = 'petcloud_session'
 const digest = (value: string) => createHash('sha256').update(value).digest('hex')
 export async function hashPassword(password: string) {
@@ -42,7 +43,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
   if (!/^[a-f0-9]{64}$/.test(token)) throw new HttpError(401, '请先登录')
   const tokenHash = digest(token)
   const [session] = await rows<User & {isAdmin: number}>(`SELECT u.id,u.username,u.display_name AS displayName,
-    u.created_at AS createdAt,u.is_admin AS isAdmin FROM sessions s JOIN users u ON u.id=s.user_id
+    u.created_at AS createdAt,u.avatar_version AS avatarVersion,u.is_admin AS isAdmin FROM sessions s JOIN users u ON u.id=s.user_id
     WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP(3) AND u.disabled_at IS NULL`, [tokenHash])
   if (!session) throw new HttpError(401, '登录已过期，请重新登录')
   const {isAdmin,...user} = session
@@ -126,12 +127,54 @@ authRouter.post('/logout', requireAuth, async (req, res) => {
   await db.execute('DELETE FROM sessions WHERE token_hash=?', [req.tokenHash])
   res.clearCookie(cookieName, sessionCookie(req)); res.json({ ok: true })
 })
+const profileName = z.string().trim().min(1, '请填写昵称').max(40, '昵称最多 40 个字符')
+const maxAvatarBytes = 8 * 1024 * 1024
 authRouter.route('/profile').all(requireAuth).patch(updateProfile).put(updateProfile)
-async function updateProfile(req: Request, res: Response) {
-  const data = z.object({ displayName: z.string().trim().min(1).max(40) }).parse(req.body)
-  await db.execute('UPDATE users SET display_name=? WHERE id=?', [data.displayName, req.user.id])
-  res.json({ user: { ...req.user, displayName: data.displayName } })
+
+async function resizeAvatar(dataUrl: string) {
+  const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(dataUrl)
+  if (!match) throw new HttpError(400, '请选择 JPG、PNG 或 WebP 头像')
+  const bytes = Buffer.from(match[2], 'base64')
+  if (bytes.length > maxAvatarBytes) throw new HttpError(413, '请选择 8 MB 以内的头像')
+  try {
+    const source = sharp(bytes, { limitInputPixels: 25_000_000 })
+    const { format, pages } = await source.metadata()
+    if (format !== match[1] || (pages ?? 1) !== 1) throw new Error('Invalid avatar image')
+    return await source.rotate().resize(256, 256, { fit: 'cover', withoutEnlargement: true }).webp({ quality: 86 }).toBuffer()
+  } catch {
+    throw new HttpError(400, '头像图片无法读取，请重新选择')
+  }
 }
+
+async function sendProfile(req: Request, res: Response) {
+  const [user] = await rows<User>(`SELECT ${userSelect} FROM users WHERE id=? AND disabled_at IS NULL`, [req.user.id])
+  if (!user) throw new HttpError(401, '登录已过期，请重新登录')
+  res.json({ user })
+}
+async function updateProfile(req: Request, res: Response) {
+  const data = z.object({ displayName: profileName }).parse(req.body)
+  await db.execute('UPDATE users SET display_name=? WHERE id=? AND disabled_at IS NULL', [data.displayName, req.user.id])
+  await sendProfile(req, res)
+}
+
+authRouter.get('/profile/avatar', requireAuth, async (req, res) => {
+  const [user] = await rows<{ image: Buffer | null }>(
+    'SELECT avatar_image AS image FROM users WHERE id=? AND disabled_at IS NULL', [req.user.id])
+  if (!user?.image) throw new HttpError(404, '尚未设置头像')
+  res.type('webp').send(user.image)
+})
+authRouter.put('/profile/avatar', requireAuth, async (req, res) => {
+  const data = z.object({
+    displayName: profileName.optional(),
+    avatarImage: z.string().max(4 * Math.ceil(maxAvatarBytes / 3) + 32, '请选择 8 MB 以内的头像'),
+  }).parse(req.body)
+  const image = await resizeAvatar(data.avatarImage)
+  const version = createHash('sha256').update(image).digest('hex').slice(0, 16)
+  await db.execute(`UPDATE users SET display_name=COALESCE(?,display_name), avatar_version=?, avatar_image=?
+    WHERE id=? AND disabled_at IS NULL`, [data.displayName ?? null, version, image, req.user.id])
+  await sendProfile(req, res)
+})
+
 authRouter.post('/password', requireAuth, authLimiter, async (req, res) => {
   const data = z.object({ currentPassword: z.string().max(128), newPassword: password }).parse(req.body)
   const [user] = await rows<{ password_hash: string }>('SELECT password_hash FROM users WHERE id=?', [req.user.id])

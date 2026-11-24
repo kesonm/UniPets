@@ -8,7 +8,7 @@ let token = stored?.token || ''
 export const user = ref<User | null>(stored?.user || null)
 export const loggingIn = ref(false)
 export const loginError = ref('')
-let pending: Promise<void> | undefined
+let pending: Promise<{ firstLogin: boolean } | undefined> | undefined
 
 function apiOrigin() {
   const origin = (import.meta.env.VITE_PETCLOUD_API_ORIGIN || '').trim().replace(/\/+$/, '')
@@ -35,6 +35,11 @@ export function message(error: unknown) {
 }
 export function toast(title: string) {
   uni.showToast({ title, icon: 'none' })
+}
+export function openPrivacyGuide() {
+  const unavailable = () => toast('暂时无法打开隐私保护指引')
+  if (typeof uni.openPrivacyContract === 'function') uni.openPrivacyContract({ fail: unavailable })
+  else unavailable()
 }
 const tabPages = new Set(['home', 'friends', 'orders', 'pets', 'account'])
 export function go(page: string, args: Record<string, string> = {}) {
@@ -65,9 +70,9 @@ export function updateUser(value: User) {
   uni.setStorageSync(sessionKey, { user: value, token })
 }
 export type Method = 'GET' | 'POST' | 'PUT' | 'DELETE'
-export function api<T>(path: string, method: Method = 'GET', data?: Record<string, unknown>, timeout = 18000): Promise<T> {
+function request<T>(path: string, method: Method, data?: Record<string, unknown>, timeout = 18000) {
   const usedToken = token
-  return new Promise((resolve, reject) =>
+  return new Promise<{ data: T; statusCode: number }>((resolve, reject) =>
     uni.request({
       url: apiUrl(path),
       method,
@@ -80,13 +85,16 @@ export function api<T>(path: string, method: Method = 'GET', data?: Record<strin
       },
       success(r) {
         if (usedToken !== token) return reject(new Error('账号已切换，请重新打开页面'))
-        if (r.statusCode >= 200 && r.statusCode < 300) return resolve(r.data as T)
+        if (r.statusCode >= 200 && r.statusCode < 300) return resolve({ data: r.data as T, statusCode: r.statusCode })
         if (r.statusCode === 401 && usedToken) forget()
         reject(new Error((r.data as { error?: string })?.error || '请求失败（' + r.statusCode + '）'))
       },
       fail: () => reject(new Error('无法连接宠云，请检查网络或服务域名')),
     }),
   )
+}
+export function api<T>(path: string, method: Method = 'GET', data?: Record<string, unknown>, timeout = 18000): Promise<T> {
+  return request<T>(path, method, data, timeout).then((response) => response.data)
 }
 export async function restoreSession() {
   if (!token) return
@@ -110,9 +118,10 @@ export function login() {
           fail: () => reject(new Error('微信登录未完成，请重试')),
         }),
       )
-      const result = await api<Session>('/auth/wechat', 'POST', { code })
+      const { data: result, statusCode } = await request<Session>('/auth/wechat', 'POST', { code })
       token = result.token
       updateUser(result.user)
+      return { firstLogin: statusCode === 201 }
     } catch (err) {
       loginError.value = message(err)
     } finally {
@@ -142,6 +151,9 @@ function downloadImage(path: string, label: string): Promise<string> {
 }
 export function downloadAsset(id: string) {
   return downloadImage('/assets/' + id + '/file', '照片')
+}
+export function downloadAvatar(version: string) {
+  return downloadImage('/auth/profile/avatar?v=' + encodeURIComponent(version), '头像')
 }
 export function downloadIdentityCode(id: string, kind: 'barcode'|'qrcode') {
   return downloadImage('/pets/' + id + '/identity/codes/' + kind, '身份证识别码')

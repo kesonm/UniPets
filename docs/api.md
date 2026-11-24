@@ -11,10 +11,12 @@
 | GET | /health | MySQL 连通性 |
 | POST | /auth/register | username, password, displayName? |
 | POST | /auth/login | username, password |
-| POST | /auth/wechat | 小程序发送一次性 `code`，服务端校验后返回 `{ user, token }`。首次登录自动建号 |
+| POST | /auth/wechat | 小程序发送一次性 `code`，服务端校验后返回 `{ user, token }`。首次登录自动建号并返回 201 |
 | GET | /auth/me | 当前账号 |
 | POST | /auth/logout | 撤销当前会话 |
 | PATCH / PUT | /auth/profile | displayName |
+| PUT | /auth/profile/avatar | avatarImage（JPG/PNG/WebP data URL，解码后不超过 8 MB），displayName?，返回更新后的账号 |
+| GET | /auth/profile/avatar | 下载本人头像，响应为 WebP。未设置头像时返回 404 |
 | POST | /auth/password | currentPassword, newPassword；撤销所有会话 |
 | GET | /dashboard | 当前账号的档案、素材、记忆统计，`generationEnabled` 为 `false` |
 | GET / POST | /pets | 列出本人档案 / 新建普通档案，必填 `name`、`species`，每个账号最多 3 份 |

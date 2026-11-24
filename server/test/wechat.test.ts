@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import type { AddressInfo } from 'node:net'
 import test from 'node:test'
+import sharp from 'sharp'
 import { createApp } from '../src/app.js'
 import { config } from '../src/config.js'
 import { db, rows } from '../src/db.js'
@@ -85,7 +86,8 @@ test('WeChat code exchange, concurrent registration and private pet sessions', a
     assert.equal(a.data.user.id, b.data.user.id)
     assert.notEqual(a.data.token, b.data.token)
     assert.deepEqual(Object.keys(a.data).sort(), ['token', 'user'])
-    assert.deepEqual(Object.keys(a.data.user).sort(), ['createdAt', 'displayName', 'id', 'username'])
+    assert.deepEqual(Object.keys(a.data.user).sort(), ['avatarVersion', 'createdAt', 'displayName', 'id', 'username'])
+    assert.equal(a.data.user.avatarVersion, null)
     assert.match(a.data.token, /^[a-f0-9]{64}$/)
     assert.deepEqual((await request('/pets', 'GET', undefined, a.data.token)).data, { pets: [] })
     assert.equal((await login('first')).status, 401)
@@ -115,6 +117,32 @@ test('WeChat code exchange, concurrent registration and private pet sessions', a
       (await request('/auth/me', 'GET', undefined, b.data.token)).data.user.displayName,
       '小云的主人',
     )
+    const avatarPath = '/auth/profile/avatar'
+    const avatar = await sharp({
+      create: { width: 640, height: 480, channels: 3, background: '#ffe34e' },
+    }).png().toBuffer()
+    const avatarImage = 'data:image/png;base64,' + avatar.toString('base64')
+    const saved = await request(avatarPath, 'PUT', { displayName: ' 云云 ', avatarImage }, again.data.token)
+    assert.equal(saved.status, 200)
+    assert.equal(saved.data.user.displayName, '云云')
+    assert.match(saved.data.user.avatarVersion, /^[a-f0-9]{16}$/)
+    assert.equal((await request(avatarPath)).status, 401)
+    assert.equal((await request(avatarPath, 'GET', undefined, other.data.token)).status, 404)
+    const download = await publicFetch(base + avatarPath, { headers: { Authorization: 'Bearer ' + b.data.token } })
+    assert.equal(download.status, 200)
+    assert.match(download.headers.get('content-type') ?? '', /^image\/webp\b/)
+    const thumbnail = await sharp(Buffer.from(await download.arrayBuffer())).metadata()
+    assert.equal(thumbnail.width, 256)
+    assert.equal(thumbnail.height, 256)
+    const invalid = await request(avatarPath, 'PUT', {
+      displayName: '无效头像不得改名', avatarImage: 'data:image/png;base64,AAAA',
+    }, again.data.token)
+    assert.equal(invalid.status, 400)
+    const current = (await request('/auth/me', 'GET', undefined, b.data.token)).data.user
+    assert.equal(current.displayName, '云云')
+    assert.equal(current.avatarVersion, saved.data.user.avatarVersion)
+    const renamed = await request('/auth/profile', 'PUT', { displayName: '小云的主人' }, b.data.token)
+    assert.equal(renamed.data.user.avatarVersion, saved.data.user.avatarVersion)
     assert.equal((await request('/auth/logout', 'POST', {}, a.data.token)).status, 200)
     assert.equal((await request('/auth/me', 'GET', undefined, a.data.token)).status, 401)
     assert.equal((await request('/auth/me', 'GET', undefined, b.data.token)).status, 200)

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { onHide } from '@dcloudio/uni-app'
-import { api, user, updateUser, go, confirm, login, loggingIn, loginError, logout, toast } from '../../lib/client'
+import { user, go, confirm, logout, openPrivacyGuide } from '../../lib/client'
 import { listPets } from '../../lib/pets'
 import { pageLoad, submitAction } from '../../lib/page'
 import { useTabPage } from '../../lib/tab-page'
 import { orderPanel } from '../../lib/cart'
-import type { User } from '../../../../src/lib/types'
+import AccountAvatar from '../../components/AccountAvatar.vue'
+import LoginDialog from '../../components/LoginDialog.vue'
 import UiIcon from '../../components/UiIcon.vue'
 
 const entries = [
@@ -23,7 +24,7 @@ const entries = [
   { id: 'settings', title: '账号与隐私', page: '' },
 ] as const
 const tabLayout = useTabPage('pages/account/index')
-const nickname = ref('')
+const loginDialog = ref(false)
 const settings = ref(false)
 const help = ref(false)
 const petCount = ref(0)
@@ -38,23 +39,21 @@ watch(() => user.value?.id, () => { settings.value = false })
 onHide(() => { settings.value = false; help.value = false })
 
 function openSettings() {
-  if (!user.value) return login()
-  nickname.value = user.value.displayName
+  if (!user.value) {
+    loginDialog.value = true
+    return
+  }
   settings.value = true
+}
+function editProfile() {
+  settings.value = false
+  go('profile')
 }
 function open(item: (typeof entries)[number]) {
   if (item.id === 'settings') return openSettings()
   if (item.id === 'help') { help.value = true; return }
   if (item.id === 'orders') orderPanel.value = 'orders'
   go(item.page, 'args' in item ? item.args : {})
-}
-function save() {
-  return run(async () => {
-    const result = await api<{ user: User }>('/auth/profile', 'PUT', { displayName: nickname.value.trim() })
-    updateUser(result.user)
-    settings.value = false
-    toast('昵称已保存')
-  })
 }
 function signOut() {
   return run(async () => {
@@ -67,19 +66,18 @@ function signOut() {
   <view class="account-page tab-screen" :style="tabLayout">
     <view class="account-head">
       <view class="tab-leading account-profile">
-        <view class="account-avatar"><UiIcon name="account-avatar" :size="23" /></view>
+        <AccountAvatar />
         <view class="grow">
           <text class="account-name">{{ user?.displayName || '欢迎来到云上空间' }}</text>
           <text class="sub">{{ user ? '微信账号' : '登录后创建自己的宠物档案' }}</text>
         </view>
       </view>
       <view class="account-actions">
-        <button v-if="!user" class="small primary account-action account-login" :loading="loggingIn" :disabled="loggingIn" @tap="login">登录 / 注册</button>
-        <button v-else class="text-button account-action" @tap="openSettings"><UiIcon name="account-settings" :size="15" />账号设置</button>
+        <button v-if="!user" id="open-wechat-login" class="small primary account-action account-login" @tap="loginDialog = true">登录 / 注册</button>
+        <button v-else id="edit-account-profile" class="text-button account-action" @tap="editProfile"><UiIcon name="account-settings" :size="15" />编辑资料</button>
       </view>
     </view>
     <view class="account-content">
-      <text v-if="!user && loginError" class="error">{{ loginError }}</text>
       <view v-if="countError" class="spread">
         <text class="error">{{ countError }}</text><button class="text-button" @tap="refresh">重试</button>
       </view>
@@ -98,14 +96,18 @@ function signOut() {
         </button>
       </view>
     </view>
+    <LoginDialog v-if="loginDialog" @close="loginDialog = false" />
     <view v-if="settings && user" class="modal-scrim" @tap="settings = false">
       <view class="modal-panel" role="dialog" aria-label="账号与隐私" @tap.stop>
         <view class="spread"><text class="heading">账号与隐私</text><button class="text-button" @tap="settings = false">关闭</button></view>
-        <text class="label">昵称</text>
-        <input v-model="nickname" maxlength="40" placeholder="输入昵称" />
+        <button class="account-link" @tap="editProfile">
+          <UiIcon name="account-avatar" :size="16" /><text>编辑头像和昵称</text><UiIcon name="right" :size="13" />
+        </button>
+        <button class="account-link" @tap="openPrivacyGuide">
+          <UiIcon name="account-help" :size="16" /><text>小程序用户隐私保护指引</text><UiIcon name="right" :size="13" />
+        </button>
         <text v-if="error" class="error">{{ error }}</text>
         <view class="actions">
-          <button class="primary" :disabled="busy || !nickname.trim()" @tap="save">保存昵称</button>
           <button :disabled="busy" @tap="signOut">退出登录</button>
         </view>
       </view>
@@ -126,7 +128,6 @@ function signOut() {
 .account-page { max-width: 500px; margin: auto; }
 .account-head { padding: var(--tab-start, 8px) 14px 5px; background: linear-gradient(#ffe78a, #fff2bf 78%, #f5f4f1); }
 .account-profile { display: flex; align-items: center; gap: 9px; }
-.account-avatar { display: flex; align-items: center; justify-content: center; flex: none; width: 42px; height: 42px; border-radius: 50%; background: #fff8da; }
 .account-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 18px; font-weight: 850; }
 .account-head .sub { color: #65531c; font-size: 11px; }
 .account-actions { display: flex; justify-content: flex-end; padding: 2px 0 4px; }
