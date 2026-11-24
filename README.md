@@ -61,7 +61,7 @@ pnpm db:migrate
 pnpm dev
 ```
 
-在 `server/.env` 中填写 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`，重启 API 后生效。小程序使用的 AppID 为 `wx0d7d45eb04511857`。密钥仅由服务端读取。
+在 `server/.env` 中填写 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`，重启 API 后生效。小程序使用的 AppID 为 `wx0baf7b9e0883ba2f`。密钥仅由服务端读取。
 
 `pnpm dev` 同时启动 API 和小程序编译监听。在微信开发者工具中导入 `miniapp/dist/dev/mp-weixin/`。如果 API 已经运行，只需执行 `pnpm dev:mp-weixin`。
 
