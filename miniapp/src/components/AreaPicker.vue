@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { h5Areas } from '../../../shared/h5-areas.mjs'
 import { selectedArea, selectArea } from '../lib/area'
+import { go } from '../lib/client'
 import UiIcon from './UiIcon.vue'
 
 const emit = defineEmits<{ close: [] }>()
 function choose(id: string) {
   selectArea(id)
   emit('close')
+}
+function openMap() {
+  emit('close')
+  go('area-map')
 }
 </script>
 
@@ -17,6 +22,11 @@ function choose(id: string) {
         <text class="heading">选择商圈</text>
         <button class="text-button" @tap="emit('close')">取消</button>
       </view>
+      <button id="entry-area-map" class="choice-row map-entry" @tap="openMap">
+        <UiIcon name="location" :size="15" />
+        <text class="choice-label">地图选商圈</text>
+        <UiIcon name="right" :size="12" />
+      </button>
       <button
         v-for="area in h5Areas"
         :key="area.id"
@@ -25,7 +35,7 @@ function choose(id: string) {
         @tap="choose(area.id)"
       >
         <UiIcon name="location" :size="15" />
-        <text>{{ area.label }}</text>
+        <text class="choice-label">{{ area.label }}</text>
         <UiIcon name="right" :size="12" />
       </button>
       <button class="text-button" @tap="choose('')">不限商圈</button>
@@ -43,6 +53,7 @@ function choose(id: string) {
   padding: 10px 12px;
   text-align: left;
 }
-.choice-row text { flex: 1; }
+.choice-label { flex: 1; }
+.choice-row.map-entry { background: #fff8dc; }
 .choice-row.selected { border-color: #f1d577; background: #fff1bf; }
 </style>

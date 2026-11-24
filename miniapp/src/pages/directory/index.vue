@@ -167,7 +167,10 @@ function copyLink() {
         <ShopShelf v-if="section === 'shop' && !loading && !error" :listings="items" :query="shopQuery" filter @area="areaPicker = true" />
         <template v-else-if="section !== 'shop'">
           <view v-if="categories.length" class="card">
-            <button class="text-button" @tap="areaPicker = true"><UiIcon name="location" />{{ areaLabel(selectedArea) || '选择商圈' }}</button>
+            <view class="spread">
+              <button class="text-button" @tap="areaPicker = true"><UiIcon name="location" />{{ areaLabel(selectedArea) || '选择商圈' }}</button>
+              <button v-if="section === 'services'" id="service-area-map" class="small" @tap="go('area-map')">商圈地图</button>
+            </view>
             <view class="chips">
               <button :class="['chip', { active: !category }]" @tap="category = ''">全部</button>
               <button

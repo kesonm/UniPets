@@ -9,6 +9,10 @@
   "mp-weixin": {
     "appid": "wx0d7d45eb04511857",
     "setting": { "urlCheck": true, "es6": true, "minified": true },
-    "usingComponents": true
+    "usingComponents": true,
+    "permission": {
+      "scope.userLocation": { "desc": "用于在商圈地图上显示当前位置，并参考距离选择商圈。" }
+    },
+    "requiredPrivateInfos": ["getLocation"]
   }
 }

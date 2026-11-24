@@ -69,6 +69,8 @@ pnpm dev
 
 `pnpm build` 生成的微信小程序默认访问 `https://canyin.uniwork.top/petcloud/api/`。在微信公众平台将 `https://canyin.uniwork.top` 配置为 `request` 和 `downloadFile` 合法域名，再将 `miniapp/dist/build/mp-weixin/` 导入微信开发者工具。需要连接其他服务时，在 `miniapp/.env.production.local` 设置 `VITE_PETCLOUD_API_ORIGIN` 和 `VITE_PETCLOUD_API_PREFIX` 后重新构建。直接通过 `/api/` 提供服务时，将路径前缀设为空。
 
+商圈地图使用微信小程序内置的腾讯地图，打开地图、浏览商圈中心和手动选择商圈无需地图 Key。正式版的「定位到我」需要在微信公众平台的「开发 → 开发管理 → 接口设置」中开通获取当前位置的接口，并在用户隐私保护指引中声明定位用途。当前位置仅用于此页面展示和估算距离。
+
 旧版网页与 API 可通过 `pnpm dev:legacy` 同时启动。网页默认端口为 4173，API 为 3008。
 
 ## 管理后台

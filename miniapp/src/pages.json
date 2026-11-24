@@ -65,6 +65,13 @@
       }
     },
     {
+      "path": "pages/area-map/index",
+      "style": {
+        "navigationBarTitleText": "商圈地图",
+        "navigationBarBackgroundColor": "#f5f4f1"
+      }
+    },
+    {
       "path": "pages/immortality/index",
       "style": {
         "navigationStyle": "custom",
