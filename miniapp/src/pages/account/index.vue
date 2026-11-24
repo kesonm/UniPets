@@ -21,7 +21,7 @@ const entries = [
 ] as const
 const contentLinks = [
   {id:'published',label:'发布',icon:'account-published'},
-  {id:'likes',label:'点赞',icon:'star'},
+  {id:'likes',label:'点赞',icon:''},
   {id:'favorites',label:'收藏',icon:'account-favorites'},
 ] as const
 const tabLayout = useTabPage('pages/account/index')
@@ -83,7 +83,8 @@ function open(item: (typeof entries)[number]) {
         <button v-for="item in contentLinks" :id="'account-stat-'+item.id" :key="item.id" class="account-stat"
           :aria-label="'我的'+item.label+' '+counts[item.id]+' 条'" @tap="openContent(item.id)">
           <text>{{ item.label }}</text>
-          <UiIcon :name="item.icon" :size="15" />
+          <UiIcon v-if="item.icon" :name="item.icon" :size="15" />
+          <text v-else class="account-like-icon" aria-hidden="true">♡</text>
           <text class="account-stat-count">{{ counts[item.id] }}</text>
         </button>
       </view>
@@ -157,6 +158,7 @@ function open(item: (typeof entries)[number]) {
   line-height: 1.15;
 }
 .account-stat + .account-stat { border-left: 1px solid rgba(170,132,36,.15); }
+.account-like-icon { height: 15px; color: #8b681f; font-size: 17px; font-weight: 700; line-height: 15px; }
 .account-stat-count { color: var(--ink); font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .account-content { padding: 5px 14px 0; }
 .account-archives { display: flex; align-items: center; gap: 4px; padding: 0 10px; margin-bottom: 12px; }
