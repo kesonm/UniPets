@@ -1,5 +1,6 @@
 import { ChatDotRound, CollectionTag, Film, FirstAidKit, Goods, Shop, User } from '@element-plus/icons-vue'
 import { h5Areas } from '../../shared/h5-areas.mjs'
+import { serviceRegions } from '../../shared/h5-service-regions.mjs'
 import { businessModules, type Listing } from '../h5/business'
 import { categories } from '../h5/catalog'
 import type { PostTopic } from '../h5/types'
@@ -10,7 +11,7 @@ export const sections = [
     columns:['用户','登录方式','宠物档案','注册时间','状态'],
     filters:[{id:'enabled',label:'正常'},{id:'disabled',label:'已停用'}]},
   {id:'stores',title:'门店管理',icon:Shop,search:'搜索门店、地址或电话',create:'新增门店',
-    columns:['门店','商圈','联系电话','创建时间','状态'],
+    columns:['门店','地区','联系电话','创建时间','状态'],
     filters:[{id:'enabled',label:'营业中'},{id:'disabled',label:'已停用'}]},
   {id:'products',title:'商品管理',icon:Goods,search:'搜索商品或门店',create:'新增商品',
     columns:['商品','门店 / 提供方','价格','库存','状态'],filters:catalogFilters()},
@@ -39,10 +40,12 @@ export interface Account extends BaseRow {
   isAdmin: Flag; wechat: Flag; enabled: Flag; petCount: number
 }
 export interface Store extends BaseRow {
-  name: string; area: string|null; districtCode: string|null; address: string; phone: string; enabled: Flag; createdAt: string
+  name: string; area: string|null; districtCode: string|null; cityCode: string|null; address: string; phone: string
+  latitude: number|null; longitude: number|null; enabled: Flag; createdAt: string
 }
 export interface CatalogItem extends Listing {
   storeId: string|null; storeName: string|null; storeEnabled: Flag|null; visible: Flag; published: Flag; updatedAt: string
+  categoryLabel?: string|null
 }
 export const speciesNames = {cat:'猫',dog:'狗',other:'其他'}
 export const genderNames = {unknown:'未知',male:'公',female:'母'}
@@ -71,6 +74,7 @@ const localDate = new Intl.DateTimeFormat('zh-CN', {
   year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:'Asia/Shanghai',
 })
 const currency = new Intl.NumberFormat('zh-CN',{style:'currency',currency:'CNY'})
+const cities = new Map(serviceRegions.flatMap(province => [province,...province.cities]).map(city => [city.id,city.label]))
 type Cell = { title: string; detail?: string; tone?: 'positive'|'muted'|'warning' }
 const cell = (title: string|number|null, detail?: string): Cell => ({title:String(title ?? '—'),detail})
 const status = (title: string, tone: Cell['tone']): Cell => ({title,tone})
@@ -82,11 +86,11 @@ export function tableCells(row: AdminRecord): Cell[] {
     cell(row.petCount),date(row.createdAt),row.enabled ? status('正常','positive') : status('已停用','warning'),
   ]
   if ('phone' in row) return [
-    cell(row.name,row.address),cell(h5Areas.find(area => area.id===row.area)?.label ?? row.area),
+    cell(row.name,row.address),cell(cities.get(row.cityCode ?? '') ?? h5Areas.find(area => area.id===row.area)?.label ?? row.area),
     cell(row.phone || null),date(row.createdAt),row.enabled ? status('营业中','positive') : status('已停用','warning'),
   ]
   if ('storeId' in row) {
-    const category = listingGroups[row.module].categories.find(item => item.id===row.category)?.label ?? row.category
+    const category = row.categoryLabel ?? listingGroups[row.module].categories.find(item => item.id===row.category)?.label ?? row.category
     const primary = cell(row.title,category)
     const provider = cell(row.storeName || row.provider || '平台')
     const visibility = row.visible ? status('已上架','positive') : row.published ? status('门店已停用','warning') : status('未上架','muted')

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { Router, type RequestHandler } from 'express'
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 import { z } from 'zod'
@@ -7,9 +7,10 @@ import { photoThumbnail } from './assets.js'
 import { adminLogin, authLimiter, requireAuth } from './auth.js'
 import { catalogStore, catalogValues, catalogVisible, createCatalogItem, h5Area, managedCatalogInput, managedCatalogUpdate } from './catalog.js'
 import { db, rows, transaction } from './db.js'
-import { districtInput, listDistricts } from './districts.js'
+import { coordinatesInput, districtInput, listDistricts, serviceCityInput } from './districts.js'
 import { HttpError } from './errors.js'
 import { petSchema, updatePetRecord } from './routes.js'
+import { checkServiceCategory, getServiceCategories, serviceCategoryId, serviceCategoryJoin, serviceCategoryLabel, serviceCategoryName } from './service-categories.js'
 
 export const adminRouter = Router()
 const uuid = z.string().uuid()
@@ -85,6 +86,8 @@ const storeInput = z.object({
   name:z.string().trim().min(1,'请填写门店名称').max(120),
   area:h5Area.nullable(),
   districtCode:districtInput.nullable().optional(),
+  cityCode:serviceCityInput.nullable().optional(),
+  coordinates:coordinatesInput.nullable().optional(),
   address:z.string().trim().max(160),
   phone:z.string().trim().max(40),
 }).strict()
@@ -96,7 +99,9 @@ function checkDistrict(id: string | null | undefined) {
   if (id && !listDistricts('',id).length) throw new HttpError(400,'请选择有效的服务区县')
 }
 adminRouter.get('/stores',list({
-  select:'id,name,area,district_code AS districtCode,address,phone,enabled,created_at AS createdAt',
+  select:`id,name,area,district_code AS districtCode,city_code AS cityCode,
+    CAST(latitude AS DOUBLE) AS latitude,CAST(longitude AS DOUBLE) AS longitude,
+    address,phone,enabled,created_at AS createdAt`,
   from:'h5_stores', search:'name,address,phone,id', order:'created_at DESC,id DESC',
   states:{enabled:'enabled=TRUE',disabled:'enabled=FALSE'},
 }))
@@ -104,15 +109,20 @@ adminRouter.post('/stores',async (req,res) => {
   const item = storeInput.parse(req.body)
   checkDistrict(item.districtCode)
   const id = randomUUID()
-  await db.execute('INSERT INTO h5_stores (id,name,area,district_code,address,phone) VALUES (?,?,?,?,?,?)',
-    [id,item.name,item.area,item.districtCode ?? null,item.address,item.phone])
+  await db.execute(`INSERT INTO h5_stores (id,name,area,district_code,city_code,latitude,longitude,address,phone)
+    VALUES (?,?,?,?,?,?,?,?,?)`,
+    [id,item.name,item.area,item.districtCode ?? null,item.cityCode ?? null,
+      item.coordinates?.latitude ?? null,item.coordinates?.longitude ?? null,item.address,item.phone])
   res.status(201).json({id})
 })
 adminRouter.put('/stores/:id',async (req,res) => {
   const item = storeInput.parse(req.body)
   checkDistrict(item.districtCode)
-  await update('UPDATE h5_stores SET name=?,area=?,district_code=IF(?,?,district_code),address=?,phone=? WHERE id=?',
-    [item.name,item.area,item.districtCode!==undefined,item.districtCode ?? null,item.address,item.phone,uuid.parse(req.params.id)],'门店不存在')
+  await update(`UPDATE h5_stores SET name=?,area=?,district_code=IF(?,?,district_code),city_code=IF(?,?,city_code),
+    latitude=IF(?,?,latitude),longitude=IF(?,?,longitude),address=?,phone=? WHERE id=?`,
+  [item.name,item.area,item.districtCode!==undefined,item.districtCode ?? null,item.cityCode!==undefined,item.cityCode ?? null,
+    item.coordinates!==undefined,item.coordinates?.latitude ?? null,item.coordinates!==undefined,item.coordinates?.longitude ?? null,
+    item.address,item.phone,uuid.parse(req.params.id)],'门店不存在')
   res.json({ok:true})
 })
 adminRouter.patch('/stores/:id',async (req,res) => {
@@ -126,13 +136,41 @@ async function checkStore(id: string|null, localService = false) {
     if (localService) throw new HttpError(400,'发布周边服务帖前请选择关联门店')
     return
   }
-  const [store] = await rows<{ phone:string; area:string|null; districtCode:string|null }>(
-    'SELECT phone,area,district_code AS districtCode FROM h5_stores WHERE id=?',[id])
+  const [store] = await rows<{ phone:string; area:string|null; districtCode:string|null; cityCode:string|null }>(
+    'SELECT phone,area,district_code AS districtCode,city_code AS cityCode FROM h5_stores WHERE id=?',[id])
   if (!store) throw new HttpError(400,'关联门店不存在，请重新选择')
-  if (localService && ((!store.area && !store.districtCode) || !servicePhone(store.phone))) {
-    throw new HttpError(400,'请先在门店管理填写区县和联系电话')
+  if (localService && ((!store.area && !store.districtCode && !store.cityCode) || !servicePhone(store.phone))) {
+    throw new HttpError(400,'请先在门店管理填写地区和联系电话')
   }
 }
+
+const serviceCategoryForm = z.object({label:serviceCategoryName}).strict()
+adminRouter.get('/service-categories', async (_req,res) => {
+  res.json({items:await getServiceCategories()})
+})
+adminRouter.post('/service-categories', async (req,res) => {
+  const {label} = serviceCategoryForm.parse(req.body)
+  const id = 'custom-'+randomBytes(10).toString('hex')
+  try {
+    await db.execute('INSERT INTO h5_service_categories (id,label) VALUES (?,?)',[id,label])
+  } catch (error) {
+    if ((error as {code?:string}).code === 'ER_DUP_ENTRY') throw new HttpError(409,'该分类已存在')
+    throw error
+  }
+  res.status(201).json({id,label})
+})
+adminRouter.put('/service-categories/:id', async (req,res) => {
+  const id = serviceCategoryId.parse(req.params.id)
+  const {label} = serviceCategoryForm.parse(req.body)
+  try {
+    await update('UPDATE h5_service_categories SET label=? WHERE id=?',[label,id],'服务分类不存在')
+  } catch (error) {
+    if ((error as {code?:string}).code === 'ER_DUP_ENTRY') throw new HttpError(409,'该分类已存在')
+    throw error
+  }
+  res.json({id,label})
+})
+
 const catalogSections = [
   {path:'/products',name:'商品',scope:"i.kind='product'"},
   {path:'/services',name:'服务',scope:"i.kind NOT IN ('product','group')"},
@@ -144,14 +182,16 @@ for (const section of catalogSections) {
     select:`i.id,i.module,i.category,i.kind,i.title,i.provider,i.description,i.area,i.venue,
       i.starts_at AS startsAt,i.closes_at AS closesAt,i.price_cents AS priceCents,i.stock,
       i.external_url AS externalUrl,i.published,i.updated_at AS updatedAt,i.store_id AS storeId,
-      store.name AS storeName,store.enabled AS storeEnabled,(${catalogVisible}) AS visible`,
-    from:`h5_catalog_items i ${catalogStore}`, scope:section.scope,
+      store.name AS storeName,store.enabled AS storeEnabled,(${catalogVisible}) AS visible,
+      IF(i.module='services' AND i.kind<>'product',${serviceCategoryLabel},NULL) AS categoryLabel`,
+    from:`h5_catalog_items i ${catalogStore} ${serviceCategoryJoin}`, scope:section.scope,
     search:'i.title,i.description,i.provider,store.name,i.id', order:'i.updated_at DESC,i.id DESC',
     states:{published:catalogVisible,unpublished:'i.published=FALSE',paused:'i.published=TRUE AND store.enabled=FALSE'},
   }))
   adminRouter.post(section.path,async (req,res) => {
     const item = managedCatalogInput.parse(req.body)
     if ((item.kind === 'product') !== isProduct || item.kind === 'group') throw new HttpError(400,'项目类型不匹配')
+    if (!isProduct && item.module==='services') await checkServiceCategory(item.category)
     await checkStore(item.storeId, item.module==='services' && item.published)
     res.status(201).json({id:await createCatalogItem(item)})
   })
@@ -159,6 +199,7 @@ for (const section of catalogSections) {
     const id = uuid.parse(req.params.id)
     const item = managedCatalogUpdate.parse(req.body)
     if ((item.kind === 'product') !== isProduct || item.kind === 'group') throw new HttpError(400,'项目类型不匹配')
+    if (!isProduct && item.module==='services') await checkServiceCategory(item.category)
     await checkStore(item.storeId, item.module==='services' && item.published)
     await update(`UPDATE h5_catalog_items i SET module=?,category=?,kind=?,title=?,provider=?,description=?,area=?,
       venue=?,starts_at=?,closes_at=?,price_cents=?,stock=?,external_url=?,published=?,store_id=?

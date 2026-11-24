@@ -16,3 +16,9 @@ python3 scripts/build-district-data.py adm3.json CN.zip server/data/china-distri
 ```
 
 已有门店沿用关联的区县编号。更新区划文件时应核对编号和旧商圈映射。
+
+### 服务筛选的省份和城市
+
+`shared/h5-service-regions.mjs` 采用 areacodes 的 2025 年区划代码，保留省级、地级和省直辖市的名称与代码。该数据集使用 CC0 1.0，文件 Git blob 为 `a31f53c95324bf8723be9f653bafce17bc253a61`。[数据集及来源](https://github.com/yescallop/areacodes)
+
+门店可以明确选择服务城市。旧门店缺少城市代码时，根据关联区县或商圈归入省市。距离排序使用填有门店坐标的记录，用户选择距离排序时只向 API 发送保留三位小数的坐标。

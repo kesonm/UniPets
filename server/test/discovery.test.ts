@@ -16,6 +16,7 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
   const accounts: string[] = []
   const stores: string[] = []
   const services: string[] = []
+  const customCategories: string[] = []
   const servicePath = '/h5/catalog/service-posts'
 
   async function request(path: string, method = 'GET', body?: unknown, token?: string, client = 'miniprogram') {
@@ -34,9 +35,9 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     accounts.push(result.data.user.id)
     return { id: result.data.user.id as string, token: result.data.token as string }
   }
-  async function addStore(manager: string, code: string) {
+  async function addStore(manager: string, code: string | null, location: Record<string,unknown> = {}) {
     const result = await request('/admin/stores','POST',{
-      name: '测试门店 ' + suffix, area: null, districtCode: code, address: '测试地址', phone: '0755-23456789',
+      name: '测试门店 ' + suffix, area: null, districtCode: code, address: '测试地址', phone: '0755-23456789', ...location,
     },manager)
     assert.equal(result.status,201)
     stores.push(result.data.id)
@@ -70,13 +71,54 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     const owner = await signup('owner')
     const dogOwner = await signup('dog')
     await db.execute('UPDATE users SET is_admin=TRUE WHERE id=?',[owner.id])
+    const defaultCategories = await request('/h5/catalog/service-categories')
+    assert.deepEqual(defaultCategories.data.items.slice(0,6).map((item:{label:string}) => item.label),
+      ['洗护','代养','上门','拍摄','套餐','其他'])
+    assert.equal((await request('/admin/service-categories','POST',{label:'剪甲'},dogOwner.token)).status,403)
+    assert.equal((await request('/admin/service-categories','POST',{label:'宠物剪甲护理'},owner.token)).status,400)
+    const custom = await request('/admin/service-categories','POST',{label:'宠物剪甲'},owner.token)
+    assert.equal(custom.status,201)
+    customCategories.push(custom.data.id)
+    assert.equal((await request('/admin/service-categories','POST',{label:'宠物剪甲'},owner.token)).status,409)
+    assert.equal((await request('/admin/service-categories/'+custom.data.id,'PUT',{label:'剪甲'},owner.token)).status,200)
     const found = await request('/admin/districts?q='+encodeURIComponent('深圳 宝安'), 'GET', undefined, owner.token)
-    assert.ok(found.data.items.some((district: {id:string}) => district.id === '1816983'))
-    const ba = await addStore(owner.token,'1816983')
+    assert.ok(found.data.items.some((district:{id:string;serviceCityCode:string}) =>
+      district.id === '1816983' && district.serviceCityCode === '440300'))
+    const ba = await addStore(owner.token,'1816983',{coordinates:{latitude:22.55,longitude:113.885}})
     const ns = await addStore(owner.token,'6571327')
+    const guangzhou = await addStore(owner.token,null,{cityCode:'440100',coordinates:{latitude:23.14,longitude:113.32}})
+    assert.equal((await request('/admin/stores/'+guangzhou,'PUT',{
+      name:'广州测试门店 '+suffix,area:null,address:'天河区测试地址',phone:'020-23456789',
+    },owner.token)).status,200)
     const wash = await addService(owner.token,ba,'grooming','洗护')
     const board = await addService(owner.token,ba,'boarding','宠物寄养')
-    const home = await addService(owner.token,ns,'home-service','上门喂养')
+    const home = await addService(owner.token,ns,'home-service','大型犬上门喂养')
+    const nails = await addService(owner.token,guangzhou,custom.data.id,'猫咪剪甲')
+    function serviceIds(result: Awaited<ReturnType<typeof request>>) {
+      assert.equal(result.status,200,result.data.error)
+      return result.data.posts.map((post:{id:string}) => post.id)
+    }
+    const serviceSearch = '?q='+suffix
+    assert.deepEqual(new Set(serviceIds(await request(servicePath+serviceSearch))),
+      new Set([wash,board,home,nails]))
+    assert.deepEqual(new Set(serviceIds(await request(servicePath+serviceSearch+'&region=440300'))),
+      new Set([wash,board,home]))
+    assert.deepEqual(new Set(serviceIds(await request(servicePath+serviceSearch+'&region=440000'))),
+      new Set([wash,board,home,nails]))
+    const selected = await request(servicePath+serviceSearch+'&region=440100&category='+custom.data.id)
+    assert.deepEqual(serviceIds(selected),[nails])
+    assert.equal(selected.data.posts[0].categoryLabel,'剪甲')
+    const distance = {q:suffix,location:{latitude:22.55,longitude:113.882}}
+    const closest = await request(servicePath+'/search','POST',{...distance,sort:'distance-asc'})
+    assert.equal(closest.status,200)
+    assert.deepEqual(new Set(serviceIds(closest).slice(0,2)),new Set([wash,board]))
+    assert.deepEqual(serviceIds(closest).slice(2),[nails,home])
+    assert.ok(closest.data.posts[0].distanceMeters < 400)
+    assert.equal(closest.data.posts[3].distanceMeters,null)
+    const farthest = await request(servicePath+'/search','POST',{...distance,sort:'distance-desc'})
+    assert.equal(serviceIds(farthest)[0],nails)
+    assert.equal(serviceIds(farthest)[3],home)
+    assert.equal((await request(servicePath+'/search','POST',{sort:'distance-asc'})).status,400)
     const nearby = await request(servicePath + '?district=1816983&q=' + suffix)
     assert.deepEqual(new Set(nearby.data.posts.map((post: {id:string}) => post.id)),new Set([board,wash]))
     const category = await request(servicePath+'?district=1816983&category=grooming&q='+suffix)
@@ -93,6 +135,8 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     assert.equal((await request(servicePath+'/'+board+'/comments')).data.comments[0].body,'可以代养吗？')
     assert.equal((await request(servicePath+'/'+board,'GET',undefined,dogOwner.token)).data.post.liked,1)
     assert.equal((await request(servicePath+'/'+board,'GET',undefined,owner.token)).data.post.liked,0)
+    assert.equal(serviceIds(await request(servicePath+serviceSearch+'&sort=likes-desc'))[0],board)
+    assert.equal(serviceIds(await request(servicePath+serviceSearch+'&sort=likes-asc')).at(-1),board)
     const unliked = await request(servicePath+'/'+board+'/like','PUT',{active:false},dogOwner.token)
     assert.deepEqual(unliked.data,{active:false,likes:0})
 
@@ -119,6 +163,11 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     assert.ok(forCat.indexOf(cat)<forCat.indexOf(dog))
     assert.ok(forDog.indexOf(dog)<forDog.indexOf(cat))
     assert.ok(forCat.indexOf(board)<forCat.indexOf(wash))
+    const recommendedServices = servicePath + serviceSearch + '&sort=recommended'
+    const catServices = serviceIds(await request(recommendedServices,'GET',undefined,owner.token))
+    const dogServices = serviceIds(await request(recommendedServices,'GET',undefined,dogOwner.token))
+    assert.ok(catServices.indexOf(board)<catServices.indexOf(home))
+    assert.ok(dogServices.indexOf(home)<dogServices.indexOf(board))
 
     assert.equal((await request('/admin/stores/'+ba,'PATCH',{enabled:false},owner.token)).status,200)
     assert.equal((await request(servicePath+'/'+board)).status,404)
@@ -129,6 +178,7 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     await new Promise<void>(resolve => server.close(() => resolve()))
     for (const id of services) await db.execute('DELETE FROM h5_catalog_items WHERE id=?',[id])
     for (const id of stores) await db.execute('DELETE FROM h5_stores WHERE id=?',[id])
+    for (const id of customCategories) await db.execute('DELETE FROM h5_service_categories WHERE id=?',[id])
     for (const id of accounts) await db.execute('DELETE FROM users WHERE id=?',[id])
     await db.end()
   }

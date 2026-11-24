@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { serviceCategories, type PostPetType } from '../../shared/h5-discovery.mjs'
 import { rows } from './db.js'
 import type { ServiceRecord } from './h5-service-posts.js'
+import { serviceCategoryColumn, serviceCategoryLabel } from './service-categories.js'
 
 export interface PublicPost {
   id: string
@@ -23,6 +24,18 @@ const petWords: Record<PostPetType, readonly string[]> = {
   other: [],
 }
 
+async function recommendationSignals(owner?: string): Promise<[PetSignal[], Text[]]> {
+  if (!owner) return [[], []]
+  return Promise.all([
+    rows<PetSignal>(`SELECT breed,CASE WHEN species='other' AND (LOCATE('兔',breed)>0 OR LOCATE('rabbit',LOWER(breed))>0)
+      THEN 'rabbit' ELSE species END AS petType FROM pets WHERE user_id=?`, [owner]),
+    rows<Text>(`SELECT title,LEFT(body,1200) AS body FROM h5_posts WHERE user_id=? AND hidden_at IS NULL
+      AND created_at>=UTC_TIMESTAMP(3)-INTERVAL 30 DAY
+      AND (topic IN ('help','rescue') OR LOCATE('求助',CONCAT_WS(' ',title,body))>0)
+      ORDER BY created_at DESC,id LIMIT 6`, [owner]),
+  ])
+}
+
 function tokens(text: string) {
   const result = new Set<string>()
   for (const word of text.toLowerCase().match(/[\p{Script=Han}]+|[a-z0-9]+/gu) ?? []) {
@@ -39,11 +52,15 @@ function similarity(left: Set<string>, right: Set<string>) {
   return same / Math.sqrt(left.size * right.size)
 }
 
+function matchServiceCategories(help: string[]) {
+  return serviceCategories.filter(category => category.terms.some(term => help.some(text => text.includes(term))))
+    .map(category => category.id)
+}
+
 function rankFor(seed: string, pets: PetSignal[], requests: Text[]) {
   const help = requests.map(({title, body}) => (title + ' ' + body).toLowerCase())
   const helpTokens = help.map(tokens)
-  const interests = new Set(serviceCategories.filter(item => item.terms.some(term => help.some(text => text.includes(term))))
-    .map(item => item.id))
+  const interests = new Set(matchServiceCategories(help))
   const types = new Set(pets.map(pet => pet.petType))
   const breeds = pets.map(pet => pet.breed.trim()).filter(Boolean)
 
@@ -59,21 +76,15 @@ function rankFor(seed: string, pets: PetSignal[], requests: Text[]) {
       (item.kind === 'post' && breeds.includes(item.post.breed))
     const contentTokens = tokens(text)
     const related = Math.max(0, ...helpTokens.map(request => similarity(request, contentTokens)))
-    const helpCategory = item.kind === 'service' && interests.has(item.post.category)
+    const helpCategory = item.kind === 'service' &&
+      (interests.has(item.post.category) || help.some(request => request.includes(item.post.categoryLabel)))
     const random = createHash('sha256').update(seed + ':' + item.kind + ':' + post.id).digest().readUInt32BE(0) / 2 ** 32
     return 4 * Number(match) + 2 * Number(breed) + 5 * Number(helpCategory) + 6 * related + fresh + 2.8 * random
   }
 }
 
 export async function recommendedPosts(posts: PublicPost[], services: ServiceRecord[], owner: string | undefined, seed: string) {
-  const [pets, help] = owner ? await Promise.all([
-    rows<PetSignal>(`SELECT breed,CASE WHEN species='other' AND (LOCATE('兔',breed)>0 OR LOCATE('rabbit',LOWER(breed))>0)
-      THEN 'rabbit' ELSE species END AS petType FROM pets WHERE user_id=?`, [owner]),
-    rows<Text>(`SELECT title,LEFT(body,1200) AS body FROM h5_posts WHERE user_id=? AND hidden_at IS NULL
-      AND created_at>=UTC_TIMESTAMP(3)-INTERVAL 30 DAY
-      AND (topic IN ('help','rescue') OR LOCATE('求助',CONCAT_WS(' ',title,body))>0)
-      ORDER BY created_at DESC,id LIMIT 6`, [owner]),
-  ]) : [[], []]
+  const [pets, help] = await recommendationSignals(owner)
   const score = rankFor((owner ?? seed) + ':' + new Date().toISOString().slice(0, 10), pets, help)
   const content: Candidate[] = [
     ...posts.map(post => ({ kind: 'post' as const, post })),
@@ -90,4 +101,25 @@ export async function recommendedPosts(posts: PublicPost[], services: ServiceRec
     reserved.add(row)
   }
   return ranked.filter(row => reserved.has(row)).map(row => row.item)
+}
+
+// Sort the entire filtered service list before pagination using the same pet and help signals as the home feed.
+export async function serviceRecommendation(owner?: string) {
+  const [pets, requests] = await recommendationSignals(owner)
+  if (!pets.length && !requests.length) return {sql:'likes DESC',values:[]}
+  const help = requests.map(({title, body}) => (title + ' ' + body).toLowerCase())
+  const types = [...new Set(pets.flatMap(pet => petWords[pet.petType]))]
+  const breeds = [...new Set(pets.map(pet => pet.breed.trim().toLowerCase()).filter(Boolean))]
+  const categoryHints = matchServiceCategories(help)
+  const helpTokens = [...new Set(help.flatMap(text => [...tokens(text)]))].slice(0, 60)
+  const text = `LOWER(CONCAT_WS(' ', i.title, i.description, ${serviceCategoryLabel}))`
+  const termsMatch = `EXISTS(SELECT 1 FROM JSON_TABLE(?, '$[*]' COLUMNS(term VARCHAR(200) PATH '$'))
+    AS terms WHERE LOCATE(terms.term COLLATE utf8mb4_0900_ai_ci, ${text})>0)`
+  return {
+    sql: `(4*${termsMatch} + 2*${termsMatch} + 2*${termsMatch} +
+      5*(JSON_CONTAINS(?, JSON_QUOTE(${serviceCategoryColumn}))
+        OR EXISTS(SELECT 1 FROM JSON_TABLE(?, '$[*]' COLUMNS(body TEXT PATH '$')) AS request
+          WHERE LOCATE(${serviceCategoryLabel}, request.body COLLATE utf8mb4_0900_ai_ci)>0))) DESC, likes DESC`,
+    values: [types, breeds, helpTokens, categoryHints, help].map(value => JSON.stringify(value)),
+  }
 }

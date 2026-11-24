@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { api, ApiError } from '../lib/api'
 import type { User } from '../lib/types'
 import AdminEditor from './AdminEditor.vue'
+import AdminServiceCategories from './AdminServiceCategories.vue'
 import { canReview, detailTitle, recordAction, sections, tableCells, type AdminRecord } from './admin'
 import './admin.css'
 
@@ -28,6 +29,7 @@ const page = ref(1)
 const hasMore = ref(false)
 const working = ref('')
 const drawer = ref<{record?:AdminRecord}|null>(null)
+const categoryManager = ref(false)
 const rows = computed(() => records.value.map(record => ({record,cells:tableCells(record),action:recordAction(record)})))
 const createLabel = computed(() => 'create' in active.value ? active.value.create : '')
 const drawerTitle = computed(() => {
@@ -82,6 +84,7 @@ function navigate() {
 }
 watch(active,() => {
   drawer.value = null
+  categoryManager.value = false
   records.value = []
   search.value = ''
   state.value = ''
@@ -109,6 +112,7 @@ function clearSession() {
   user.value = null
   records.value = []
   drawer.value = null
+  categoryManager.value = false
   loading.value = false
   hasMore.value = false
   password.value = ''
@@ -223,7 +227,10 @@ onBeforeUnmount(() => {
       <main class="admin-main">
         <header class="admin-page-title">
           <h1>{{ active.title }}</h1>
-          <button v-if="createLabel" class="admin-button admin-primary" type="button" @click="drawer={}"><el-icon><Plus /></el-icon>{{ createLabel }}</button>
+          <div v-if="createLabel" class="admin-title-actions">
+            <button v-if="active.id==='services'" class="admin-button" type="button" @click="categoryManager=true">管理分类</button>
+            <button class="admin-button admin-primary" type="button" @click="drawer={}"><el-icon><Plus /></el-icon>{{ createLabel }}</button>
+          </div>
         </header>
         <section class="admin-panel" :aria-label="active.title+'列表'" :aria-busy="loading">
           <form class="admin-toolbar" role="search" @submit.prevent="filterRecords">
@@ -285,5 +292,8 @@ onBeforeUnmount(() => {
       @update:model-value="(open: boolean) => { if (!open) drawer=null }">
       <AdminEditor v-if="drawer" :section="active.id" :record="drawer.record" @saved="saved" @close="drawer=null" @stale="load" />
     </el-drawer>
+    <el-dialog v-model="categoryManager" title="服务分类" width="min(460px, 94vw)" destroy-on-close>
+      <AdminServiceCategories @saved="load" />
+    </el-dialog>
   </div>
 </template>

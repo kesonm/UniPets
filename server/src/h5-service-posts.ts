@@ -2,28 +2,26 @@ import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 import { z } from 'zod'
-import { serviceCategories } from '../../shared/h5-discovery.mjs'
+import { serviceSorts, sortsByDistance, type ServiceCoordinates, type ServiceSort } from '../../shared/h5-discovery.mjs'
 import { legacyDistricts } from '../../shared/h5-districts.mjs'
 import { optionalAuth, requireAuth } from './auth.js'
 import { catalogVenue } from './catalog.js'
 import { db, rows, transaction } from './db.js'
-import { districtInput } from './districts.js'
+import { coordinatesInput, districtInput, districtsInServiceRegion, serviceRegionInput } from './districts.js'
 import { HttpError } from './errors.js'
+import { serviceRecommendation } from './h5-recommendations.js'
+import { getServiceCategories, serviceCategoryColumn, serviceCategoryId, serviceCategoryJoin, serviceCategoryLabel } from './service-categories.js'
 
 export const h5ServicePostsRouter = Router()
 const uuid = z.string().uuid()
 const pageSize = 16
-const category = z.string().refine(id => serviceCategories.some(item => item.id === id), '服务分类无效')
 const route = '/catalog/service-posts'
 const from = 'FROM h5_catalog_items i JOIN h5_stores store ON store.id=i.store_id'
 const visible = "i.module='services' AND i.kind NOT IN ('product','group') AND i.published=TRUE AND store.enabled=TRUE"
 const district = `COALESCE(store.district_code, CASE store.area
   ${Object.entries(legacyDistricts).map(([area, id]) => `WHEN '${area}' THEN '${id}'`).join(' ')}
   ELSE NULL END)`
-const categoryColumn = `CASE WHEN i.category='self-service' THEN 'grooming'
-  WHEN i.category IN (${serviceCategories.map(item => `'${item.id}'`).join(',')}) THEN i.category
-  ELSE 'other' END`
-const fields = `i.id,i.title,i.description,${categoryColumn} AS category,
+const fields = `i.id,i.title,i.description,${serviceCategoryColumn} AS category,${serviceCategoryLabel} AS categoryLabel,
   store.name AS provider,${catalogVenue} AS venue,store.phone,${district} AS district,
   i.price_cents AS priceCents,i.updated_at AS updatedAt,
   (SELECT COUNT(*) FROM h5_service_likes l WHERE l.item_id=i.id) AS likes,
@@ -35,6 +33,7 @@ export interface ServiceRecord {
   title: string
   description: string
   category: string
+  categoryLabel: string
   provider: string
   venue: string
   phone: string
@@ -44,39 +43,91 @@ export interface ServiceRecord {
   likes: number
   commentCount: number
   liked: number
+  distanceMeters?: number | null
 }
 
 interface ServiceFilter {
   district?: string
   category?: string
+  region?: string
+  sort?: ServiceSort
+  location?: ServiceCoordinates
   q: string
   limit: number
   offset: number
 }
-export function servicePosts(filter: ServiceFilter, viewer?: string) {
-  return rows<ServiceRecord>(`SELECT ${fields} ${from} WHERE ${visible}
-    AND (? IS NULL OR ${district}=?)
-    AND (? IS NULL OR (${categoryColumn})=?)
-    AND (?='' OR LOCATE(?,CONCAT_WS(' ',i.title,i.description,store.name,${catalogVenue}))>0)
-    ORDER BY i.updated_at DESC,i.id DESC LIMIT ? OFFSET ?`, [
-    viewer ?? null, filter.district ?? null, filter.district ?? null, filter.category ?? null, filter.category ?? null,
-    filter.q, filter.q, filter.limit, filter.offset,
-  ])
+const sortOrder: Record<Exclude<ServiceSort, 'recommended'>, string> = {
+  'likes-desc': 'likes DESC',
+  'likes-asc': 'likes ASC',
+  'distance-asc': 'distanceMeters IS NULL, distanceMeters ASC',
+  'distance-desc': 'distanceMeters IS NULL, distanceMeters DESC',
 }
 
+export async function servicePosts(filter: ServiceFilter, viewer?: string) {
+  const conditions = [visible]
+  const values: Array<string | number | null> = [viewer ?? null]
+  let distance = ''
+  if (filter.location) {
+    distance = `, CASE WHEN store.latitude BETWEEN -90 AND 90 AND store.longitude > -180 AND store.longitude <= 180
+      THEN ST_Distance_Sphere(POINT(?,?), POINT(store.longitude, store.latitude)) END AS distanceMeters`
+    values.push(filter.location.longitude, filter.location.latitude)
+  }
+  if (filter.district) {
+    conditions.push(`${district}=?`)
+    values.push(filter.district)
+  }
+  if (filter.region) {
+    const regionDistricts = districtsInServiceRegion(filter.region)
+    const byCity = filter.region.endsWith('0000') ? 'store.city_code LIKE ?' : 'store.city_code=?'
+    const legacy = regionDistricts.length
+      ? ` OR (store.city_code IS NULL AND ${district} IN (${regionDistricts.map(() => '?').join(',')}))` : ''
+    conditions.push(`(${byCity}${legacy})`)
+    values.push(filter.region.endsWith('0000') ? filter.region.slice(0,2)+'%' : filter.region, ...regionDistricts)
+  }
+  if (filter.category) {
+    conditions.push(`${serviceCategoryColumn}=?`)
+    values.push(filter.category)
+  }
+  if (filter.q) {
+    conditions.push(`LOCATE(?,CONCAT_WS(' ',i.title,i.description,store.name,${catalogVenue},${serviceCategoryLabel}))>0`)
+    values.push(filter.q)
+  }
+  const recommendation = filter.sort === 'recommended' && viewer ? await serviceRecommendation(viewer) : undefined
+  const sort = filter.sort === 'recommended' ? recommendation?.sql ?? 'likes DESC' : filter.sort && sortOrder[filter.sort]
+  return rows<ServiceRecord>(`SELECT ${fields}${distance} ${from} ${serviceCategoryJoin}
+    WHERE ${conditions.join(' AND ')} ORDER BY ${sort ? sort + ',' : ''} i.updated_at DESC,i.id DESC LIMIT ? OFFSET ?`,
+    [...values, ...(recommendation?.values ?? []), filter.limit, filter.offset])
+}
+
+const filters = z.object({
+  district: districtInput.optional(), region: serviceRegionInput.optional(), category: serviceCategoryId.optional(),
+  q: z.string().trim().max(60).default(''),
+  sort: z.enum(serviceSorts).default('recommended'),
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+})
+async function readServicePosts(filter: z.infer<typeof filters> & { location?: ServiceCoordinates }, viewer?: string) {
+  if (sortsByDistance(filter.sort) && !filter.location) throw new HttpError(400, '按距离排序需要定位')
+  const posts = await servicePosts({
+    ...filter, location: sortsByDistance(filter.sort) ? filter.location : undefined,
+    limit: pageSize + 1, offset: (filter.page - 1) * pageSize,
+  }, viewer)
+  return { posts: posts.slice(0, pageSize), hasMore: posts.length > pageSize && filter.page < 10000 }
+}
+
+h5ServicePostsRouter.get('/catalog/service-categories', async (_req, res) => {
+  res.json({ items: await getServiceCategories() })
+})
 h5ServicePostsRouter.get(route, optionalAuth, async (req, res) => {
-  const filter = z.object({
-    district: districtInput.optional(), category: category.optional(),
-    q: z.string().trim().max(60).default(''),
-    page: z.coerce.number().int().min(1).max(200).default(1),
-  }).parse(req.query)
-  const posts = await servicePosts({ ...filter, limit: pageSize + 1, offset: (filter.page - 1) * pageSize }, req.user?.id)
-  res.json({ posts: posts.slice(0, pageSize), hasMore: posts.length > pageSize })
+  res.json(await readServicePosts(filters.parse(req.query), req.user?.id))
+})
+h5ServicePostsRouter.post(route + '/search', optionalAuth, async (req, res) => {
+  const filter = filters.extend({ location: coordinatesInput.optional() }).strict().parse(req.body)
+  res.json(await readServicePosts(filter, req.user?.id))
 })
 
 h5ServicePostsRouter.get(route + '/:id', optionalAuth, async (req, res) => {
   const [post] = await rows<ServiceRecord>(
-    `SELECT ${fields} ${from} WHERE i.id=? AND ${visible}`, [req.user?.id ?? null, uuid.parse(req.params.id)],
+    `SELECT ${fields} ${from} ${serviceCategoryJoin} WHERE i.id=? AND ${visible}`, [req.user?.id ?? null, uuid.parse(req.params.id)],
   )
   if (!post) throw new HttpError(404, '服务帖未发布或已下架')
   res.json({ post })

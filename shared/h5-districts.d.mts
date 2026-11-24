@@ -4,6 +4,7 @@ export interface District {
   name: string
   city?: string
   province?: string
+  serviceCityCode?: string
 }
 export interface DistrictBoundary extends District {
   bounds: [number, number, number, number]

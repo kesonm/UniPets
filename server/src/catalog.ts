@@ -9,7 +9,7 @@ export const h5Area = z.string().refine(id => h5Areas.some(area => area.id === i
 
 const fields = z.object({
   module: catalogModules,
-  category: z.string().regex(/^[a-z][a-z-]{0,31}$/, '分类需为英文标识'),
+  category: z.string().regex(/^[a-z][a-z0-9-]{0,31}$/, '分类需为英文标识'),
   kind: catalogKinds,
   title: z.string().trim().min(1, '请填写名称').max(120),
   provider: z.string().trim().max(120),

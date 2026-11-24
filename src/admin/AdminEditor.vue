@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { h5Areas } from '../../shared/h5-areas.mjs'
+import type { ServiceCategory } from '../../shared/h5-discovery.mjs'
 import { legacyDistricts, type District } from '../../shared/h5-districts.mjs'
+import { serviceRegions } from '../../shared/h5-service-regions.mjs'
 import { api, ApiError, apiUrl } from '../lib/api'
 import { detailTitle, genderNames, kinds, listingGroups, speciesNames, type AdminRecord, type Section, type Store } from './admin'
 
@@ -19,7 +21,13 @@ const error = ref('')
 const detail = ref<{body?:string;scenes?:string[];hasImage:boolean|number}>()
 const name = ref(account?.displayName ?? '')
 const storeForm = reactive({name:store?.name ?? '',area:store?.area ?? '',districtCode:store?.districtCode ?? '',
-  address:store?.address ?? '',phone:store?.phone ?? ''})
+  cityCode:store?.cityCode ?? '',address:store?.address ?? '',phone:store?.phone ?? '',
+  latitude:store?.latitude?.toString() ?? '', longitude:store?.longitude?.toString() ?? ''})
+const cityOptions = serviceRegions.map(province => ({
+  value:province.id,label:province.label,
+  children:province.cities.length ? province.cities.map(city => ({value:city.id,label:city.label})) : undefined,
+}))
+const cityPickerProps = {emitPath:false}
 const districts = ref<District[]>([])
 const selectedDistrict = ref<District>()
 const districtBusy = ref(false)
@@ -40,7 +48,10 @@ async function findDistricts(q = '', id = '') {
     const {items} = await api<{items:District[]}>('/admin/districts?' + params)
     if (revision !== districtRevision) return
     districts.value = items
-    if (id) selectedDistrict.value = items[0]
+    if (id) {
+      selectedDistrict.value = items[0]
+      if (!storeForm.cityCode && items[0]?.serviceCityCode) storeForm.cityCode = items[0].serviceCityCode
+    }
   } catch (cause) {
     if (revision === districtRevision) districtError.value = cause instanceof Error ? cause.message : '区县读取失败'
   } finally {
@@ -49,6 +60,7 @@ async function findDistricts(q = '', id = '') {
 }
 function chooseDistrict(id: string) {
   selectedDistrict.value = districtOptions.value.find(item => item.id === id)
+  if (selectedDistrict.value?.serviceCityCode) storeForm.cityCode = selectedDistrict.value.serviceCityCode
 }
 const petForm = reactive({name:pet?.name ?? '',species:pet?.species ?? 'other',breed:pet?.breed ?? '',
   gender:pet?.gender ?? 'unknown',birthday:pet?.birthday ?? '',notes:pet?.notes ?? ''})
@@ -72,10 +84,30 @@ const listing = reactive({
 })
 const moduleOptions = (Object.keys(listingGroups) as (keyof typeof listingGroups)[])
   .filter(group => group!=='friends' && (product || group!=='shop'))
+const localCategories = ref<ServiceCategory[]>([])
+const categoryError = ref('')
+const usesServiceCategories = computed(() => !product && listing.module === 'services')
 const listingCategories = computed(() => {
+  if (usesServiceCategories.value) return localCategories.value
   const choices = [...listingGroups[listing.module].categories]
   return choices.some(choice => choice.id===listing.category) ? choices : [...choices,{id:listing.category,label:listing.category}]
 })
+function resetCategory() {
+  listing.category = listingCategories.value[0]?.id ?? ''
+}
+async function readServiceCategories() {
+  categoryError.value = ''
+  try {
+    localCategories.value = (await api<{items:ServiceCategory[]}>('/admin/service-categories')).items
+    if (!usesServiceCategories.value) return
+    if (listing.category === 'self-service') listing.category = 'grooming'
+    if (!localCategories.value.some(category => category.id === listing.category)) {
+      listing.category = item ? 'other' : localCategories.value[0]?.id ?? ''
+    }
+  } catch (cause) {
+    categoryError.value = cause instanceof Error ? cause.message : '分类读取失败'
+  }
+}
 const serviceKinds = ['appointment','enrollment','article','link'] as const
 type StoreChoice = Pick<Store,'id'|'name'|'enabled'>
 const stores = ref<StoreChoice[]>([])
@@ -118,7 +150,12 @@ const media = computed(() => content && apiUrl('/admin/'+props.section+'/'+conte
 function formValues() {
   if (account) return {displayName:name.value}
   if (pet) return {...petForm,birthday:petForm.birthday || null}
-  if (props.section === 'stores') return {...storeForm,area:storeForm.area || null,districtCode:storeForm.districtCode || null}
+  if (props.section === 'stores') {
+    const {latitude, longitude, ...fields} = storeForm
+    if ((latitude === '') !== (longitude === '')) throw new Error('请同时填写门店的经度和纬度')
+    return {...fields,area:fields.area || null,districtCode:fields.districtCode || null,cityCode:fields.cityCode || null,
+      coordinates:latitude === '' ? null : {latitude:Number(latitude),longitude:Number(longitude)}}
+  }
   const {price,stock,startsAt,closesAt,...fields} = listing
   return {...fields,area:fields.area || null,venue:fields.venue || null,storeId:fields.storeId || null,
     startsAt:scheduledAt(startsAt,item?.startsAt),closesAt:scheduledAt(closesAt,item?.closesAt),
@@ -145,6 +182,7 @@ onMounted(() => {
   if (content) void readContent()
   if (props.section === 'stores' && storeForm.districtCode) void findDistricts('', storeForm.districtCode)
   if (props.section === 'products' || props.section === 'services') void findStores()
+  if (props.section === 'services') void readServiceCategories()
 })
 </script>
 
@@ -178,8 +216,16 @@ onMounted(() => {
         </el-select>
       </label>
       <p v-if="districtError" class="admin-error" role="alert">{{ districtError }}</p>
+      <label>服务城市
+        <el-cascader v-model="storeForm.cityCode" class="admin-city-picker" aria-label="服务城市" :options="cityOptions"
+          :props="cityPickerProps" filterable clearable placeholder="选择省份和城市" />
+      </label>
       <label>门店地址<input v-model.trim="storeForm.address" maxlength="160" autocomplete="street-address"></label>
       <label>联系电话<input v-model.trim="storeForm.phone" type="tel" maxlength="40" autocomplete="tel"></label>
+      <div class="admin-editor-pair">
+        <label>门店经度<input v-model="storeForm.longitude" type="number" min="-179.999999" max="180" step="any" placeholder="WGS84"></label>
+        <label>门店纬度<input v-model="storeForm.latitude" type="number" min="-90" max="90" step="any" placeholder="WGS84"></label>
+      </div>
     </template>
     <template v-else-if="pet">
       <div class="admin-record-identifier">{{ pet.owner }} · {{ pet.identityNumber ?? '未登记宠物编号' }}</div>
@@ -197,13 +243,16 @@ onMounted(() => {
     <template v-else>
       <label>{{ product ? '商品名称' : '服务名称' }}<input v-model.trim="listing.title" maxlength="120" required></label>
       <div class="admin-editor-pair">
-        <label>目录<select v-model="listing.module" @change="listing.category=listingGroups[listing.module].categories[0].id">
+        <label>目录<select v-model="listing.module" @change="resetCategory">
           <option v-for="group in moduleOptions" :key="group" :value="group">{{ listingGroups[group].title }}</option>
         </select></label>
-        <label>分类<select v-model="listing.category">
+        <label>分类<select v-model="listing.category" :disabled="usesServiceCategories && !localCategories.length">
           <option v-for="choice in listingCategories" :key="choice.id" :value="choice.id">{{ choice.label }}</option>
         </select></label>
       </div>
+      <p v-if="usesServiceCategories && categoryError" class="admin-error" role="alert">
+        {{ categoryError }} <button class="admin-text-button" type="button" @click="readServiceCategories">重试</button>
+      </p>
       <label v-if="!product">项目类型<select v-model="listing.kind">
         <option v-for="kind in serviceKinds" :key="kind" :value="kind">{{ kinds[kind] }}</option>
       </select></label>
@@ -235,7 +284,7 @@ onMounted(() => {
     <p v-if="error" class="admin-error" role="alert">{{ error }}</p>
     <footer class="admin-editor-actions">
       <button class="admin-button" type="button" :disabled="busy" @click="emit('close')">取消</button>
-      <button class="admin-button admin-primary" type="submit" :disabled="busy">{{ busy ? '正在保存…' : '保存' }}</button>
+      <button class="admin-button admin-primary" type="submit" :disabled="busy || (usesServiceCategories && !localCategories.length)">{{ busy ? '正在保存…' : '保存' }}</button>
     </footer>
   </form>
 </template>

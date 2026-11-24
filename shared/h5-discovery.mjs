@@ -10,6 +10,12 @@ export const serviceCategories = [
   { id: 'other', label: '其他服务', terms: [] },
 ]
 
+export const serviceSorts = ['recommended', 'likes-desc', 'likes-asc', 'distance-asc', 'distance-desc']
+
+export function sortsByDistance(sort) {
+  return sort === 'distance-asc' || sort === 'distance-desc'
+}
+
 export function servicePhone(value) {
   const number = value.replace(/[\s()-]/g, '')
   return /^\+?[0-9]{5,20}$/.test(number) ? number : ''

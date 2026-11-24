@@ -34,6 +34,7 @@ export interface ServicePost {
   title: string
   description: string
   category: string
+  categoryLabel?: string
   provider: string
   venue: string
   phone: string
@@ -43,6 +44,7 @@ export interface ServicePost {
   likes: number
   commentCount: number
   liked: boolean | number
+  distanceMeters?: number | null
 }
 
 export type Recommendation = { kind: 'post'; post: H5Post } | { kind: 'service'; post: ServicePost }

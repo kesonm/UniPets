@@ -27,7 +27,8 @@ export function createApp(privateRoutes = apiRouter) {
     if (!['GET','HEAD'].includes(req.method)) {
       if (!req.is('application/json')) return res.status(415).json({ error: '请求必须使用 JSON' })
       const wechatLogin = req.method === 'POST' && req.path === '/api/auth/wechat' && req.get('X-PetCloud-Client') === 'miniprogram'
-      if (!origin && !req.headers.authorization && req.get('X-PetCloud-Client') !== 'desktop' && !wechatLogin) return res.status(403).json({ error: '请求来源校验失败' })
+      const serviceSearch = req.method === 'POST' && req.path === '/api/h5/catalog/service-posts/search' && req.get('X-PetCloud-Client') === 'miniprogram'
+      if (!origin && !req.headers.authorization && req.get('X-PetCloud-Client') !== 'desktop' && !wechatLogin && !serviceSearch) return res.status(403).json({ error: '请求来源校验失败' })
     }
     next()
   })

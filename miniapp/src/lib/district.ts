@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { districtAt, type District, type DistrictBoundary } from '../../../shared/h5-districts.mjs'
+import type { ServiceCoordinates } from '../../../shared/h5-discovery.mjs'
 import { api, confirm, message, toast } from './client'
 
 const key = 'petcloud.current-district.v1'
@@ -15,12 +16,25 @@ function settings() {
   }))
 }
 
+export function deviceCoordinates() {
+  return new Promise<ServiceCoordinates>((resolve, reject) => uni.getLocation({
+    type: 'wgs84', success: resolve, fail: () => reject(new Error('暂时无法获取当前位置')),
+  }))
+}
+
+export async function enableLocation(explanation: string) {
+  if (await settings() !== false || !await confirm('开启定位', explanation)) return false
+  return new Promise<boolean>(resolve => uni.openSetting({
+    success: result => resolve(result.authSetting['scope.userLocation'] === true),
+    fail: () => resolve(false),
+  }))
+}
+
 export async function locateDistrict(interactive = true): Promise<void> {
   if (locatingDistrict.value) return
   locatingDistrict.value = true
   try {
-    const { latitude, longitude } = await new Promise<{latitude: number; longitude: number}>((resolve,reject) =>
-      uni.getLocation({ type: 'wgs84', success: resolve, fail: () => reject(new Error('暂时无法获取当前位置')) }))
+    const { latitude, longitude } = await deviceCoordinates()
     const x = Math.floor(longitude), y = Math.floor(latitude)
     if (cached?.x !== x || cached.y !== y) {
       const { boundaries } = await api<{ boundaries: DistrictBoundary[] }>('/h5/catalog/district-boundaries?x=' + x + '&y=' + y)
@@ -36,11 +50,11 @@ export async function locateDistrict(interactive = true): Promise<void> {
     uni.setStorageSync(key, found)
   } catch (cause) {
     if (!interactive) return
-    if (await settings() === false && await confirm('开启定位', '允许定位后，首页会显示所在区县。')) {
-      uni.openSetting({
-        success: result => { if (result.authSetting['scope.userLocation']) void locateDistrict() },
-      })
-    } else toast(message(cause))
+    if (await enableLocation('允许定位后，首页会显示所在区县。')) {
+      locatingDistrict.value = false
+      return await locateDistrict()
+    }
+    toast(message(cause))
   } finally {
     locatingDistrict.value = false
   }

@@ -32,7 +32,7 @@ watch([() => props.active, () => user.value?.id, () => district.value?.id, retry
 }, { immediate: true })
 
 function label(item: Recommendation) {
-  if (item.kind === 'service') return serviceCategories.find(category => category.id === item.post.category)?.label || '其他服务'
+  if (item.kind === 'service') return item.post.categoryLabel || serviceCategories.find(category => category.id === item.post.category)?.label || '其他服务'
   return postPetTypeLabels[item.post.petType || item.post.species] + ' · 动态'
 }
 function open(item: Recommendation) {
