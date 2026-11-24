@@ -72,7 +72,7 @@ function scheduledAt(value: string, previous?: string|null) {
   if (!value) return null
   return previous && shanghaiInput(previous) === value ? previous : new Date(value+'+08:00').toISOString()
 }
-const module = item?.module ?? (product ? 'shop' : 'services')
+const module = item?.module ?? (product ? 'shop' : 'medical')
 const listing = reactive({
   module,category:item?.category ?? listingGroups[module].categories[0].id,
   kind:item?.kind ?? (product ? 'product' : 'article'),
@@ -83,7 +83,7 @@ const listing = reactive({
   stock:item?.stock != null ? String(item.stock) : '',published:Boolean(item?.published),
 })
 const moduleOptions = (Object.keys(listingGroups) as (keyof typeof listingGroups)[])
-  .filter(group => group!=='friends' && (product || group!=='shop'))
+  .filter(group => group!=='friends' && (product || group!=='shop') && (product || group!=='services' || item?.module==='services'))
 const localCategories = ref<ServiceCategory[]>([])
 const categoryError = ref('')
 const usesServiceCategories = computed(() => !product && listing.module === 'services')
@@ -241,9 +241,10 @@ onMounted(() => {
       <label>备注<textarea v-model="petForm.notes" rows="4" maxlength="2000"></textarea></label>
     </template>
     <template v-else>
+      <p v-if="section==='services' && !item" class="admin-muted">周边服务帖由绑定门店的小程序用户发布。</p>
       <label>{{ product ? '商品名称' : '服务名称' }}<input v-model.trim="listing.title" maxlength="120" required></label>
       <div class="admin-editor-pair">
-        <label>目录<select v-model="listing.module" @change="resetCategory">
+        <label>目录<select v-model="listing.module" :disabled="!product && item?.module==='services'" @change="resetCategory">
           <option v-for="group in moduleOptions" :key="group" :value="group">{{ listingGroups[group].title }}</option>
         </select></label>
         <label>分类<select v-model="listing.category" :disabled="usesServiceCategories && !localCategories.length">
@@ -258,7 +259,7 @@ onMounted(() => {
       </select></label>
       <label>关联门店
         <el-select v-model="listing.storeId" aria-label="关联门店" filterable remote clearable :value-on-clear="''"
-          placeholder="搜索门店名称" :loading="storeBusy" :remote-method="findStores" @change="selectStore">
+          placeholder="搜索门店名称" :disabled="!product && item?.module==='services'" :loading="storeBusy" :remote-method="findStores" @change="selectStore">
           <el-option v-for="entry in storeOptions" :key="entry.id" :value="entry.id" :label="entry.name+(entry.enabled ? '' : '（已停用）')" />
         </el-select>
       </label>

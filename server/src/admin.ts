@@ -2,13 +2,13 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { Router, type RequestHandler } from 'express'
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 import { z } from 'zod'
-import { servicePhone } from '../../shared/h5-discovery.mjs'
 import { photoThumbnail } from './assets.js'
 import { adminLogin, authLimiter, requireAuth } from './auth.js'
 import { catalogStore, catalogValues, catalogVisible, createCatalogItem, h5Area, managedCatalogInput, managedCatalogUpdate } from './catalog.js'
 import { db, rows, transaction } from './db.js'
 import { coordinatesInput, districtInput, listDistricts, serviceCityInput } from './districts.js'
 import { HttpError } from './errors.js'
+import { hasStoreContact, issueStoreBindingCode, type StoreContact } from './h5-store-binding.js'
 import { petSchema, updatePetRecord } from './routes.js'
 import { checkServiceCategory, getServiceCategories, serviceCategoryId, serviceCategoryJoin, serviceCategoryLabel, serviceCategoryName } from './service-categories.js'
 
@@ -101,7 +101,7 @@ function checkDistrict(id: string | null | undefined) {
 adminRouter.get('/stores',list({
   select:`id,name,area,district_code AS districtCode,city_code AS cityCode,
     CAST(latitude AS DOUBLE) AS latitude,CAST(longitude AS DOUBLE) AS longitude,
-    address,phone,enabled,created_at AS createdAt`,
+    address,phone,enabled,(owner_user_id IS NOT NULL) AS bound,created_at AS createdAt`,
   from:'h5_stores', search:'name,address,phone,id', order:'created_at DESC,id DESC',
   states:{enabled:'enabled=TRUE',disabled:'enabled=FALSE'},
 }))
@@ -130,16 +130,19 @@ adminRouter.patch('/stores/:id',async (req,res) => {
   await update('UPDATE h5_stores SET enabled=? WHERE id=?',[enabled,uuid.parse(req.params.id)],'门店不存在')
   res.json({ok:true})
 })
+adminRouter.post('/stores/:id/binding-code', async (req,res) => {
+  res.set('Cache-Control','no-store').json(await issueStoreBindingCode(uuid.parse(req.params.id)))
+})
 
 async function checkStore(id: string|null, localService = false) {
   if (!id) {
     if (localService) throw new HttpError(400,'发布周边服务帖前请选择关联门店')
     return
   }
-  const [store] = await rows<{ phone:string; area:string|null; districtCode:string|null; cityCode:string|null }>(
+  const [store] = await rows<StoreContact>(
     'SELECT phone,area,district_code AS districtCode,city_code AS cityCode FROM h5_stores WHERE id=?',[id])
   if (!store) throw new HttpError(400,'关联门店不存在，请重新选择')
-  if (localService && ((!store.area && !store.districtCode && !store.cityCode) || !servicePhone(store.phone))) {
+  if (localService && !hasStoreContact(store)) {
     throw new HttpError(400,'请先在门店管理填写地区和联系电话')
   }
 }
@@ -191,8 +194,8 @@ for (const section of catalogSections) {
   adminRouter.post(section.path,async (req,res) => {
     const item = managedCatalogInput.parse(req.body)
     if ((item.kind === 'product') !== isProduct || item.kind === 'group') throw new HttpError(400,'项目类型不匹配')
-    if (!isProduct && item.module==='services') await checkServiceCategory(item.category)
-    await checkStore(item.storeId, item.module==='services' && item.published)
+    if (!isProduct && item.module==='services') throw new HttpError(400,'请由门店绑定账号在小程序发布周边服务帖')
+    await checkStore(item.storeId)
     res.status(201).json({id:await createCatalogItem(item)})
   })
   adminRouter.put(detail,async (req,res) => {
@@ -200,11 +203,13 @@ for (const section of catalogSections) {
     const item = managedCatalogUpdate.parse(req.body)
     if ((item.kind === 'product') !== isProduct || item.kind === 'group') throw new HttpError(400,'项目类型不匹配')
     if (!isProduct && item.module==='services') await checkServiceCategory(item.category)
-    await checkStore(item.storeId, item.module==='services' && item.published)
+    await checkStore(item.storeId, !isProduct && item.module==='services' && item.published)
+    const keepStore = isProduct ? '' : "AND IF(i.module='services', ?='services' AND i.store_id<=>?, ?<>'services')"
     await update(`UPDATE h5_catalog_items i SET module=?,category=?,kind=?,title=?,provider=?,description=?,area=?,
       venue=?,starts_at=?,closes_at=?,price_cents=?,stock=?,external_url=?,published=?,store_id=?
-      WHERE id=? AND updated_at=? AND stock<=>? AND ${section.scope}`,
-    [...catalogValues(item),id,new Date(item.updatedAt),item.expectedStock],'记录已变化，请重新打开后编辑',409)
+      WHERE id=? AND updated_at=? AND stock<=>? AND ${section.scope} ${keepStore}`,
+    [...catalogValues(item),id,new Date(item.updatedAt),item.expectedStock,
+      ...(isProduct ? [] : [item.module,item.storeId,item.module])],'记录已变化，请重新打开后编辑',409)
     res.json({ok:true})
   })
   adminRouter.patch(detail,async (req,res) => {

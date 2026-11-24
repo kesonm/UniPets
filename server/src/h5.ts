@@ -20,12 +20,15 @@ import { h5StoriesRouter } from './h5-stories.js'
 import { h5SocialPagesRouter } from './h5-social-pages.js'
 import { h5OperationsRouter } from './h5-operations.js'
 import { h5ServicePostsRouter, servicePosts } from './h5-service-posts.js'
+import { h5StoreBindingRouter } from './h5-store-binding.js'
+import { h5MyContentRouter } from './h5-my-content.js'
 import { recommendedPosts, type PublicPost } from './h5-recommendations.js'
 import { districtInput, districtRouter } from './districts.js'
 
 export const h5Router = Router()
 h5Router.use('/operations',h5OperationsRouter)
-h5Router.use(districtRouter,h5ServicePostsRouter,h5ProgramsRouter,h5DirectoryRouter,h5OrdersRouter,h5PetRecordsRouter,h5StoriesRouter,h5SocialPagesRouter)
+h5Router.use(districtRouter,h5ServicePostsRouter,h5StoreBindingRouter,h5MyContentRouter,
+  h5ProgramsRouter,h5DirectoryRouter,h5OrdersRouter,h5PetRecordsRouter,h5StoriesRouter,h5SocialPagesRouter)
 const uuid = z.string().uuid()
 const area = z.string().refine(id => h5Areas.some(item => item.id === id), '请选择已有商圈')
 const species = z.enum(['cat','dog','other'])
@@ -212,6 +215,12 @@ h5Router.get('/posts/:id/image', async (req, res) => {
 })
 
 h5Router.use(requireAuth)
+
+h5Router.get('/posts/mine/:id', async (req,res) => {
+  const [post] = await rows(`${postSelect} WHERE post.id=? AND post.user_id=?`, [uuid.parse(req.params.id),req.user.id])
+  if (!post) throw new HttpError(404,'动态不存在')
+  res.json({post})
+})
 
 h5Router.get('/me', async (req, res) => {
   const owner = req.user.id

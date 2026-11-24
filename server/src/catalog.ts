@@ -56,10 +56,15 @@ export function catalogValues(item: CatalogInput & {storeId?: string|null}) {
     item.priceCents,item.stock,item.externalUrl,item.published,item.storeId ?? null]
 }
 
-export async function createCatalogItem(item: CatalogInput & {storeId?: string|null}) {
+export async function createCatalogItem(
+  item: CatalogInput & {storeId?: string|null; publisherId?: string},
+  connection: Pick<typeof db,'execute'> = db,
+) {
   const id = randomUUID()
-  await db.execute('INSERT INTO h5_catalog_items (id,module,category,kind,title,provider,description,area,venue,starts_at,closes_at,price_cents,stock,external_url,published,store_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-    [id,...catalogValues(item)])
+  await connection.execute(`INSERT INTO h5_catalog_items
+    (id,module,category,kind,title,provider,description,area,venue,starts_at,closes_at,price_cents,
+      stock,external_url,published,store_id,publisher_user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id,...catalogValues(item),item.publisherId ?? null])
   return id
 }
 
@@ -68,3 +73,5 @@ export const catalogProvider = 'COALESCE(store.name,i.provider)'
 export const catalogArea = 'COALESCE(i.area,store.area)'
 export const catalogVenue = 'COALESCE(i.venue,store.address)'
 export const catalogVisible = 'i.published=TRUE AND (store.id IS NULL OR store.enabled=TRUE)'
+export const servicePostScope = "i.module='services' AND i.kind NOT IN ('product','group')"
+export const servicePostVisible = `${servicePostScope} AND i.published=TRUE AND store.enabled=TRUE`

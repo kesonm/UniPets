@@ -5,19 +5,19 @@ import { z } from 'zod'
 import { serviceSorts, sortsByDistance, type ServiceCoordinates, type ServiceSort } from '../../shared/h5-discovery.mjs'
 import { legacyDistricts } from '../../shared/h5-districts.mjs'
 import { optionalAuth, requireAuth } from './auth.js'
-import { catalogVenue } from './catalog.js'
+import { catalogVenue, createCatalogItem, servicePostVisible as visible } from './catalog.js'
 import { db, rows, transaction } from './db.js'
 import { coordinatesInput, districtInput, districtsInServiceRegion, serviceRegionInput } from './districts.js'
 import { HttpError } from './errors.js'
 import { serviceRecommendation } from './h5-recommendations.js'
-import { getServiceCategories, serviceCategoryColumn, serviceCategoryId, serviceCategoryJoin, serviceCategoryLabel } from './service-categories.js'
+import { hasStoreContact, type StoreContact } from './h5-store-binding.js'
+import { checkServiceCategory, getServiceCategories, serviceCategoryColumn, serviceCategoryId, serviceCategoryJoin, serviceCategoryLabel } from './service-categories.js'
 
 export const h5ServicePostsRouter = Router()
 const uuid = z.string().uuid()
 const pageSize = 16
 const route = '/catalog/service-posts'
 const from = 'FROM h5_catalog_items i JOIN h5_stores store ON store.id=i.store_id'
-const visible = "i.module='services' AND i.kind NOT IN ('product','group') AND i.published=TRUE AND store.enabled=TRUE"
 const district = `COALESCE(store.district_code, CASE store.area
   ${Object.entries(legacyDistricts).map(([area, id]) => `WHEN '${area}' THEN '${id}'`).join(' ')}
   ELSE NULL END)`
@@ -119,6 +119,27 @@ h5ServicePostsRouter.get('/catalog/service-categories', async (_req, res) => {
 })
 h5ServicePostsRouter.get(route, optionalAuth, async (req, res) => {
   res.json(await readServicePosts(filters.parse(req.query), req.user?.id))
+})
+h5ServicePostsRouter.post(route, requireAuth, async (req,res) => {
+  const item = z.object({
+    storeId:uuid, category:serviceCategoryId,
+    title:z.string().trim().min(1,'请填写服务名称').max(120),
+    description:z.string().trim().min(1,'请填写服务详情').max(5000),
+    priceCents:z.number().int().min(1).max(10_000_000).nullable().default(null),
+  }).strict().parse(req.body)
+  await checkServiceCategory(item.category)
+  const id = await transaction(async conn => {
+    const [[store]] = await conn.execute<(RowDataPacket & StoreContact & {name:string})[]>(`SELECT
+      name,phone,area,city_code AS cityCode,district_code AS districtCode FROM h5_stores
+      WHERE id=? AND owner_user_id=? AND enabled=TRUE FOR SHARE`, [item.storeId,req.user.id])
+    if (!store) throw new HttpError(403,'请选择自己绑定且营业中的门店')
+    if (!hasStoreContact(store)) throw new HttpError(400,'请让管理员补齐门店地区和联系电话')
+    return createCatalogItem({
+      ...item, module:'services', kind:'article', provider:store.name, publisherId:req.user.id,
+      area:null, venue:null, startsAt:null, closesAt:null, stock:null, externalUrl:null, published:true,
+    }, conn)
+  })
+  res.status(201).json({id})
 })
 h5ServicePostsRouter.post(route + '/search', optionalAuth, async (req, res) => {
   const filter = filters.extend({ location: coordinatesInput.optional() }).strict().parse(req.body)

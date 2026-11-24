@@ -39,7 +39,21 @@
     {
       "path": "pages/profile/index",
       "style": {
-        "navigationBarTitleText": "个人资料",
+        "navigationBarTitleText": "编辑资料",
+        "navigationBarBackgroundColor": "#f5f4f1"
+      }
+    },
+    {
+      "path": "pages/my-content/index",
+      "style": {
+        "navigationBarTitleText": "我的发布",
+        "navigationBarBackgroundColor": "#f5f4f1"
+      }
+    },
+    {
+      "path": "pages/stores/index",
+      "style": {
+        "navigationBarTitleText": "我的门店",
         "navigationBarBackgroundColor": "#f5f4f1"
       }
     },

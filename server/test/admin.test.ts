@@ -92,8 +92,9 @@ test('admin management updates the same records used by the customer APIs', {tim
     entries.push(productId)
     assert.equal((await request('/h5/catalog/'+productId)).data.listing.provider,'更新门店 '+suffix)
     assert.equal((await request('/h5/catalog/'+productId)).data.listing.venue,newStore.address)
-    const offer = {...listing,module:'services',kind:'appointment',category:'grooming',title:'预约服务 '+suffix,
+    const offer = {...listing,module:'education',kind:'appointment',category:'training',title:'预约服务 '+suffix,
       startsAt:new Date(Date.now()+3600_000).toISOString(),stock:2,priceCents:null}
+    assert.equal((await admin('/services','POST',{...offer,module:'services',category:'grooming'})).status,400)
     const service = await admin('/services','POST',offer)
     assert.equal(service.status,201)
     const serviceId = service.data.id

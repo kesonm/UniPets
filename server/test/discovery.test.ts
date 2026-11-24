@@ -43,13 +43,16 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     stores.push(result.data.id)
     return result.data.id as string
   }
-  async function addService(manager: string, storeId: string, category: string, title: string) {
-    const result = await request('/admin/services','POST',{
-      module:'services', kind:'appointment', category, title: title + ' ' + suffix,
-      provider:'', description:title + '的项目详情', area:null, venue:null,
-      startsAt:'2099-12-01T10:00:00.000Z', closesAt:null, priceCents:null, stock:null, externalUrl:null,
-      published:true, storeId,
-    },manager)
+  async function codeFor(manager: string, storeId: string) {
+    const result = await request('/admin/stores/'+storeId+'/binding-code','POST',{},manager)
+    assert.equal(result.status,200)
+    assert.match(result.data.code,/^[0-9A-F]{12}$/)
+    return result.data.code as string
+  }
+  async function addService(merchant: string, storeId: string, category: string, title: string) {
+    const result = await request(servicePath,'POST',{
+      category, title:title+' '+suffix, description:title+'的项目详情', storeId,
+    },merchant)
     assert.equal(result.status,201)
     services.push(result.data.id)
     return result.data.id as string
@@ -70,26 +73,47 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
 
     const owner = await signup('owner')
     const dogOwner = await signup('dog')
-    await db.execute('UPDATE users SET is_admin=TRUE WHERE id=?',[owner.id])
+    const manager = await signup('manager')
+    await db.execute('UPDATE users SET is_admin=TRUE WHERE id=?',[manager.id])
     const defaultCategories = await request('/h5/catalog/service-categories')
     assert.deepEqual(defaultCategories.data.items.slice(0,6).map((item:{label:string}) => item.label),
       ['洗护','代养','上门','拍摄','套餐','其他'])
     assert.equal((await request('/admin/service-categories','POST',{label:'剪甲'},dogOwner.token)).status,403)
-    assert.equal((await request('/admin/service-categories','POST',{label:'宠物剪甲护理'},owner.token)).status,400)
-    const custom = await request('/admin/service-categories','POST',{label:'宠物剪甲'},owner.token)
+    assert.equal((await request('/admin/service-categories','POST',{label:'宠物剪甲护理'},manager.token)).status,400)
+    const custom = await request('/admin/service-categories','POST',{label:'宠物剪甲'},manager.token)
     assert.equal(custom.status,201)
     customCategories.push(custom.data.id)
-    assert.equal((await request('/admin/service-categories','POST',{label:'宠物剪甲'},owner.token)).status,409)
-    assert.equal((await request('/admin/service-categories/'+custom.data.id,'PUT',{label:'剪甲'},owner.token)).status,200)
-    const found = await request('/admin/districts?q='+encodeURIComponent('深圳 宝安'), 'GET', undefined, owner.token)
+    assert.equal((await request('/admin/service-categories','POST',{label:'宠物剪甲'},manager.token)).status,409)
+    assert.equal((await request('/admin/service-categories/'+custom.data.id,'PUT',{label:'剪甲'},manager.token)).status,200)
+    const found = await request('/admin/districts?q='+encodeURIComponent('深圳 宝安'), 'GET', undefined, manager.token)
     assert.ok(found.data.items.some((district:{id:string;serviceCityCode:string}) =>
       district.id === '1816983' && district.serviceCityCode === '440300'))
-    const ba = await addStore(owner.token,'1816983',{coordinates:{latitude:22.55,longitude:113.885}})
-    const ns = await addStore(owner.token,'6571327')
-    const guangzhou = await addStore(owner.token,null,{cityCode:'440100',coordinates:{latitude:23.14,longitude:113.32}})
+    const ba = await addStore(manager.token,'1816983',{coordinates:{latitude:22.55,longitude:113.885}})
+    const ns = await addStore(manager.token,'6571327')
+    const guangzhou = await addStore(manager.token,null,{cityCode:'440100',coordinates:{latitude:23.14,longitude:113.32}})
+    assert.equal((await request('/admin/stores/'+ba+'/binding-code','POST',{},owner.token)).status,403)
+    const superseded = await codeFor(manager.token,ba)
+    const bindingCode = await codeFor(manager.token,ba)
+    const bindPath = '/h5/catalog/stores/bind'
+    assert.equal((await request(bindPath,'POST',{code:superseded},owner.token)).status,409)
+    assert.equal((await request(bindPath,'POST',{code:bindingCode.toLowerCase()},owner.token)).status,200)
+    assert.equal((await request(bindPath,'POST',{code:bindingCode},dogOwner.token)).status,409)
+    assert.equal((await request('/admin/stores/'+ba+'/binding-code','POST',{},manager.token)).status,409)
+    for (const id of [ns,guangzhou]) {
+      assert.equal((await request(bindPath,'POST',{code:await codeFor(manager.token,id)},owner.token)).status,200)
+    }
+    const bound = await request('/h5/catalog/stores/mine','GET',undefined,owner.token)
+    assert.deepEqual(new Set(bound.data.stores.map((item:{id:string}) => item.id)),new Set([ba,ns,guangzhou]))
+    assert.deepEqual((await request('/h5/catalog/stores/mine','GET',undefined,dogOwner.token)).data.stores,[])
+    const contested = await addStore(manager.token,'1816983')
+    const contestedCode = await codeFor(manager.token,contested)
+    const claims = await Promise.all([owner,dogOwner].map(account => request(bindPath,'POST',{code:contestedCode},account.token)))
+    assert.deepEqual(claims.map(claim => claim.status).sort(),[200,409])
+    const forbiddenPost = {storeId:ba,category:'grooming',title:'越权测试',description:'不应显示'}
+    assert.equal((await request(servicePath,'POST',forbiddenPost,dogOwner.token)).status,403)
     assert.equal((await request('/admin/stores/'+guangzhou,'PUT',{
       name:'广州测试门店 '+suffix,area:null,address:'天河区测试地址',phone:'020-23456789',
-    },owner.token)).status,200)
+    },manager.token)).status,200)
     const wash = await addService(owner.token,ba,'grooming','洗护')
     const board = await addService(owner.token,ba,'boarding','宠物寄养')
     const home = await addService(owner.token,ns,'home-service','大型犬上门喂养')
@@ -169,7 +193,41 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     assert.ok(catServices.indexOf(board)<catServices.indexOf(home))
     assert.ok(dogServices.indexOf(home)<dogServices.indexOf(board))
 
-    assert.equal((await request('/admin/stores/'+ba,'PATCH',{enabled:false},owner.token)).status,200)
+    const pets = await request('/pets','GET',undefined,owner.token)
+    const story = await request('/h5/stories','POST',{
+      petId:pets.data.pets.find((pet:{species:string}) => pet.species === 'cat').id,title:'猫咪小故事',scenes:['回到家'],publish:true,
+    },owner.token)
+    assert.equal(story.status,201)
+    for (const content of ['/h5/posts/'+cat,'/h5/stories/'+story.data.id]) {
+      for (const kind of ['like','favorite']) {
+        assert.equal((await request(content+'/reaction','PUT',{kind,active:true},dogOwner.token)).status,200)
+      }
+    }
+    assert.equal((await request(servicePath+'/'+board+'/like','PUT',{active:true},dogOwner.token)).status,200)
+    const personal = '/h5/posts/mine'
+    const counts = async (token:string) => {
+      const result = await request(personal+'/counts','GET',undefined,token)
+      assert.equal(result.status,200,result.data.error)
+      return result.data.counts
+    }
+    const mine = async (token:string,tab:string) => {
+      const result = await request(personal+'?tab='+tab,'GET',undefined,token)
+      assert.equal(result.status,200,result.data.error)
+      return result.data.items.map((item:{id:string}) => item.id)
+    }
+    assert.equal((await request(personal+'/counts')).status,401)
+    assert.deepEqual(await counts(owner.token),{published:7,likes:0,favorites:0})
+    assert.deepEqual(new Set(await mine(owner.token,'published')),new Set([cat,rabbit,wash,board,home,nails,story.data.id]))
+    assert.deepEqual(await counts(dogOwner.token),{published:1,likes:3,favorites:2})
+    assert.deepEqual(new Set(await mine(dogOwner.token,'likes')),new Set([cat,story.data.id,board]))
+    assert.deepEqual(new Set(await mine(dogOwner.token,'favorites')),new Set([cat,story.data.id]))
+    assert.equal((await request('/admin/posts/'+cat,'PATCH',{hidden:true},manager.token)).status,200)
+    assert.equal((await request(personal+'/'+cat,'GET',undefined,owner.token)).status,200)
+    assert.equal((await request(personal+'/'+cat,'GET',undefined,dogOwner.token)).status,404)
+
+    assert.equal((await request('/admin/stores/'+ba,'PATCH',{enabled:false},manager.token)).status,200)
+    assert.equal((await request(servicePath,'POST',forbiddenPost,owner.token)).status,403)
+    assert.deepEqual(await counts(dogOwner.token),{published:1,likes:1,favorites:1})
     assert.equal((await request(servicePath+'/'+board)).status,404)
     assert.equal((await request(servicePath+'/'+board+'/comments')).status,404)
     assert.equal((await request(servicePath+'/'+board+'/like','PUT',{active:true},dogOwner.token)).status,404)

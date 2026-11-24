@@ -47,6 +47,25 @@ export interface ServicePost {
   distanceMeters?: number | null
 }
 
+export interface BoundStore {
+  id: string
+  name: string
+  address: string
+  phone: string
+  enabled: boolean
+  ready: boolean
+}
+
+export type PersonalContentTab = 'published' | 'likes' | 'favorites'
+export type PersonalContentCounts = Record<PersonalContentTab, number>
+export interface PersonalContentItem {
+  id: string
+  title: string
+  kind: 'post' | 'story' | 'service'
+  visible: boolean | number
+  activityAt: string
+}
+
 export type Recommendation = { kind: 'post'; post: H5Post } | { kind: 'service'; post: ServicePost }
 
 export interface H5Social {

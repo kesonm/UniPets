@@ -78,13 +78,22 @@
 | GET | /h5/catalog/service-posts | 按 `region`（省市代码）、`category`、`q`、`page` 筛选服务帖，兼容旧版 `district` |
 | POST | /h5/catalog/service-posts/search | 查询同一列表，按距离排序时在 JSON 里提交 `location`（`latitude` 和 `longitude`） |
 | GET | /h5/catalog/service-posts/:id | 服务详情、门店电话及互动计数 |
+| POST | /h5/catalog/service-posts | 已绑定门店的登录用户提交 `storeId`、`category`、`title`、`description` 与可选的 `priceCents`，发布服务帖 |
 | PUT | /h5/catalog/service-posts/:id/like | 为当前账号设置点赞，提交 `{ active }` |
 | GET / POST | /h5/catalog/service-posts/:id/comments | 读取评论，或登录后提交 `{ body }` |
+| GET | /h5/catalog/stores/mine | 读取当前账号绑定的门店及其发布条件 |
+| POST | /h5/catalog/stores/bind | 提交 `{ code }` 绑定门店 |
 | GET | /h5/posts | 交友使用 `sort=latest`，可组合 `petType`、`breed`、`q` 和 `page` |
+| GET | /h5/posts/mine/counts | 当前账号的发布、点赞和收藏计数 |
+| GET | /h5/posts/mine | 按 `tab=published`、`likes` 或 `favorites` 读取对应列表，支持 `page` |
 | GET | /h5/posts/breeds | 获取公开帖子使用的品种，可按 `petType` 筛选 |
 | GET | /h5/posts/recommendations | 混排服务帖与动态，支持区县 `district` 和访客随机种子 `seed` |
 
-首页推荐会参考登录用户的宠物类型、品种和近 30 天的公开求助，并加入按用户区分的随机排序。周边服务通过后台「服务管理」关联营业门店发布。服务帖的预约入口为门店电话。
+首页推荐会参考登录用户的宠物类型、品种和近 30 天的公开求助，并加入按用户区分的随机排序。周边服务通过小程序「我的门店」发布，预约入口为门店电话。
+
+管理员可在门店管理生成绑定码，对应接口为 `POST /admin/stores/:id/binding-code`。绑定码有效期 24 小时，新的绑定码替换旧码，门店绑定成功后即消耗。一个账号可以绑定多个门店，每个门店最多由一个账号绑定。
+
+发布记录包括动态、已发布的宠物故事和用户发出的门店服务帖。点赞列表包括三种内容，收藏列表包括动态和宠物故事。点赞和收藏只统计当前可打开的公开内容。
 
 周边服务的 `sort` 默认是 `recommended`，根据用户宠物档案和近 30 天公开求助排序。还支持 `likes-desc`、`likes-asc`、`distance-asc` 和 `distance-desc`。距离使用设备取整后的 WGS84 坐标和门店坐标计算，响应中的 `distanceMeters` 是直线距离。无坐标的门店排在最后。未选择地区时查询全国。
 

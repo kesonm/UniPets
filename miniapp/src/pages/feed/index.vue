@@ -92,9 +92,7 @@ async function load() {
     if (!p.some((x) => x.id === petId.value)) petId.value = p[0]?.id || ''
   }
   if (mode.value === 'private') {
-    social.value = user.value ? await api<H5Social>('/h5/me') : undefined
-    current.value = social.value?.published.find(post => post.id === id.value)
-    if (!current.value && user.value) throw new Error('动态不存在')
+    current.value = user.value ? (await api<{post:H5Post}>('/h5/posts/mine/' + id.value)).post : undefined
     return
   }
   if (mode.value === 'detail') {
@@ -117,6 +115,8 @@ async function load() {
 }
 const { error, loading, refresh } = pageLoad(load, () => {
   social.value = undefined
+  current.value = undefined
+  comments.value = []
   myComments.value = []
   pets.value = []
   assets.value = []
@@ -165,7 +165,8 @@ function remove(commentId = '') {
     }
   })
 }
-const owned = computed(() => social.value?.published.some((p) => p.id === id.value))
+const owned = computed(() => mode.value === 'private' ? Boolean(current.value && user.value)
+  : social.value?.published.some((p) => p.id === id.value))
 </script>
 <template>
   <view class="screen">
