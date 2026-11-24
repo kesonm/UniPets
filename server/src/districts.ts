@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { gunzipSync } from 'node:zlib'
 import { Router } from 'express'
 import { z } from 'zod'
-import type { District, DistrictBoundary } from '../../shared/h5-districts.mjs'
+import { districtAt, type District, type DistrictBoundary } from '../../shared/h5-districts.mjs'
 import { serviceRegions } from '../../shared/h5-service-regions.mjs'
 
 export const districtInput = z.string().regex(/^[a-zA-Z0-9-]{1,32}$/)
@@ -35,6 +35,11 @@ function serviceCity(district: District) {
   const name = district.city || district.name
   return province.cities.find(city => city.label === name)?.id ??
     province.cities.find(city => city.label === (legacyCityNames[name] ?? name.replace(/地区$/, '市')))?.id
+}
+
+export function districtForPoint(latitude: number, longitude: number) {
+  const district = districtAt(latitude,longitude,boundaries())
+  return district && {...district,serviceCityCode:serviceCity(district)}
 }
 
 export function districtsInServiceRegion(code: string) {

@@ -8,11 +8,11 @@ import { pageLoad, submitAction } from '../../lib/page'
 import ChoiceField from '../../components/ChoiceField.vue'
 import LoadState from '../../components/LoadState.vue'
 import LoginCard from '../../components/LoginCard.vue'
+import UiIcon from '../../components/UiIcon.vue'
 
 const stores = ref<BoundStore[]>([])
 const storeId = ref('')
 const selected = computed(() => stores.value.find(store => store.id === storeId.value))
-const code = ref('')
 const categories = ref<ServiceCategory[]>([])
 const category = ref('')
 const title = ref('')
@@ -27,21 +27,13 @@ const {loading,error,refresh} = pageLoad(async () => {
     categories.value = (await api<{items:ServiceCategory[]}>('/h5/catalog/service-categories')).items
     if (!categories.value.some(item => item.id === category.value)) category.value = categories.value[0]?.id ?? ''
   }
-}, () => { stores.value = []; categories.value = []; code.value = ''; category.value = ''; title.value = ''; description.value = ''; price.value = '' })
+}, () => { stores.value = []; categories.value = []; category.value = ''; title.value = ''; description.value = ''; price.value = '' })
 
 onLoad(options => {
   storeId.value = options?.storeId ?? ''
   if (storeId.value) uni.setNavigationBarTitle({title:'发布服务帖'})
 })
 
-function bindStore() {
-  return run(async () => {
-    await api('/h5/catalog/stores/bind','POST',{code:code.value.trim()})
-    code.value = ''
-    await refresh()
-    toast('门店已绑定')
-  })
-}
 function publish() {
   return run(async () => {
     const amount = price.value.trim()
@@ -64,24 +56,37 @@ function publish() {
     <template v-else>
       <LoadState :loading="loading" :error="error" @retry="refresh" />
       <template v-if="!storeId">
-        <view class="card">
-          <text class="heading">绑定门店</text>
-          <view class="bind-controls">
-            <input id="store-binding-code" v-model="code" maxlength="12" placeholder="输入管理员提供的 12 位绑定码" aria-label="门店绑定码" />
-            <button id="bind-store" class="small primary" :disabled="busy || code.trim().length !== 12" @tap="bindStore">绑定</button>
+        <view class="card store-map-entry">
+          <view class="store-map-intro">
+            <view class="store-map-icon"><UiIcon name="location" :size="23" /></view>
+            <view>
+              <text class="heading">地图绑定门店</text>
+              <text class="sub">选择门店位置后确认绑定</text>
+            </view>
           </view>
-          <text v-if="actionError" class="error">{{ actionError }}</text>
+          <button id="open-store-map" class="primary store-map-button" @tap="go('store-map')">
+            <text>打开地图</text><UiIcon name="right" :size="13" />
+          </button>
         </view>
-        <view v-for="store in stores" :key="store.id" class="card">
+        <view class="spread store-list-heading">
+          <text class="heading">已绑定门店</text>
+          <text class="sub">{{ stores.length }} 家</text>
+        </view>
+        <view v-for="store in stores" :key="store.id" class="card store-list-card">
           <view class="spread store-heading">
-            <text class="heading">{{ store.name }}</text>
+            <text class="store-name">{{ store.name }}</text>
+            <text :class="['store-badge',{paused:!store.enabled}]">{{ store.enabled ? '营业中' : '已停用' }}</text>
+          </view>
+          <view v-if="store.address" class="store-address"><UiIcon name="location" :size="13" /><text>{{ store.address }}</text></view>
+          <text v-if="store.enabled && !store.ready" class="sub">完善地区和联系电话后可以发布服务帖</text>
+          <view class="store-card-actions">
             <button class="small" :disabled="!store.enabled || !store.ready" @tap="go('stores',{storeId:store.id})">发服务帖</button>
           </view>
-          <text v-if="store.address" class="sub">{{ store.address }}</text>
-          <text v-if="!store.enabled" class="sub">门店已停用</text>
-          <text v-else-if="!store.ready" class="sub">请让管理员补齐地区和联系电话</text>
         </view>
-        <view v-if="!loading && !error && !stores.length" class="card empty-card">暂无绑定门店</view>
+        <view v-if="!loading && !error && !stores.length" class="card store-empty">
+          <UiIcon name="entry-services" :size="28" />
+          <text>还没有绑定门店</text>
+        </view>
       </template>
       <template v-else-if="selected?.enabled && selected.ready && !error">
         <view class="card">
@@ -106,8 +111,18 @@ function publish() {
 </template>
 
 <style scoped>
-.bind-controls { display: flex; align-items: center; gap: 7px; margin-top: 8px; }
-.bind-controls input { flex: 1; min-width: 0; }
-.bind-controls button,.store-heading button { flex: none; }
-.store-heading { gap: 6px; }
+.store-map-entry { padding: 15px; background: linear-gradient(135deg, #fff0b7, #fffcf0); border-color: #f0e0aa; }
+.store-map-intro { display: flex; align-items: center; gap: 12px; margin-bottom: 13px; }
+.store-map-intro .heading { margin: 0 0 4px; }
+.store-map-icon { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none; border-radius: 13px; background: #ffe187; }
+.store-map-button { display: flex; align-items: center; justify-content: space-between; width: 100%; padding-inline: 14px; }
+.store-list-heading { margin: 18px 0 9px; }
+.store-list-heading .heading { margin: 0; }
+.store-heading { gap: 8px; }
+.store-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 750; overflow-wrap: anywhere; }
+.store-badge { flex: none; padding: 3px 7px; border-radius: 6px; background: #eef5e9; color: #386436; font-size: 11px; }
+.store-badge.paused { background: #f1eeea; color: #75695c; }
+.store-address { display: flex; align-items: center; gap: 5px; margin-top: 6px; color: var(--muted); font-size: 12px; }
+.store-card-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+.store-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 27px 12px; color: var(--muted); font-size: 13px; }
 </style>
