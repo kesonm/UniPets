@@ -91,7 +91,11 @@
 
 首页推荐会参考登录用户的宠物类型、品种和近 30 天的公开求助，并加入按用户区分的随机排序。周边服务通过小程序「我的门店」发布，预约入口为门店电话。
 
-门店管理可调用 `POST /admin/stores/location`，提交浏览器定位的 WGS84 经度和纬度，识别服务城市和区县。管理员可用 `POST /admin/stores/:id/binding-code` 为暂未绑定的营业门店生成同一次绑定的门店码和二维码，有效期 24 小时。二维码包含 `petcloud:store:` 前缀及门店码。绑定时消费该码，一个账号可以绑定多家门店，每家门店最多由一个账号绑定。
+门店管理可调用 `POST /admin/stores/location`，提交 `latitude`、`longitude` 和可选的 `system`。浏览器定位使用 `wgs84`（默认），腾讯地图选点使用 `gcj02`。接口返回用于保存的 WGS84 坐标 `coordinates` 和识别出的服务城市及区县 `district`。
+
+`GET /admin/stores/map` 按 `q` 和 `state` 筛选全部门店记录，包含用于腾讯地图展示的 `mapPoint`。缺少经纬度的门店返回 `mapPoint: null`，列表提示管理员补录位置。`GET /admin/stores/map-settings` 返回管理员页面使用的腾讯地图网页 Key。
+
+管理员可用 `POST /admin/stores/:id/binding-code` 为暂未绑定的营业门店生成同一次绑定的门店码和二维码，有效期 24 小时。二维码包含 `petcloud:store:` 前缀及门店码。绑定时消费该码，一个账号可以绑定多家门店，每家门店最多由一个账号绑定。
 
 发布记录包括动态、已发布的宠物故事和用户发出的门店服务帖。点赞列表包括三种内容，收藏列表包括动态和宠物故事。点赞和收藏只统计当前可打开的公开内容。
 

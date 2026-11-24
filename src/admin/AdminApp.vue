@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowLeft, ArrowRight, Document, Menu, Plus, Refresh, Search, SwitchButton } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Document, Location, Menu, Plus, Refresh, Search, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api, ApiError } from '../lib/api'
 import type { User } from '../lib/types'
 import AdminEditor from './AdminEditor.vue'
 import AdminServiceCategories from './AdminServiceCategories.vue'
-import { canReview, detailTitle, recordAction, sections, tableCells, type AdminRecord, type Store } from './admin'
+import AdminStoreMap from './AdminStoreMap.vue'
+import { canReview, detailTitle, recordAction, sections, tableCells, type AdminRecord, type Store, type StoreOnMap } from './admin'
 import './admin.css'
 
 const logo = import.meta.env.BASE_URL + 'assets/brand-mark.png'
@@ -28,10 +29,13 @@ const state = ref('')
 const page = ref(1)
 const hasMore = ref(false)
 const working = ref('')
-const drawer = ref<{record?:AdminRecord}|null>(null)
+const drawer = ref<{record?:AdminRecord;openStorePicker?:boolean}|null>(null)
 const categoryManager = ref(false)
+const storeMapOpen = ref(false)
+const focusStoreId = ref('')
 const binding = ref<{store:string;code:string;qrCode:string;expiresAt:string}|null>(null)
 const rows = computed(() => records.value.map(record => ({record,cells:tableCells(record),action:recordAction(record)})))
+const storesOnMap = computed(() => records.value.filter((record):record is StoreOnMap => 'mapPoint' in record))
 const createLabel = computed(() => 'create' in active.value ? active.value.create : '')
 const drawerTitle = computed(() => {
   if (!drawer.value?.record) return createLabel.value
@@ -46,17 +50,20 @@ async function load() {
   const current = ++revision
   loading.value = true
   listError.value = ''
-  const filter = new URLSearchParams({q:keyword.value,page:String(page.value)})
+  const section = active.value.id
+  const showingMap = section === 'stores' && storeMapOpen.value
+  const filter = new URLSearchParams({q:keyword.value})
+  if (!showingMap) filter.set('page',String(page.value))
   if (state.value) filter.set('state',state.value)
   try {
-    const result = await api<{items:AdminRecord[];hasMore:boolean}>('/admin/'+active.value.id+'?'+filter)
+    const result = await api<{items:AdminRecord[];hasMore?:boolean}>('/admin/'+section+(showingMap ? '/map' : '')+'?'+filter)
     if (current !== revision) return
     if (!result.items.length && page.value > 1) {
       page.value--
       return void load()
     }
     records.value = result.items
-    hasMore.value = result.hasMore
+    hasMore.value = Boolean(result.hasMore)
   } catch (cause) {
     if (current === revision) {
       listError.value = errorMessage(cause,'读取失败')
@@ -79,6 +86,22 @@ function movePage(offset: number) {
   void load()
 }
 
+function showStoreMap(open: boolean, storeId = '') {
+  storeMapOpen.value = open
+  focusStoreId.value = storeId
+  records.value = []
+  filterRecords()
+}
+
+function storeHasCoordinates(store: Store) {
+  return store.latitude != null && store.longitude != null
+}
+
+function locateOnMap(store: Store) {
+  if (storeHasCoordinates(store)) showStoreMap(true,store.id)
+  else drawer.value = {record:store,openStorePicker:true}
+}
+
 function navigate() {
   active.value = fromHash()
   navigationOpen.value = false
@@ -87,6 +110,8 @@ watch(active,() => {
   drawer.value = null
   categoryManager.value = false
   binding.value = null
+  storeMapOpen.value = false
+  focusStoreId.value = ''
   records.value = []
   search.value = ''
   state.value = ''
@@ -115,6 +140,8 @@ function clearSession() {
   records.value = []
   drawer.value = null
   categoryManager.value = false
+  storeMapOpen.value = false
+  focusStoreId.value = ''
   binding.value = null
   loading.value = false
   hasMore.value = false
@@ -261,10 +288,13 @@ onBeforeUnmount(() => {
           <h1>{{ active.title }}</h1>
           <div v-if="createLabel" class="admin-title-actions">
             <button v-if="active.id==='services'" class="admin-button" type="button" @click="categoryManager=true">管理分类</button>
+            <button v-if="active.id==='stores'" class="admin-button" type="button" @click="showStoreMap(!storeMapOpen)">
+              <el-icon><component :is="storeMapOpen ? Menu : Location" /></el-icon>{{ storeMapOpen ? '门店列表' : '门店地图' }}
+            </button>
             <button class="admin-button admin-primary" type="button" @click="drawer={}"><el-icon><Plus /></el-icon>{{ createLabel }}</button>
           </div>
         </header>
-        <section class="admin-panel" :aria-label="active.title+'列表'" :aria-busy="loading">
+        <section class="admin-panel" :aria-label="storeMapOpen ? '门店地图与筛选' : active.title+'列表'" :aria-busy="loading">
           <form class="admin-toolbar" role="search" @submit.prevent="filterRecords">
             <div class="admin-search">
               <el-icon aria-hidden="true"><Search /></el-icon>
@@ -278,6 +308,14 @@ onBeforeUnmount(() => {
             <button class="admin-button admin-icon-button admin-reload" type="button" title="刷新" aria-label="刷新" :disabled="loading"
               @click="load"><el-icon><Refresh /></el-icon></button>
           </form>
+          <template v-if="storeMapOpen">
+            <div v-if="listError" class="admin-empty" role="alert">
+              <p>{{ listError }}</p><button class="admin-button" type="button" @click="load">重试</button>
+            </div>
+            <AdminStoreMap v-else :stores="storesOnMap" :focus-id="focusStoreId" :loading="loading"
+              @edit="store => drawer={record:store,openStorePicker:!store.mapPoint}" />
+          </template>
+          <template v-else>
           <div class="admin-table-scroll" tabindex="0" :aria-label="active.title+'表格'">
             <table>
               <thead><tr><th v-for="column in active.columns" :key="column" scope="col">{{ column }}</th><th scope="col">操作</th></tr></thead>
@@ -293,6 +331,9 @@ onBeforeUnmount(() => {
                   <td class="admin-actions">
                     <button v-if="!('hidden' in record) || canReview(record)" class="admin-text-button" type="button"
                       @click="drawer={record}">{{ 'hidden' in record ? '查看' : '编辑' }}</button>
+                    <button v-if="'bound' in record" class="admin-text-button" type="button" @click="locateOnMap(record)">
+                      {{ storeHasCoordinates(record) ? '定位' : '补位置' }}
+                    </button>
                     <button v-if="action" class="admin-text-button" :class="{'admin-text-danger':action.notice}" type="button"
                       :disabled="Boolean(working) || loading" @click="applyAction(record)">{{ working===record.id ? '处理中…' : action.label }}</button>
                     <button v-if="'bound' in record && record.enabled && !record.bound" class="admin-text-button" type="button"
@@ -319,12 +360,14 @@ onBeforeUnmount(() => {
               <button class="admin-button admin-icon-button" type="button" :disabled="!hasMore || loading" title="下一页" aria-label="下一页" @click="movePage(1)"><el-icon><ArrowRight /></el-icon></button>
             </div>
           </footer>
+          </template>
         </section>
       </main>
     </div>
     <el-drawer :model-value="Boolean(drawer)" :title="drawerTitle" class="admin-drawer" size="min(500px, 100%)" :close-on-click-modal="false"
       @update:model-value="(open: boolean) => { if (!open) drawer=null }">
-      <AdminEditor v-if="drawer" :section="active.id" :record="drawer.record" @saved="saved" @close="drawer=null" @stale="load" />
+      <AdminEditor v-if="drawer" :section="active.id" :record="drawer.record" :open-store-picker="drawer.openStorePicker"
+        @saved="saved" @close="drawer=null" @stale="load" />
     </el-drawer>
     <el-dialog v-model="categoryManager" title="服务分类" width="min(460px, 94vw)" destroy-on-close>
       <AdminServiceCategories @saved="load" />

@@ -5,10 +5,12 @@ import { z } from 'zod'
 import { photoThumbnail } from './assets.js'
 import { adminLogin, authLimiter, requireAuth } from './auth.js'
 import { catalogStore, catalogValues, catalogVisible, createCatalogItem, h5Area, managedCatalogInput, managedCatalogUpdate } from './catalog.js'
+import { config } from './config.js'
 import { db, rows, transaction } from './db.js'
 import { coordinatesInput, districtForPoint, districtInput, listDistricts, serviceCityInput } from './districts.js'
 import { HttpError } from './errors.js'
 import { hasStoreContact, issueStoreBindingCode, type StoreContact } from './h5-store-binding.js'
+import { mapPointToWgs84, wgs84ToMapPoint } from './map-coordinates.js'
 import { petSchema, updatePetRecord } from './routes.js'
 import { checkServiceCategory, getServiceCategories, serviceCategoryId, serviceCategoryJoin, serviceCategoryLabel, serviceCategoryName } from './service-categories.js'
 
@@ -32,13 +34,17 @@ interface ListQuery {
   scope?: string
   states: Record<string,string>
 }
+function listWhere(query: ListQuery, state?: string) {
+  if (state && !Object.hasOwn(query.states,state)) throw new HttpError(400,'筛选条件不正确')
+  const status = state ? query.states[state] : 'TRUE'
+  return `WHERE (${query.scope ?? 'TRUE'}) AND (${status}) AND (?='' OR LOCATE(?,CONCAT_WS(' ',${query.search}))>0)`
+}
+
 function list(query: ListQuery): RequestHandler {
   return async (req,res) => {
     const {q,page,state} = pageInput.parse(req.query)
-    if (state && !Object.hasOwn(query.states,state)) throw new HttpError(400,'筛选条件不正确')
-    const status = state ? query.states[state] : 'TRUE'
     const records = await rows(`SELECT ${query.select} FROM ${query.from}
-      WHERE (${query.scope ?? 'TRUE'}) AND (${status}) AND (?='' OR LOCATE(?,CONCAT_WS(' ',${query.search}))>0)
+      ${listWhere(query,state)}
       ORDER BY ${query.order} LIMIT ? OFFSET ?`, [q,q,pageSize+1,(page-1)*pageSize])
     res.json({items:records.slice(0,pageSize),hasMore:records.length>pageSize})
   }
@@ -98,16 +104,33 @@ adminRouter.get('/districts', (req,res) => {
 function checkDistrict(id: string | null | undefined) {
   if (id && !listDistricts('',id).length) throw new HttpError(400,'请选择有效的服务区县')
 }
-adminRouter.get('/stores',list({
+const storeList: ListQuery = {
   select:`id,name,area,district_code AS districtCode,city_code AS cityCode,
     CAST(latitude AS DOUBLE) AS latitude,CAST(longitude AS DOUBLE) AS longitude,
     address,phone,enabled,(owner_user_id IS NOT NULL) AS bound,created_at AS createdAt`,
   from:'h5_stores', search:'name,address,phone,id', order:'created_at DESC,id DESC',
   states:{enabled:'enabled=TRUE',disabled:'enabled=FALSE',bound:'owner_user_id IS NOT NULL',unbound:'owner_user_id IS NULL'},
-}))
+}
+adminRouter.get('/stores',list(storeList))
+adminRouter.get('/stores/map-settings', (_req,res) => {
+  res.json({key:config.tencentMapBrowserKey || null})
+})
+adminRouter.get('/stores/map',async (req,res) => {
+  const {q,state} = pageInput.omit({page:true}).parse(req.query)
+  const records = await rows<RowDataPacket & {latitude:number|null;longitude:number|null}>(
+    `SELECT ${storeList.select} FROM ${storeList.from} ${listWhere(storeList,state)} ORDER BY ${storeList.order}`,[q,q])
+  res.json({items:records.map(record => ({...record,
+    mapPoint:record.latitude === null || record.longitude === null ? null : wgs84ToMapPoint({
+      latitude:record.latitude,longitude:record.longitude,
+    }),
+  }))})
+})
+const storeLocationInput = coordinatesInput.extend({system:z.enum(['wgs84','gcj02']).default('wgs84')})
 adminRouter.post('/stores/location', (req,res) => {
-  const {latitude,longitude} = coordinatesInput.parse(req.body)
-  res.json({district:districtForPoint(latitude,longitude) ?? null})
+  const {latitude,longitude,system} = storeLocationInput.parse(req.body)
+  const point = {latitude,longitude}
+  const coordinates = system === 'gcj02' ? mapPointToWgs84(point) : point
+  res.json({coordinates,district:districtForPoint(coordinates.latitude,coordinates.longitude) ?? null})
 })
 adminRouter.post('/stores',async (req,res) => {
   const item = storeInput.parse(req.body)

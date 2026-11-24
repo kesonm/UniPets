@@ -1,5 +1,6 @@
 import { ChatDotRound, CollectionTag, Film, FirstAidKit, Goods, Shop, User } from '@element-plus/icons-vue'
 import { h5Areas } from '../../shared/h5-areas.mjs'
+import type { ServiceCoordinates } from '../../shared/h5-discovery.mjs'
 import { serviceRegions } from '../../shared/h5-service-regions.mjs'
 import { businessModules, type Listing } from '../h5/business'
 import { categories } from '../h5/catalog'
@@ -62,6 +63,7 @@ export interface Story extends BaseRow {
   publishedAt: string|null; updatedAt: string
 }
 export type AdminRecord = Account|Store|CatalogItem|Pet|Post|Story
+export type StoreOnMap = Store & {mapPoint:ServiceCoordinates|null}
 export type Content = Post|Story
 
 export const listingGroups = {...businessModules,shop:{title:'宠物品牌超市',categories:categories.filter(item => item.id !== 'all')},

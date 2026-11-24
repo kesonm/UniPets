@@ -83,6 +83,26 @@ test('admin management updates the same records used by the customer APIs', {tim
     assert.equal((await admin('/stores/'+storeId,'PUT',{...newStore,name:'更新门店 '+suffix})).status,200)
     assert.equal((await admin('/stores?q='+suffix)).data.items[0].id,storeId)
 
+    assert.equal((await request('/admin/stores/map','GET',undefined,member.cookie)).status,403)
+    assert.equal((await request('/admin/stores/map-settings')).status,401)
+    assert.equal((await admin('/stores/map-settings')).data.key,config.tencentMapBrowserKey || null)
+    const tencentPoint = {latitude:22.547146,longitude:113.886846}
+    const located = await admin('/stores/location','POST',{...tencentPoint,system:'gcj02'})
+    assert.equal(located.status,200)
+    assert.equal(located.data.district.serviceCityCode,'440300')
+    assert.ok(Math.abs(located.data.coordinates.longitude-tencentPoint.longitude)>0.001)
+    const mapped = await admin('/stores','POST',{...newStore,name:'定位门店 '+suffix,
+      coordinates:located.data.coordinates,districtCode:located.data.district.id,cityCode:located.data.district.serviceCityCode})
+    assert.equal(mapped.status,201)
+    stores.push(mapped.data.id)
+    const mapRecords = (await admin('/stores/map?q='+suffix+'&state=unbound')).data.items
+    assert.equal(mapRecords.length,2)
+    assert.equal(mapRecords.find((row: {id:string}) => row.id===storeId).mapPoint,null)
+    const marker = mapRecords.find((row: {id:string}) => row.id===mapped.data.id).mapPoint
+    assert.ok(Math.abs(marker.latitude-tencentPoint.latitude)<0.00001)
+    assert.ok(Math.abs(marker.longitude-tencentPoint.longitude)<0.00001)
+    assert.deepEqual((await admin('/stores/map?q='+suffix+'&state=bound')).data.items,[])
+
     const listing = {module:'shop',kind:'product',category:'food',title:'测试商品 '+suffix,provider:'',
       description:'测试详情',area:null,venue:null,startsAt:null,closesAt:null,priceCents:2590,
       stock:3,externalUrl:null,published:true,storeId}

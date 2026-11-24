@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { h5Areas } from '../../shared/h5-areas.mjs'
-import type { ServiceCategory } from '../../shared/h5-discovery.mjs'
+import type { ServiceCategory, ServiceCoordinates } from '../../shared/h5-discovery.mjs'
 import { legacyDistricts, type District } from '../../shared/h5-districts.mjs'
 import { serviceRegions } from '../../shared/h5-service-regions.mjs'
 import { api, ApiError, apiUrl } from '../lib/api'
 import { detailTitle, genderNames, kinds, listingGroups, speciesNames, type AdminRecord, type Section, type Store } from './admin'
+import AdminStoreLocationPicker from './AdminStoreLocationPicker.vue'
 
-const props = defineProps<{section:Section;record?:AdminRecord}>()
+const props = defineProps<{section:Section;record?:AdminRecord;openStorePicker?:boolean}>()
 const emit = defineEmits<{saved:[];close:[];stale:[]}>()
 const record = props.record
 const account = record && 'username' in record ? record : undefined
@@ -23,6 +24,12 @@ const name = ref(account?.displayName ?? '')
 const storeForm = reactive({name:store?.name ?? '',area:store?.area ?? '',districtCode:store?.districtCode ?? '',
   cityCode:store?.cityCode ?? '',address:store?.address ?? '',phone:store?.phone ?? '',
   latitude:store?.latitude?.toString() ?? '', longitude:store?.longitude?.toString() ?? ''})
+const storePoint = computed(() => {
+  if (storeForm.latitude === '' || storeForm.longitude === '') return undefined
+  const latitude = Number(storeForm.latitude)
+  const longitude = Number(storeForm.longitude)
+  if (latitude >= -90 && latitude <= 90 && longitude > -180 && longitude <= 180) return {latitude,longitude}
+})
 const cityOptions = serviceRegions.map(province => ({
   value:province.id,label:province.label,
   children:province.cities.length ? province.cities.map(city => ({value:city.id,label:city.label})) : undefined,
@@ -33,6 +40,7 @@ const selectedDistrict = ref<District>()
 const districtBusy = ref(false)
 const districtError = ref('')
 const locatingStore = ref(false)
+const storePickerOpen = ref(Boolean(props.openStorePicker))
 const locationStatus = ref('')
 const locationError = ref('')
 let districtRevision = 0
@@ -66,35 +74,49 @@ function chooseDistrict(id: string) {
   if (selectedDistrict.value?.serviceCityCode) storeForm.cityCode = selectedDistrict.value.serviceCityCode
 }
 
-async function locateStore() {
+function currentPosition() {
+  if (!navigator.geolocation) throw new Error('当前浏览器无法使用定位')
+  return new Promise<ServiceCoordinates>((resolve,reject) => {
+    navigator.geolocation.getCurrentPosition(
+      ({coords}) => resolve({latitude:coords.latitude,longitude:coords.longitude}),
+      failure => reject(new Error(failure.code === 1 ? '请允许此网站使用定位' : '暂时无法获取当前位置')),
+      {enableHighAccuracy:true,timeout:12000,maximumAge:0},
+    )
+  })
+}
+
+function setStorePoint({latitude,longitude}: ServiceCoordinates) {
+  storeForm.latitude = latitude.toFixed(6)
+  storeForm.longitude = longitude.toFixed(6)
+}
+
+async function locateStore(point?: ServiceCoordinates, place?: {name:string;address:string}) {
   if (locatingStore.value || busy.value) return
   locatingStore.value = true
   locationError.value = ''
   locationStatus.value = ''
   try {
-    if (!navigator.geolocation) throw new Error('当前浏览器无法使用定位')
-    const coords = await new Promise<GeolocationCoordinates>((resolve,reject) => {
-      navigator.geolocation.getCurrentPosition(
-        position => resolve(position.coords),
-        failure => reject(new Error(failure.code === 1 ? '请允许此网站使用定位' : '暂时无法获取当前位置')),
-        {enableHighAccuracy:true,timeout:12000,maximumAge:0},
-      )
+    const coords = point ?? await currentPosition()
+    if (!point) setStorePoint(coords)
+    const {coordinates,district} = await api<{coordinates:ServiceCoordinates;district:District|null}>('/admin/stores/location',{
+      method:'POST',body:{...coords,system:point ? 'gcj02' : 'wgs84'},
     })
-    storeForm.latitude = coords.latitude.toFixed(6)
-    storeForm.longitude = coords.longitude.toFixed(6)
-    const result = await api<{district:District|null}>('/admin/stores/location',{
-      method:'POST',body:{latitude:coords.latitude,longitude:coords.longitude},
-    })
-    const district = result.district
+    setStorePoint(coordinates)
+    if (place?.address) storeForm.address = place.address
+    if (place?.name && !storeForm.name) storeForm.name = place.name
     if (district) {
+      districtRevision++
+      districtBusy.value = false
+      districtError.value = ''
       selectedDistrict.value = district
       storeForm.districtCode = district.id
-      if (district.serviceCityCode) storeForm.cityCode = district.serviceCityCode
+      storeForm.cityCode = district.serviceCityCode ?? ''
       if (!storeForm.address) storeForm.address = [...new Set([district.province,district.city,district.name].filter(Boolean))].join('')
       locationStatus.value = districtLabel(district)
     } else {
-      locationStatus.value = '经纬度已填写，请选择服务城市'
+      locationStatus.value = '经纬度已填写，请核对城市和区县'
     }
+    storePickerOpen.value = false
   } catch (cause) {
     locationError.value = cause instanceof Error ? cause.message : '定位失败'
   } finally {
@@ -245,11 +267,15 @@ onMounted(() => {
     <template v-else-if="section==='stores'">
       <label>门店名称<input v-model.trim="storeForm.name" maxlength="120" required></label>
       <div class="admin-store-locate">
-        <button id="admin-locate-store" class="admin-button" type="button" :disabled="locatingStore || busy" @click="locateStore">
+        <button class="admin-button" type="button" :aria-expanded="storePickerOpen" :disabled="locatingStore || busy" @click="storePickerOpen=!storePickerOpen">
+          {{ storePickerOpen ? '收起地图' : '腾讯地图选点' }}
+        </button>
+        <button id="admin-locate-store" class="admin-button" type="button" :disabled="locatingStore || busy" @click="locateStore()">
           {{ locatingStore ? '正在定位…' : '使用当前位置' }}
         </button>
         <span v-if="locationStatus" class="admin-muted" role="status">{{ locationStatus }}</span>
       </div>
+      <AdminStoreLocationPicker v-if="storePickerOpen" :point="storePoint" @select="locateStore" />
       <p v-if="locationError" class="admin-error" role="alert">{{ locationError }}</p>
       <label>所在商圈
         <select v-model="storeForm.area"><option value="">未指定</option><option v-for="area in h5Areas" :key="area.id" :value="area.id">{{ area.label }}</option></select>
