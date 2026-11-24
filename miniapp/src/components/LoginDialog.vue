@@ -66,7 +66,7 @@ async function signIn(event: Event) {
           </view>
         </view>
         <text v-if="loginError" class="error" role="status">{{ loginError }}</text>
-        <button id="confirm-wechat-login" class="primary login-button" form-type="submit" :loading="loggingIn" :disabled="loggingIn">
+        <button id="confirm-wechat-login" class="primary login-button" form-type="submit" :loading="loggingIn" :disabled="loggingIn" @tap.stop>
           微信登录
         </button>
       </form>
