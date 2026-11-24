@@ -1,17 +1,15 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onLoad, onUnload } from '@dcloudio/uni-app'
+import { onUnload } from '@dcloudio/uni-app'
 import type { User } from '../../../../src/lib/types'
 import AccountAvatar from '../../components/AccountAvatar.vue'
 import { api, go, toast, updateUser, user } from '../../lib/client'
 import { submitAction } from '../../lib/page'
 import { readPhoto } from '../../lib/photo'
 
-const setup = ref(false)
 const avatar = ref('')
 const { run, busy, error } = submitAction()
 let active = true
-onLoad((options) => { setup.value = options?.setup === '1' })
 onUnload(() => { active = false })
 
 function chooseAvatar(event: { detail: { avatarUrl?: string } }) {
@@ -60,7 +58,7 @@ function save(event: Event) {
           id="profile-nickname"
           name="nickname"
           type="nickname"
-          :value="setup ? '' : user.displayName"
+          :value="user.displayName"
           maxlength="40"
           aria-label="昵称"
           placeholder="使用微信昵称或自行填写"
@@ -69,7 +67,6 @@ function save(event: Event) {
         <text v-if="error" class="error" role="status">{{ error }}</text>
         <view class="profile-actions">
           <button id="save-profile" class="primary" form-type="submit" :disabled="busy" :loading="busy">保存资料</button>
-          <button v-if="setup" id="skip-profile" class="text-button" :disabled="busy" @tap="close">稍后设置</button>
         </view>
       </form>
     </view>

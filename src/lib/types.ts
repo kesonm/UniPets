@@ -1,4 +1,4 @@
-export interface User { id: string; username: string; displayName: string; createdAt: string; avatarVersion?: string | null }
+export interface User { id: string; username: string; displayName: string; createdAt: string; avatarVersion?: string | null; publicId?: string }
 export interface Pet { id: string; identityNumber: string|null; name: string; species: 'dog'|'cat'|'other'; breed: string; birthday: string|null; gender: 'unknown'|'male'|'female'; notes: string; avatarAssetId: string|null; assetCount: number; memoryCount: number }
 import type { CatClipId, CatManifest, CatPoseId } from '../../shared/cat-motion.mjs'
 

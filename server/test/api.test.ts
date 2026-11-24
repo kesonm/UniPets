@@ -48,6 +48,8 @@ test('MySQL-backed accounts, private assets, generation and desktop lifecycle', 
       const a=await request('/auth/register','POST',{username:aName,password});assert.equal(a.status,201);alice=a.data.token;userIds.push(a.data.user.id)
       assert.equal(a.data.user.passwordHash,undefined)
       const b=await request('/auth/register','POST',{username:bName,password});assert.equal(b.status,201);bob=b.data.token;userIds.push(b.data.user.id)
+      assert.match(a.data.user.publicId,/^[A-Z]{3}[0-9]{3}$/)
+      assert.notEqual(a.data.user.publicId,b.data.user.publicId)
       assert.equal((await request('/auth/register','POST',{username:aName,password})).status,409)
       assert.equal((await request('/auth/login','POST',{username:aName,password:'wrong'})).status,401)
       const [stored]=await rows('SELECT password_hash FROM users WHERE id=?',[a.data.user.id]);assert.notEqual(stored.password_hash,password);assert.match(stored.password_hash,/^scrypt:/)

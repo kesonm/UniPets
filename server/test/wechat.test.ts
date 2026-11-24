@@ -17,6 +17,7 @@ test('WeChat code exchange, concurrent registration and private pet sessions', a
     ['concurrent', first],
     ['returning', first],
     ['other', second],
+    ['bad-avatar', first + '-unused'],
   ])
   const publicFetch = globalThis.fetch
   const originalApp = config.wechatAppId,
@@ -66,7 +67,8 @@ test('WeChat code exchange, concurrent registration and private pet sessions', a
         cookie: response.headers.get('set-cookie'),
       }
     }
-    const login = (code: string) => request('/auth/wechat', 'POST', { code })
+    const login = (code: string, profile?: { displayName?: string; avatarImage?: string }) =>
+      request('/auth/wechat', 'POST', { code, ...profile })
     assert.equal((await request('/auth/wechat', 'POST', { code: 'first', openid: first })).status, 400)
     assert.equal(
       (await request('/auth/wechat', 'POST', { code: 'first' }, '', { 'X-PetCloud-Client': '' })).status,
@@ -80,14 +82,25 @@ test('WeChat code exchange, concurrent registration and private pet sessions', a
     assert.equal(exchange.mock.callCount(), 0)
     assert.equal((await login('invalid')).status, 401)
     assert.equal((await login('offline')).status, 502)
-    const [a, b] = await Promise.all([login('first'), login('concurrent')])
+    const avatar = await sharp({
+      create: { width: 640, height: 480, channels: 3, background: '#ffe34e' },
+    }).png().toBuffer()
+    const avatarImage = 'data:image/png;base64,' + avatar.toString('base64')
+    assert.equal((await login('bad-avatar', { avatarImage: 'data:image/png;base64,AAAA' })).status, 400)
+    const [a, b] = await Promise.all([
+      login('first', { displayName: ' 初见 ', avatarImage }),
+      login('concurrent'),
+    ])
     assert.deepEqual([a.status, b.status].sort(), [200, 201])
     assert.equal(a.cookie, null)
     assert.equal(a.data.user.id, b.data.user.id)
     assert.notEqual(a.data.token, b.data.token)
     assert.deepEqual(Object.keys(a.data).sort(), ['token', 'user'])
-    assert.deepEqual(Object.keys(a.data.user).sort(), ['avatarVersion', 'createdAt', 'displayName', 'id', 'username'])
-    assert.equal(a.data.user.avatarVersion, null)
+    assert.deepEqual(Object.keys(a.data.user).sort(), ['avatarVersion', 'createdAt', 'displayName', 'id', 'publicId', 'username'])
+    assert.match(a.data.user.publicId, /^[A-Z]{3}[0-9]{3}$/)
+    assert.equal(a.data.user.publicId, b.data.user.publicId)
+    assert.equal(a.data.user.displayName, '初见')
+    assert.match(a.data.user.avatarVersion, /^[a-f0-9]{16}$/)
     assert.match(a.data.token, /^[a-f0-9]{64}$/)
     assert.deepEqual((await request('/pets', 'GET', undefined, a.data.token)).data, { pets: [] })
     assert.equal((await login('first')).status, 401)
@@ -102,6 +115,11 @@ test('WeChat code exchange, concurrent registration and private pet sessions', a
     assert.equal(again.status, 200)
     assert.equal(other.status, 201)
     assert.notEqual(other.data.user.id, a.data.user.id)
+    assert.notEqual(other.data.user.publicId, a.data.user.publicId)
+    assert.equal(again.data.user.publicId, a.data.user.publicId)
+    assert.equal(again.data.user.displayName, '初见')
+    assert.equal(again.data.user.avatarVersion, a.data.user.avatarVersion)
+    assert.equal(other.data.user.avatarVersion, null)
     assert.equal((await request('/pets', 'GET', undefined, again.data.token)).data.pets[0].id, id)
     assert.deepEqual((await request('/pets', 'GET', undefined, other.data.token)).data.pets, [])
     const update = { name: '小云的新名字', species: 'cat' }
@@ -118,13 +136,10 @@ test('WeChat code exchange, concurrent registration and private pet sessions', a
       '小云的主人',
     )
     const avatarPath = '/auth/profile/avatar'
-    const avatar = await sharp({
-      create: { width: 640, height: 480, channels: 3, background: '#ffe34e' },
-    }).png().toBuffer()
-    const avatarImage = 'data:image/png;base64,' + avatar.toString('base64')
     const saved = await request(avatarPath, 'PUT', { displayName: ' 云云 ', avatarImage }, again.data.token)
     assert.equal(saved.status, 200)
     assert.equal(saved.data.user.displayName, '云云')
+    assert.equal(saved.data.user.publicId, a.data.user.publicId)
     assert.match(saved.data.user.avatarVersion, /^[a-f0-9]{16}$/)
     assert.equal((await request(avatarPath)).status, 401)
     assert.equal((await request(avatarPath, 'GET', undefined, other.data.token)).status, 404)

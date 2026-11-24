@@ -11,8 +11,8 @@
 | GET | /health | MySQL 连通性 |
 | POST | /auth/register | username, password, displayName? |
 | POST | /auth/login | username, password |
-| POST | /auth/wechat | 小程序发送一次性 `code`，服务端校验后返回 `{ user, token }`。首次登录自动建号并返回 201 |
-| GET | /auth/me | 当前账号 |
+| POST | /auth/wechat | 小程序发送一次性 `code`，可同时提交 `displayName`、`avatarImage`。首次登录自动建号并返回 201，响应为 `{ user, token }` |
+| GET | /auth/me | 当前账号，`publicId` 为固定的 6 位用户 ID |
 | POST | /auth/logout | 撤销当前会话 |
 | PATCH / PUT | /auth/profile | displayName |
 | PUT | /auth/profile/avatar | avatarImage（JPG/PNG/WebP data URL，解码后不超过 8 MB），displayName?，返回更新后的账号 |

@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import type { User } from '../../../src/lib/types'
+import { readPhoto } from './photo'
 
 const sessionKey = 'petcloud.wx.session.v1'
 type Session = { token: string; user: User }
@@ -8,7 +9,7 @@ let token = stored?.token || ''
 export const user = ref<User | null>(stored?.user || null)
 export const loggingIn = ref(false)
 export const loginError = ref('')
-let pending: Promise<{ firstLogin: boolean } | undefined> | undefined
+let pending: Promise<boolean> | undefined
 
 function apiOrigin() {
   const origin = (import.meta.env.VITE_PETCLOUD_API_ORIGIN || '').trim().replace(/\/+$/, '')
@@ -70,9 +71,9 @@ export function updateUser(value: User) {
   uni.setStorageSync(sessionKey, { user: value, token })
 }
 export type Method = 'GET' | 'POST' | 'PUT' | 'DELETE'
-function request<T>(path: string, method: Method, data?: Record<string, unknown>, timeout = 18000) {
+export function api<T>(path: string, method: Method = 'GET', data?: Record<string, unknown>, timeout = 18000): Promise<T> {
   const usedToken = token
-  return new Promise<{ data: T; statusCode: number }>((resolve, reject) =>
+  return new Promise((resolve, reject) =>
     uni.request({
       url: apiUrl(path),
       method,
@@ -85,16 +86,13 @@ function request<T>(path: string, method: Method, data?: Record<string, unknown>
       },
       success(r) {
         if (usedToken !== token) return reject(new Error('账号已切换，请重新打开页面'))
-        if (r.statusCode >= 200 && r.statusCode < 300) return resolve({ data: r.data as T, statusCode: r.statusCode })
+        if (r.statusCode >= 200 && r.statusCode < 300) return resolve(r.data as T)
         if (r.statusCode === 401 && usedToken) forget()
         reject(new Error((r.data as { error?: string })?.error || '请求失败（' + r.statusCode + '）'))
       },
       fail: () => reject(new Error('无法连接宠云，请检查网络或服务域名')),
     }),
   )
-}
-export function api<T>(path: string, method: Method = 'GET', data?: Record<string, unknown>, timeout = 18000): Promise<T> {
-  return request<T>(path, method, data, timeout).then((response) => response.data)
 }
 export async function restoreSession() {
   if (!token) return
@@ -105,12 +103,13 @@ export async function restoreSession() {
     /* Offline users can retry in the page. */
   }
 }
-export function login() {
+export function login(profile: { displayName?: string; avatarPath?: string }) {
   if (pending) return pending
   loggingIn.value = true
   loginError.value = ''
   pending = (async () => {
     try {
+      const avatarImage = profile.avatarPath ? await readPhoto(profile.avatarPath) : undefined
       const code = await new Promise<string>((resolve, reject) =>
         uni.login({
           provider: 'weixin',
@@ -118,12 +117,17 @@ export function login() {
           fail: () => reject(new Error('微信登录未完成，请重试')),
         }),
       )
-      const { data: result, statusCode } = await request<Session>('/auth/wechat', 'POST', { code })
+      const result = await api<Session>('/auth/wechat', 'POST', {
+        code,
+        ...(profile.displayName ? { displayName: profile.displayName } : {}),
+        ...(avatarImage ? { avatarImage } : {}),
+      })
       token = result.token
       updateUser(result.user)
-      return { firstLogin: statusCode === 201 }
+      return true
     } catch (err) {
       loginError.value = message(err)
+      return false
     } finally {
       loggingIn.value = false
       pending = undefined

@@ -46,6 +46,10 @@ function openSettings() {
   settings.value = true
 }
 function editProfile() {
+  if (!user.value) {
+    loginDialog.value = true
+    return
+  }
   settings.value = false
   go('profile')
 }
@@ -66,15 +70,16 @@ function signOut() {
   <view class="account-page tab-screen" :style="tabLayout">
     <view class="account-head">
       <view class="tab-leading account-profile">
-        <AccountAvatar />
-        <view class="grow">
-          <text class="account-name">{{ user?.displayName || '欢迎来到云上空间' }}</text>
-          <text class="sub">{{ user ? '微信账号' : '登录后创建自己的宠物档案' }}</text>
+        <button id="account-avatar" class="account-avatar-button" :aria-label="user ? '编辑头像' : '点击头像登录'" @tap="editProfile">
+          <AccountAvatar :size="44" />
+        </button>
+        <view class="account-identity">
+          <text class="account-name">{{ user?.displayName || '未登录' }}</text>
+          <text v-if="user?.publicId" class="account-id">ID {{ user.publicId }}</text>
+          <text v-else-if="!user" class="account-caption">点击头像登录</text>
         </view>
-      </view>
-      <view class="account-actions">
         <button v-if="!user" id="open-wechat-login" class="small primary account-action account-login" @tap="loginDialog = true">登录 / 注册</button>
-        <button v-else id="edit-account-profile" class="text-button account-action" @tap="editProfile"><UiIcon name="account-settings" :size="15" />编辑资料</button>
+        <button v-else id="edit-account-profile" class="text-button account-action" @tap="editProfile"><UiIcon name="account-settings" :size="13" />编辑资料</button>
       </view>
     </view>
     <view class="account-content">
@@ -126,13 +131,16 @@ function signOut() {
 
 <style scoped>
 .account-page { max-width: 500px; margin: auto; }
-.account-head { padding: var(--tab-start, 8px) 14px 5px; background: linear-gradient(#ffe78a, #fff2bf 78%, #f5f4f1); }
-.account-profile { display: flex; align-items: center; gap: 9px; }
-.account-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 18px; font-weight: 850; }
-.account-head .sub { color: #65531c; font-size: 11px; }
-.account-actions { display: flex; justify-content: flex-end; padding: 2px 0 4px; }
-.account-actions .account-action { min-height: 34px; }
-.account-login { flex: none; padding-inline: 11px; }
+.account-head { padding: var(--tab-start, 8px) 14px 12px; background: linear-gradient(#ffe78a, #fff2bf 76%, #f5f4f1); }
+.account-profile { display: flex; align-items: center; gap: 9px; min-height: max(48px, var(--tab-row-height, 40px)); }
+.account-avatar-button { flex: none; padding: 0; border: 0; border-radius: 50%; background: transparent; }
+.account-identity { display: flex; flex: 1; min-width: 0; flex-direction: column; justify-content: center; gap: 2px; }
+.account-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 17px; font-weight: 850; line-height: 1.25; }
+.account-id, .account-caption { display: block; color: #65531c; font-size: 11px; line-height: 1.25; white-space: nowrap; }
+.account-id { font-variant-numeric: tabular-nums; letter-spacing: .25px; }
+.account-caption { overflow: hidden; text-overflow: ellipsis; }
+.account-action { flex: none; min-height: 32px; white-space: nowrap; }
+.account-login { padding-inline: 9px; }
 .account-content { padding: 5px 14px 0; }
 .account-archives { display: flex; align-items: center; gap: 4px; padding: 0 10px; margin-bottom: 12px; }
 .account-archives .account-link { flex: 1; min-width: 0; border: 0; color: #44340e; }

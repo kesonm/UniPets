@@ -17,7 +17,7 @@ docs/                 API 说明、部署配置
 
 ## 功能
 
-- 小程序访客可浏览社区和服务。首次微信登录自动建号，可选择头像和填写昵称，也可稍后在「我的 → 编辑资料」设置。宠物档案由用户自行添加，每个账号最多保留 3 份。猫狗档案可拍摄鼻纹签发身份证，并展示由身份证号生成的条形码和二维码。
+- 小程序访客可浏览社区和服务。登录弹窗可选择头像和填写昵称，首次微信登录自动建号。「我的」显示固定的 6 位用户 ID，并提供编辑资料入口。宠物档案由用户自行添加，每个账号最多保留 3 份。猫狗档案可拍摄鼻纹签发身份证，并展示由身份证号生成的条形码和二维码。
 - 所有访客均可在网页工作台和手机 H5 注册、登录，用自己的账号新建宠物档案。账号支持恢复会话、退出、修改昵称与密码。密码使用 scrypt 哈希，网页使用 HttpOnly 会话 Cookie。
 - 宠物档案新增、编辑、删除：名字、物种、品种、生日、性别、备注、封面。
 - 按账号、宠物隔离的资产管理：JPG/PNG/WebP 上传、有效图片解码校验、重命名、预览、下载、封面设置、删除；默认每个账号最多 500 张 / 512 MB。
@@ -145,7 +145,7 @@ pnpm test:video-jobs
 2. 构建前端和后端，静态 Web 与 API 独立部署。部署 API 时一并保留项目根目录下的 `shared/`。
 3. 后端配置 `NODE_ENV=production`、`FRONTEND_ORIGINS`、`DB_*` 与 `STORAGE_DIR`。生产会话默认使用 Secure Cookie。指定 HTTP 部署须显式设置 `PETCLOUD_ALLOW_HTTP_AUTH=1`，并将实际 HTTP 来源加入白名单。
 4. 建议同域 `/api` 反向代理到独立 API 服务，示例见 `docs/nginx.conf.example`。如果跨域部署，在构建时设置 `VITE_API_BASE_URL` 并同步后端来源白名单。不同站点的浏览器 Cookie 策略可能阻止登录，优先同域代理。
-5. 用独立应用账号连接 MySQL，持久挂载并同时备份数据库和素材目录。数据库不保存图片二进制，单独备份数据库不能恢复图片。
+5. 用独立应用账号连接 MySQL，持久挂载并同时备份数据库和素材目录。账号头像保存在数据库，宠物照片和动作素材保存在素材目录。
 6. 服务默认按直接连接 IP 限流。只有 API 位于一层受控代理后且 API 端口未公开时，才设置 `TRUST_PROXY=1`。
 
 旧版网页在阿里云配置中与 API 共用一个入口。运行 `VITE_API_BASE_URL='' pnpm build:web` 和 `pnpm --dir server build` 后，将 `dist/`、`server/dist/`、`server/migrations/`、`server/noseprint/`、`shared/`、`deploy/` 以及工作区的包清单和锁文件同步到服务器。小程序服务端从 `.runtime.env` 读取 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`。[Docker Compose 配置](deploy/compose.yaml)
