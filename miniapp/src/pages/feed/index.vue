@@ -24,11 +24,14 @@ const mode = ref('all'),
 const example = computed(() => examplePosts.find((post) => post.id === id.value))
 const areas = [{ id: '', label: '不限地区' }, ...h5Areas],
   topic = ref('daily'),
+  petType = ref('other'),
   topics = [
     { id: 'daily', label: '日常' },
     { id: 'travel', label: '出行' },
     { id: 'rescue', label: '救助' },
+    { id: 'help', label: '求助' },
   ]
+const otherPetTypes = [{id:'other',label:'其他宠物'},{id:'rabbit',label:'兔'}]
 const posts = ref<H5Post[]>([]),
   current = ref<H5Post>(),
   comments = ref<H5Comment[]>([]),
@@ -42,6 +45,7 @@ const mineTab = ref('published'),
   title = ref(''),
   body = ref(''),
   reply = ref('')
+const selectedPet = computed(() => pets.value.find(pet => pet.id === petId.value))
 const visiblePosts = computed(() =>
   mode.value === 'mine'
     ? (mineTab.value === 'published' ? social.value?.published : social.value?.favorites) || []
@@ -53,6 +57,7 @@ const photoOptions = computed(() => [
 ])
 watch(petId, () => {
   assetId.value = ''
+  petType.value = /兔|rabbit/i.test(selectedPet.value?.breed || '') ? 'rabbit' : 'other'
 })
 onLoad((q) => {
   id.value = q?.id || ''
@@ -130,6 +135,7 @@ function publish() {
       body: body.value,
       area: area.value || null,
       topic: topic.value,
+      ...(selectedPet.value?.species === 'other' ? { petType: petType.value } : {}),
     })
     uni.redirectTo({ url: '/pages/feed/index?id=' + r.post.id })
   })
@@ -208,6 +214,10 @@ const owned = computed(() => social.value?.published.some((p) => p.id === id.val
     <view v-if="mode === 'write' && user" class="card">
       <text class="heading">发动态</text>
       <PetPicker v-model="petId" :pets="pets" />
+      <template v-if="selectedPet?.species === 'other'">
+        <text class="label">宠物类型</text>
+        <ChoiceField v-model="petType" :options="otherPetTypes" />
+      </template>
       <text class="label">标题</text>
       <input v-model="title" maxlength="100" />
       <text class="label">正文</text>

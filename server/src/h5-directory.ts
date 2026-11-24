@@ -83,6 +83,9 @@ h5DirectoryRouter.post('/catalog/:id/participation', requireAuth, async (req, re
     const [[item]] = await conn.execute<(CatalogItem & RowDataPacket)[]>(
       `SELECT ${fields} ${from} WHERE i.id=? AND ${catalogVisible} FOR UPDATE OF i`, [itemId])
     if (!item) throw new HttpError(404, '这个项目已下架')
+    if (item.module === 'services' && req.get('X-PetCloud-Client') === 'miniprogram') {
+      throw new HttpError(409, '请联系门店电话预约')
+    }
     if (!['appointment','enrollment','group'].includes(item.kind)) throw new HttpError(400, '这个项目暂不接受报名')
     const petRequired = item.kind !== 'group' && item.module !== 'charity'
     if (petRequired && !petId) throw new HttpError(400, '请为本次预约选择一只宠物')

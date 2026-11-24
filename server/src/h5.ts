@@ -5,8 +5,9 @@ import sharp from 'sharp'
 import { z } from 'zod'
 import { availableCatClip, catClips, catDefaultAction, catIdleGroups, catInteractiveActions, catSleepAction, type CatClipId, type CatKeyAction, type CatManifest } from '../../shared/cat-motion.mjs'
 import { areaDistance, h5Areas } from '../../shared/h5-areas.mjs'
+import { postPetTypes, type PostPetType } from '../../shared/h5-discovery.mjs'
 import { ownedAsset, ownedPet, photoThumbnail, storagePath, type Asset } from './assets.js'
-import { requireAuth } from './auth.js'
+import { optionalAuth, requireAuth } from './auth.js'
 import { config } from './config.js'
 import { db, rows, transaction } from './db.js'
 import { HttpError } from './errors.js'
@@ -18,14 +19,18 @@ import { h5PetRecordsRouter } from './h5-pet-records.js'
 import { h5StoriesRouter } from './h5-stories.js'
 import { h5SocialPagesRouter } from './h5-social-pages.js'
 import { h5OperationsRouter } from './h5-operations.js'
+import { h5ServicePostsRouter, servicePosts } from './h5-service-posts.js'
+import { recommendedPosts, type PublicPost } from './h5-recommendations.js'
+import { districtInput, districtRouter } from './districts.js'
 
 export const h5Router = Router()
 h5Router.use('/operations',h5OperationsRouter)
-h5Router.use(h5ProgramsRouter,h5DirectoryRouter,h5OrdersRouter,h5PetRecordsRouter,h5StoriesRouter,h5SocialPagesRouter)
+h5Router.use(districtRouter,h5ServicePostsRouter,h5ProgramsRouter,h5DirectoryRouter,h5OrdersRouter,h5PetRecordsRouter,h5StoriesRouter,h5SocialPagesRouter)
 const uuid = z.string().uuid()
 const area = z.string().refine(id => h5Areas.some(item => item.id === id), '请选择已有商圈')
 const species = z.enum(['cat','dog','other'])
-const topics = z.enum(['daily','travel','rescue'])
+const topics = z.enum(['daily','travel','rescue','help'])
+const petTypeInput = z.enum(postPetTypes)
 const pageSize = 18
 
 const demoCover = `LEFT JOIN assets image ON image.id=p.avatar_asset_id AND image.user_id=p.user_id
@@ -129,8 +134,12 @@ h5Router.get('/demo-pets/:id/room/:assetId/image', async (req,res) => {
   res.set('Cache-Control','private, max-age=300').type('webp').send(await demoMotionImage(assetId,roomTileSize))
 })
 
+const profilePetType = `CASE WHEN p.species='other' AND (LOCATE('兔',p.breed)>0 OR LOCATE('rabbit',LOWER(p.breed))>0)
+  THEN 'rabbit' ELSE p.species END`
+const postPetType = `COALESCE(post.pet_type,(${profilePetType}))`
 const postSelect = `SELECT post.id,post.title,post.body,post.area,post.topic,post.created_at AS createdAt,
-  p.name AS petName,p.species,u.display_name AS author,(post.asset_id IS NOT NULL AND post.hidden_at IS NULL) AS hasImage,
+  p.name AS petName,p.species,p.breed,${postPetType} AS petType,u.display_name AS author,
+  (post.asset_id IS NOT NULL AND post.hidden_at IS NULL) AS hasImage,
   (post.hidden_at IS NOT NULL) AS hidden,
   (SELECT COUNT(*) FROM h5_reactions r WHERE r.post_id=post.id AND r.kind='like') AS likes
   FROM h5_posts post JOIN pets p ON p.id=post.pet_id JOIN users u ON u.id=post.user_id`
@@ -138,6 +147,7 @@ const postSelect = `SELECT post.id,post.title,post.body,post.area,post.topic,pos
 h5Router.get('/posts', async (req, res) => {
   const query = z.object({sort:z.enum(['recommended','latest','hot','near']).default('recommended'),
     area:area.optional(), q:z.string().trim().max(60).default(''), species:species.optional(),
+    petType:petTypeInput.optional(), breed:z.string().trim().max(80).default(''),
     topic:topics.optional(),page:z.coerce.number().int().min(1).max(200).default(1)}).parse(req.query)
   const current = h5Areas.find(item => item.id === query.area)
   const order: (string|number)[] = []
@@ -158,10 +168,34 @@ h5Router.get('/posts', async (req, res) => {
   }
   const records = await rows(`${postSelect}
     WHERE post.hidden_at IS NULL AND (? IS NULL OR post.topic=?)
-      AND (?='' OR LOCATE(?,CONCAT_WS(' ',post.title,post.body,p.name,u.display_name))>0)
+      AND (? IS NULL OR ${postPetType}=?)
+      AND (?='' OR p.breed=?)
+      AND (?='' OR LOCATE(?,CONCAT_WS(' ',post.title,post.body,p.name,p.breed,u.display_name,
+        CASE ${postPetType} WHEN 'cat' THEN '猫 猫咪' WHEN 'dog' THEN '狗 狗狗 犬' WHEN 'rabbit' THEN '兔 兔子' ELSE '' END))>0)
     ORDER BY ${rank} post.created_at DESC,post.id DESC LIMIT ? OFFSET ?`,
-  [query.topic??null,query.topic??null,query.q,query.q,...order,pageSize+1,(query.page-1)*pageSize])
+  [query.topic??null,query.topic??null,query.petType??null,query.petType??null,query.breed,query.breed,
+    query.q,query.q,...order,pageSize+1,(query.page-1)*pageSize])
   res.json({ posts:records.slice(0,pageSize), hasMore:records.length>pageSize })
+})
+
+h5Router.get('/posts/breeds', async (req, res) => {
+  const { petType } = z.object({ petType: petTypeInput.optional() }).parse(req.query)
+  const breeds = await rows<{ breed: string }>(`SELECT DISTINCT p.breed FROM h5_posts post JOIN pets p ON p.id=post.pet_id
+    WHERE post.hidden_at IS NULL AND p.breed<>'' AND (? IS NULL OR ${postPetType}=?)
+    ORDER BY p.breed LIMIT 150`, [petType ?? null, petType ?? null])
+  res.json({ breeds: breeds.map(row => row.breed) })
+})
+
+h5Router.get('/posts/recommendations', optionalAuth, async (req, res) => {
+  const query = z.object({
+    district: districtInput.optional(), seed: z.string().regex(/^[a-zA-Z0-9-]{1,40}$/).default('guest'),
+  }).parse(req.query)
+  const owner = req.user?.id
+  const [posts, services] = await Promise.all([
+    rows<PublicPost>(`${postSelect} WHERE post.hidden_at IS NULL ORDER BY post.created_at DESC,post.id DESC LIMIT 60`),
+    servicePosts({ district: query.district, q: '', limit: 60, offset: 0 }, owner),
+  ])
+  res.json({ items: await recommendedPosts(posts, services, owner, query.seed) })
 })
 
 h5Router.get('/posts/:id', async (req, res) => {
@@ -194,16 +228,19 @@ h5Router.get('/me', async (req, res) => {
 
 h5Router.post('/posts', async (req, res) => {
   const input = z.object({petId:uuid, assetId:uuid.nullable().default(null), area:area.nullable().default(null),
+    petType:z.enum(['rabbit','other']).optional(),
     topic:topics.default('daily'),title:z.string().trim().min(1,'请填写标题').max(100), body:z.string().trim().max(3000).default('')}).parse(req.body)
   const owner = req.user.id
-  await ownedPet(owner,input.petId)
+  const [pet] = await rows<{species: PostPetType}>('SELECT species FROM pets WHERE id=? AND user_id=?', [input.petId,owner])
+  if (!pet) throw new HttpError(404,'宠物不存在')
   if (input.assetId) {
     const asset = await ownedAsset(owner,input.assetId)
     if (asset.kind!=='photo' || asset.petId!==input.petId) throw new HttpError(400,'请选择当前宠物的照片')
   }
   const id = randomUUID()
-  await db.execute(`INSERT INTO h5_posts (id,user_id,pet_id,asset_id,title,body,area,topic,created_at)
-    VALUES (?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3))`, [id,owner,input.petId,input.assetId,input.title,input.body,input.area,input.topic])
+  await db.execute(`INSERT INTO h5_posts (id,user_id,pet_id,asset_id,title,body,area,topic,pet_type,created_at)
+    VALUES (?,?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3))`,
+  [id,owner,input.petId,input.assetId,input.title,input.body,input.area,input.topic,pet.species==='other' ? input.petType ?? null : null])
   const [post] = await rows(`${postSelect} WHERE post.id=?`, [id])
   res.status(201).json({post})
 })

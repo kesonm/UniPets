@@ -1,5 +1,7 @@
 import type { Pet } from '../lib/types'
 import type { BusinessModule } from './business'
+import type { PostPetType } from '../../shared/h5-discovery.mjs'
+export type { District } from '../../shared/h5-districts.mjs'
 
 export type H5Tab = 'home'|'friends'|'cart'|'identity'|'me'|'shop'|'cloud'|'events'|'training'|'stories'|BusinessModule
 export type PetArchiveSection = 'health'|'digital'|'assets'|'content'|'growth'|'memorial'
@@ -7,7 +9,7 @@ export type CloudSection = 'detail'|'space'|'photos'|'motions'|'memories'|PetArc
 export type DemoPet = Pick<Pet,'id'|'identityNumber'|'name'|'species'|'breed'|'birthday'|'gender'> & {hasCover:boolean|number;interactiveRoom?:boolean}
 export type CloudPet = (DemoPet & {shared:true}) | (Pet & {shared:false;interactiveRoom?:boolean})
 export type FeedOrder = 'recommended'|'latest'|'hot'|'near'
-export type PostTopic = 'daily'|'travel'|'rescue'
+export type PostTopic = 'daily'|'travel'|'rescue'|'help'
 
 export interface H5Post {
   id: string
@@ -15,6 +17,8 @@ export interface H5Post {
   body: string
   petName: string
   species: Pet['species']
+  petType?: PostPetType
+  breed?: string
   author: string
   createdAt: string
   area: string|null
@@ -24,6 +28,24 @@ export interface H5Post {
   topic?: PostTopic
   exampleImage?: string
 }
+
+export interface ServicePost {
+  id: string
+  title: string
+  description: string
+  category: string
+  provider: string
+  venue: string
+  phone: string
+  district: string | null
+  priceCents: number | null
+  updatedAt: string
+  likes: number
+  commentCount: number
+  liked: boolean | number
+}
+
+export type Recommendation = { kind: 'post'; post: H5Post } | { kind: 'service'; post: ServicePost }
 
 export interface H5Social {
   published: H5Post[]

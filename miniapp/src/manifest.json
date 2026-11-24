@@ -11,7 +11,7 @@
     "setting": { "urlCheck": true, "es6": true, "minified": true },
     "usingComponents": true,
     "permission": {
-      "scope.userLocation": { "desc": "用于在商圈地图上显示当前位置，并参考距离选择商圈。" }
+      "scope.userLocation": { "desc": "用于显示当前区县、筛选附近服务和在地图上标记位置。" }
     },
     "requiredPrivateInfos": ["getLocation"]
   }

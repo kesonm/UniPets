@@ -69,6 +69,21 @@
 
 </details>
 
+## 小程序定位、服务帖与推荐
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| GET | /h5/catalog/district-boundaries | 按整度网格 `x`、`y` 获取区县边界，端上识别当前区县 |
+| GET | /h5/catalog/service-posts | 可按 `district`、`category`、`q`、`page` 检索营业门店已发布的服务帖 |
+| GET | /h5/catalog/service-posts/:id | 服务详情、门店电话及互动计数 |
+| PUT | /h5/catalog/service-posts/:id/like | 为当前账号设置点赞，提交 `{ active }` |
+| GET / POST | /h5/catalog/service-posts/:id/comments | 读取评论，或登录后提交 `{ body }` |
+| GET | /h5/posts | 交友使用 `sort=latest`，可组合 `petType`、`breed`、`q` 和 `page` |
+| GET | /h5/posts/breeds | 获取公开帖子使用的品种，可按 `petType` 筛选 |
+| GET | /h5/posts/recommendations | 混排服务帖与动态，支持区县 `district` 和访客随机种子 `seed` |
+
+首页推荐会参考登录用户的宠物类型、品种和近 30 天的公开求助，并加入按用户区分的随机排序。周边服务通过后台「服务管理」关联营业门店发布。服务帖的预约入口为门店电话。
+
 ## H5 赛事与培训
 
 | 方法 | 路径 | 用途 |

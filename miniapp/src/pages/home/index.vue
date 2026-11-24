@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { onHide, onShow } from '@dcloudio/uni-app'
-import { areaLabel, type Listing, type StorySummary } from '../../../../src/h5/business'
+import type { Listing, StorySummary } from '../../../../src/h5/business'
+import type { ServicePost } from '../../../../src/h5/types'
 import { homeEntries, homeSearchKinds, homeSlides } from '../../../../src/h5/home'
-import { selectedArea } from '../../lib/area'
 import { api, go, message } from '../../lib/client'
-import { homeImage } from '../../lib/home'
+import { homeImage, showFriendsFeed } from '../../lib/home'
+import { district, locateDistrict, locateIfAuthorized, locatingDistrict } from '../../lib/district'
 import { useTabPage } from '../../lib/tab-page'
-import AreaPicker from '../../components/AreaPicker.vue'
 import FeedSection from '../../components/FeedSection.vue'
+import HomeRecommendations from '../../components/HomeRecommendations.vue'
 import ShopShelf from '../../components/ShopShelf.vue'
 import UiIcon from '../../components/UiIcon.vue'
 
@@ -17,24 +18,29 @@ type SearchKind = (typeof homeSearchKinds)[number]['id']
 
 const tabLayout = useTabPage('pages/home/index')
 const active = ref(false)
-const areaPicker = ref(false)
 const slide = ref(0)
 const queryInput = ref('')
 const query = ref('')
 const kind = ref<SearchKind>('shop')
-const areaName = computed(() => areaLabel(selectedArea.value) || '选择商圈')
-const areaCaption = computed(() => selectedArea.value ? areaName.value.split(' · ').pop() : '商圈')
 const listings = ref<Listing[]>([])
+const services = ref<ServicePost[]>([])
 const stories = ref<StorySummary[]>([])
 const loading = ref(false)
 const error = ref('')
 const retry = ref(0)
 
-onShow(() => { active.value = true })
-onHide(() => { active.value = false; areaPicker.value = false })
+let checkedLocation = false
+onShow(() => {
+  active.value = true
+  if (checkedLocation) return
+  checkedLocation = true
+  void locateIfAuthorized()
+})
+onHide(() => { active.value = false })
 
 function openEntry(id: Destination) {
-  if (id === 'friends' || id === 'stories' || id === 'immortality') go(id)
+  if (id === 'friends') showFriendsFeed.value = true
+  if (id === 'friends' || id === 'stories' || id === 'immortality' || id === 'services') go(id)
   else go('directory', { module: id })
 }
 
@@ -48,11 +54,12 @@ function clearSearch() {
   query.value = ''
 }
 
-watch([query, kind, selectedArea, retry], async ([term, target, area], _, onCleanup) => {
+watch([query, kind, () => district.value?.id, retry], async ([term, target, area], _, onCleanup) => {
   let current = true
   onCleanup(() => { current = false })
   listings.value = []
   stories.value = []
+  services.value = []
   error.value = ''
   loading.value = false
   if (!term || target === 'feed') return
@@ -62,10 +69,12 @@ watch([query, kind, selectedArea, retry], async ([term, target, area], _, onClea
     if (target === 'stories') {
       const result = await api<{ stories: StorySummary[] }>('/h5/stories' + q)
       if (current) stories.value = result.stories
+    } else if (target === 'services') {
+      const result = await api<{ posts: ServicePost[] }>('/h5/catalog/service-posts' + q + (area ? '&district=' + encodeURIComponent(area) : ''))
+      if (current) services.value = result.posts
     } else {
-      const url = target === 'shop' ? '/h5/catalog?kind=product' : '/h5/catalog' + q + (area ? '&area=' + area : '')
-      const result = await api<{ listings: Listing[] }>(url)
-      if (current) listings.value = result.listings.filter(item => target === 'shop' || item.kind !== 'product')
+      const result = await api<{ listings: Listing[] }>('/h5/catalog?kind=product')
+      if (current) listings.value = result.listings
     }
   } catch (cause) {
     if (current) error.value = message(cause)
@@ -79,16 +88,15 @@ watch([query, kind, selectedArea, retry], async ([term, target, area], _, onClea
   <view class="market-home tab-screen" :style="tabLayout">
     <view class="market-top">
       <view class="tab-leading market-controls">
+        <button id="home-location" class="market-location" :aria-label="'当前位置 ' + (district?.name || '定位')" @tap="locateDistrict()">
+          <UiIcon name="location" :size="13" />
+          <text>{{ locatingDistrict ? '定位中' : district?.name || '定位' }}</text>
+        </button>
         <view class="market-search">
           <UiIcon name="search" :size="15" />
           <input v-model="queryInput" maxlength="60" placeholder="服务、商品、动态" confirm-type="search" aria-label="搜索服务、商品或动态" @confirm="search" />
           <button @tap="search">搜索</button>
         </view>
-        <button class="market-location" :aria-label="'切换商圈，' + areaName" @tap="areaPicker = true">
-          <UiIcon name="location" :size="13" />
-          <text>{{ areaCaption }}</text>
-          <UiIcon name="down" :size="10" />
-        </button>
       </view>
     </view>
 
@@ -139,8 +147,11 @@ watch([query, kind, selectedArea, retry], async ([term, target, area], _, onClea
       <button class="text-button" @tap="clearSearch">返回首页</button>
     </view>
 
-    <view v-if="!query || kind === 'feed'" class="market-content">
-      <FeedSection :active="active" :query="query" @area="areaPicker = true" />
+    <view v-if="!query" class="market-content">
+      <HomeRecommendations :active="active" />
+    </view>
+    <view v-else-if="kind === 'feed'" class="market-content">
+      <FeedSection :active="active" :query="query" />
     </view>
     <view v-else class="market-content">
       <view v-if="error || loading" class="card empty-card" role="status">
@@ -157,18 +168,17 @@ watch([query, kind, selectedArea, retry], async ([term, target, area], _, onClea
       <ShopShelf v-else-if="kind === 'shop'" :listings="listings" :query="query" />
       <template v-else>
         <button
-          v-for="item in listings"
+          v-for="item in services"
           :key="item.id"
           class="card market-result"
-          @tap="go('directory', { module: item.module, id: item.id })"
+          @tap="go('services', { id: item.id })"
         >
           <text class="heading">{{ item.title }}</text>
-          <text class="sub">{{ [item.provider, areaLabel(item.area)].filter(Boolean).join(' · ') }}</text>
+          <text class="sub">{{ item.provider }}</text>
         </button>
-        <view v-if="!listings.length" class="card empty-card">没有匹配的项目</view>
+        <view v-if="!services.length" class="card empty-card">没有匹配的服务帖</view>
       </template>
     </view>
-    <AreaPicker v-if="areaPicker" @close="areaPicker = false" />
   </view>
 </template>
 

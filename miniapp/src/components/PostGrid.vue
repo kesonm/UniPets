@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { H5Post } from '../../../src/h5/types'
 import { h5Areas } from '../../../shared/h5-areas.mjs'
+import { postPetTypeLabels } from '../../../shared/h5-discovery.mjs'
 import { publicImage } from '../lib/client'
 import UiIcon from './UiIcon.vue'
 
-withDefaults(defineProps<{ posts: readonly H5Post[]; liked?: string[]; showArea?: boolean; reactions?: boolean }>(), {
+withDefaults(defineProps<{ posts: readonly H5Post[]; liked?: string[]; showArea?: boolean; showPetType?: boolean; reactions?: boolean }>(), {
   liked: () => [],
 })
 const emit = defineEmits<{ view: [post: H5Post]; like: [post: H5Post] }>()
@@ -52,6 +53,7 @@ function when(value: string) {
           <text>{{ post.likes }}</text>
         </button>
       </view>
+      <text v-if="showPetType" class="post-type">{{ postPetTypeLabels[post.petType || post.species] }}{{ post.breed ? ' · ' + post.breed : '' }}</text>
       <view v-if="showArea && post.area" class="post-area">
         <UiIcon name="post-location" :size="11" />
         <text>{{ areaLabel(post.area) }}</text>
@@ -102,6 +104,7 @@ function when(value: string) {
 .post-author { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .post-author > text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .post-date { color: #776d59; font-size: 10px; }
+.post-type { display: block; margin: -1px 8px 7px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #776d59; font-size: 11px; }
 .post-like { display: flex; align-items: center; gap: 3px; min-height: 25px; padding: 0 2px; border: 0; background: transparent; color: #66625a; font-size: 11px; }
 .post-area { display: flex; align-items: center; gap: 3px; padding: 0 8px 7px; color: #66625a; font-size: 10px; }
 </style>

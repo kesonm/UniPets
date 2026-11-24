@@ -2,10 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { Router, type RequestHandler } from 'express'
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 import { z } from 'zod'
+import { servicePhone } from '../../shared/h5-discovery.mjs'
 import { photoThumbnail } from './assets.js'
 import { adminLogin, authLimiter, requireAuth } from './auth.js'
 import { catalogStore, catalogValues, catalogVisible, createCatalogItem, h5Area, managedCatalogInput, managedCatalogUpdate } from './catalog.js'
 import { db, rows, transaction } from './db.js'
+import { districtInput, listDistricts } from './districts.js'
 import { HttpError } from './errors.js'
 import { petSchema, updatePetRecord } from './routes.js'
 
@@ -82,25 +84,35 @@ adminRouter.patch('/users/:id',async (req,res) => {
 const storeInput = z.object({
   name:z.string().trim().min(1,'请填写门店名称').max(120),
   area:h5Area.nullable(),
+  districtCode:districtInput.nullable().optional(),
   address:z.string().trim().max(160),
   phone:z.string().trim().max(40),
 }).strict()
+adminRouter.get('/districts', (req,res) => {
+  const {q,id} = z.object({q:z.string().trim().max(60).default(''),id:districtInput.optional()}).parse(req.query)
+  res.json({items:listDistricts(q,id)})
+})
+function checkDistrict(id: string | null | undefined) {
+  if (id && !listDistricts('',id).length) throw new HttpError(400,'请选择有效的服务区县')
+}
 adminRouter.get('/stores',list({
-  select:'id,name,area,address,phone,enabled,created_at AS createdAt',
+  select:'id,name,area,district_code AS districtCode,address,phone,enabled,created_at AS createdAt',
   from:'h5_stores', search:'name,address,phone,id', order:'created_at DESC,id DESC',
   states:{enabled:'enabled=TRUE',disabled:'enabled=FALSE'},
 }))
 adminRouter.post('/stores',async (req,res) => {
   const item = storeInput.parse(req.body)
+  checkDistrict(item.districtCode)
   const id = randomUUID()
-  await db.execute('INSERT INTO h5_stores (id,name,area,address,phone) VALUES (?,?,?,?,?)',
-    [id,item.name,item.area,item.address,item.phone])
+  await db.execute('INSERT INTO h5_stores (id,name,area,district_code,address,phone) VALUES (?,?,?,?,?,?)',
+    [id,item.name,item.area,item.districtCode ?? null,item.address,item.phone])
   res.status(201).json({id})
 })
 adminRouter.put('/stores/:id',async (req,res) => {
   const item = storeInput.parse(req.body)
-  await update('UPDATE h5_stores SET name=?,area=?,address=?,phone=? WHERE id=?',
-    [item.name,item.area,item.address,item.phone,uuid.parse(req.params.id)],'门店不存在')
+  checkDistrict(item.districtCode)
+  await update('UPDATE h5_stores SET name=?,area=?,district_code=IF(?,?,district_code),address=?,phone=? WHERE id=?',
+    [item.name,item.area,item.districtCode!==undefined,item.districtCode ?? null,item.address,item.phone,uuid.parse(req.params.id)],'门店不存在')
   res.json({ok:true})
 })
 adminRouter.patch('/stores/:id',async (req,res) => {
@@ -109,9 +121,16 @@ adminRouter.patch('/stores/:id',async (req,res) => {
   res.json({ok:true})
 })
 
-async function checkStore(id: string|null) {
-  if (id && !(await rows('SELECT id FROM h5_stores WHERE id=?',[id])).length) {
-    throw new HttpError(400,'关联门店不存在，请重新选择')
+async function checkStore(id: string|null, localService = false) {
+  if (!id) {
+    if (localService) throw new HttpError(400,'发布周边服务帖前请选择关联门店')
+    return
+  }
+  const [store] = await rows<{ phone:string; area:string|null; districtCode:string|null }>(
+    'SELECT phone,area,district_code AS districtCode FROM h5_stores WHERE id=?',[id])
+  if (!store) throw new HttpError(400,'关联门店不存在，请重新选择')
+  if (localService && ((!store.area && !store.districtCode) || !servicePhone(store.phone))) {
+    throw new HttpError(400,'请先在门店管理填写区县和联系电话')
   }
 }
 const catalogSections = [
@@ -133,14 +152,14 @@ for (const section of catalogSections) {
   adminRouter.post(section.path,async (req,res) => {
     const item = managedCatalogInput.parse(req.body)
     if ((item.kind === 'product') !== isProduct || item.kind === 'group') throw new HttpError(400,'项目类型不匹配')
-    await checkStore(item.storeId)
+    await checkStore(item.storeId, item.module==='services' && item.published)
     res.status(201).json({id:await createCatalogItem(item)})
   })
   adminRouter.put(detail,async (req,res) => {
     const id = uuid.parse(req.params.id)
     const item = managedCatalogUpdate.parse(req.body)
     if ((item.kind === 'product') !== isProduct || item.kind === 'group') throw new HttpError(400,'项目类型不匹配')
-    await checkStore(item.storeId)
+    await checkStore(item.storeId, item.module==='services' && item.published)
     await update(`UPDATE h5_catalog_items i SET module=?,category=?,kind=?,title=?,provider=?,description=?,area=?,
       venue=?,starts_at=?,closes_at=?,price_cents=?,stock=?,external_url=?,published=?,store_id=?
       WHERE id=? AND updated_at=? AND stock<=>? AND ${section.scope}`,
@@ -149,8 +168,14 @@ for (const section of catalogSections) {
   })
   adminRouter.patch(detail,async (req,res) => {
     const {published} = publishedInput.parse(req.body)
+    const id = uuid.parse(req.params.id)
+    if (!isProduct && published) {
+      const [item] = await rows<{ module:string; storeId:string|null }>(
+        `SELECT i.module,i.store_id AS storeId FROM h5_catalog_items i WHERE i.id=? AND ${section.scope}`, [id])
+      if (item?.module==='services') await checkStore(item.storeId, true)
+    }
     await update(`UPDATE h5_catalog_items i SET published=? WHERE id=? AND ${section.scope}`,
-      [published,uuid.parse(req.params.id)],section.name+'不存在')
+      [published,id],section.name+'不存在')
     res.json({ok:true})
   })
 }

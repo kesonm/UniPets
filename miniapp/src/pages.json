@@ -18,7 +18,9 @@
       "path": "pages/friends/index",
       "style": {
         "navigationStyle": "custom",
-        "navigationBarBackgroundColor": "#f5f4f1"
+        "navigationBarBackgroundColor": "#f5f4f1",
+        "enablePullDownRefresh": true,
+        "backgroundTextStyle": "dark"
       }
     },
     {
@@ -69,6 +71,13 @@
       "path": "pages/directory/index",
       "style": {
         "navigationBarTitleText": "服务与好物"
+      }
+    },
+    {
+      "path": "pages/services/index",
+      "style": {
+        "navigationBarTitleText": "宠物周边服务",
+        "navigationBarBackgroundColor": "#f5f4f1"
       }
     },
     {

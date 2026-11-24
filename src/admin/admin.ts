@@ -2,6 +2,7 @@ import { ChatDotRound, CollectionTag, Film, FirstAidKit, Goods, Shop, User } fro
 import { h5Areas } from '../../shared/h5-areas.mjs'
 import { businessModules, type Listing } from '../h5/business'
 import { categories } from '../h5/catalog'
+import type { PostTopic } from '../h5/types'
 
 type Choice = { id: string; label: string }
 export const sections = [
@@ -38,7 +39,7 @@ export interface Account extends BaseRow {
   isAdmin: Flag; wechat: Flag; enabled: Flag; petCount: number
 }
 export interface Store extends BaseRow {
-  name: string; area: string|null; address: string; phone: string; enabled: Flag; createdAt: string
+  name: string; area: string|null; districtCode: string|null; address: string; phone: string; enabled: Flag; createdAt: string
 }
 export interface CatalogItem extends Listing {
   storeId: string|null; storeName: string|null; storeEnabled: Flag|null; visible: Flag; published: Flag; updatedAt: string
@@ -50,7 +51,7 @@ export interface Pet extends BaseRow {
   birthday: string|null; notes: string; owner: string; ownerUsername: string; identityNumber: string|null; createdAt: string
 }
 export interface Post extends BaseRow {
-  title: string; topic: 'daily'|'travel'|'rescue'; createdAt: string
+  title: string; topic: PostTopic; createdAt: string
   author: string; petName: string; commentCount: number; hidden: Flag
 }
 export interface Story extends BaseRow {
@@ -65,7 +66,7 @@ export const listingGroups = {...businessModules,shop:{title:'宠物品牌超市
 export const kinds: Record<Listing['kind'],string> = {
   article:'资讯',appointment:'预约服务',enrollment:'报名项目',product:'商品',link:'官方链接',group:'社群',
 }
-const topics = {daily:'日常分享',travel:'出行攻略',rescue:'救助信息'}
+const topics: Record<PostTopic,string> = {daily:'日常分享',travel:'出行攻略',rescue:'救助信息',help:'求助'}
 const localDate = new Intl.DateTimeFormat('zh-CN', {
   year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:'Asia/Shanghai',
 })

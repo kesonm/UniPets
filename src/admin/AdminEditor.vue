@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { h5Areas } from '../../shared/h5-areas.mjs'
+import { legacyDistricts, type District } from '../../shared/h5-districts.mjs'
 import { api, ApiError, apiUrl } from '../lib/api'
 import { detailTitle, genderNames, kinds, listingGroups, speciesNames, type AdminRecord, type Section, type Store } from './admin'
 
@@ -17,7 +18,38 @@ const busy = ref(false)
 const error = ref('')
 const detail = ref<{body?:string;scenes?:string[];hasImage:boolean|number}>()
 const name = ref(account?.displayName ?? '')
-const storeForm = reactive({name:store?.name ?? '',area:store?.area ?? '',address:store?.address ?? '',phone:store?.phone ?? ''})
+const storeForm = reactive({name:store?.name ?? '',area:store?.area ?? '',districtCode:store?.districtCode ?? '',
+  address:store?.address ?? '',phone:store?.phone ?? ''})
+const districts = ref<District[]>([])
+const selectedDistrict = ref<District>()
+const districtBusy = ref(false)
+const districtError = ref('')
+let districtRevision = 0
+const districtOptions = computed(() => selectedDistrict.value && !districts.value.some(item => item.id === selectedDistrict.value?.id)
+  ? [selectedDistrict.value, ...districts.value] : districts.value)
+
+function districtLabel(district: District) {
+  return [...new Set([district.province,district.city,district.name].filter(Boolean))].join(' · ')
+}
+async function findDistricts(q = '', id = '') {
+  const revision = ++districtRevision
+  districtBusy.value = true
+  districtError.value = ''
+  try {
+    const params = new URLSearchParams(id ? {id} : {q})
+    const {items} = await api<{items:District[]}>('/admin/districts?' + params)
+    if (revision !== districtRevision) return
+    districts.value = items
+    if (id) selectedDistrict.value = items[0]
+  } catch (cause) {
+    if (revision === districtRevision) districtError.value = cause instanceof Error ? cause.message : '区县读取失败'
+  } finally {
+    if (revision === districtRevision) districtBusy.value = false
+  }
+}
+function chooseDistrict(id: string) {
+  selectedDistrict.value = districtOptions.value.find(item => item.id === id)
+}
 const petForm = reactive({name:pet?.name ?? '',species:pet?.species ?? 'other',breed:pet?.breed ?? '',
   gender:pet?.gender ?? 'unknown',birthday:pet?.birthday ?? '',notes:pet?.notes ?? ''})
 
@@ -31,7 +63,7 @@ function scheduledAt(value: string, previous?: string|null) {
 const module = item?.module ?? (product ? 'shop' : 'services')
 const listing = reactive({
   module,category:item?.category ?? listingGroups[module].categories[0].id,
-  kind:item?.kind ?? (product ? 'product' : 'appointment'),
+  kind:item?.kind ?? (product ? 'product' : 'article'),
   title:item?.title ?? '',provider:item?.provider ?? '',description:item?.description ?? '',
   area:item?.area ?? '',venue:item?.venue ?? '',storeId:item?.storeId ?? '',
   startsAt:shanghaiInput(item?.startsAt),closesAt:shanghaiInput(item?.closesAt),externalUrl:item?.externalUrl ?? '',
@@ -86,7 +118,7 @@ const media = computed(() => content && apiUrl('/admin/'+props.section+'/'+conte
 function formValues() {
   if (account) return {displayName:name.value}
   if (pet) return {...petForm,birthday:petForm.birthday || null}
-  if (props.section === 'stores') return {...storeForm,area:storeForm.area || null}
+  if (props.section === 'stores') return {...storeForm,area:storeForm.area || null,districtCode:storeForm.districtCode || null}
   const {price,stock,startsAt,closesAt,...fields} = listing
   return {...fields,area:fields.area || null,venue:fields.venue || null,storeId:fields.storeId || null,
     startsAt:scheduledAt(startsAt,item?.startsAt),closesAt:scheduledAt(closesAt,item?.closesAt),
@@ -111,6 +143,7 @@ async function save() {
 }
 onMounted(() => {
   if (content) void readContent()
+  if (props.section === 'stores' && storeForm.districtCode) void findDistricts('', storeForm.districtCode)
   if (props.section === 'products' || props.section === 'services') void findStores()
 })
 </script>
@@ -137,6 +170,14 @@ onMounted(() => {
       <label>所在商圈
         <select v-model="storeForm.area"><option value="">未指定</option><option v-for="area in h5Areas" :key="area.id" :value="area.id">{{ area.label }}</option></select>
       </label>
+      <label>服务区县
+        <el-select v-model="storeForm.districtCode" aria-label="服务区县" filterable remote clearable :value-on-clear="''"
+          :placeholder="legacyDistricts[storeForm.area] ? '沿用商圈对应区县，或搜索区县' : '输入区县名或城市与区县'"
+          :loading="districtBusy" :remote-method="findDistricts" @change="chooseDistrict">
+          <el-option v-for="entry in districtOptions" :key="entry.id" :value="entry.id" :label="districtLabel(entry)" />
+        </el-select>
+      </label>
+      <p v-if="districtError" class="admin-error" role="alert">{{ districtError }}</p>
       <label>门店地址<input v-model.trim="storeForm.address" maxlength="160" autocomplete="street-address"></label>
       <label>联系电话<input v-model.trim="storeForm.phone" type="tel" maxlength="40" autocomplete="tel"></label>
     </template>

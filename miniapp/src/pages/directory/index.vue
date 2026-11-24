@@ -53,6 +53,11 @@ const date = (s?: string | null) => (s ? s.slice(0, 10) : '待公布')
 onLoad((o) => {
   section.value = o?.module && names[o.module] ? o.module : 'services'
   id.value = o?.id || ''
+  if (o?.module === 'services' || (section.value === 'services' && !id.value)) {
+    forwarding.value = true
+    uni.redirectTo({ url: '/pages/services/index' + (id.value ? '?id=' + encodeURIComponent(id.value) : '') })
+    return
+  }
   if (section.value === 'immortality' && !id.value) {
     forwarding.value = true
     uni.redirectTo({
@@ -79,7 +84,15 @@ async function load() {
     } else events.value = (await api<{ events: H5Event[] }>('/h5/events')).events
   } else if (section.value === 'training')
     courses.value = (await api<{ courses: H5TrainingCourse[] }>('/h5/training')).courses
-  else if (id.value) item.value = (await api<{ listing: Listing }>('/h5/catalog/' + id.value)).listing
+  else if (id.value) {
+    const result = await api<{ listing: Listing }>('/h5/catalog/' + id.value)
+    if (result.listing.module === 'services') {
+      forwarding.value = true
+      uni.redirectTo({ url: '/pages/services/index?id=' + encodeURIComponent(id.value) })
+      return
+    }
+    item.value = result.listing
+  }
   else if (section.value === 'shop')
     items.value = (await api<{ listings: Listing[] }>('/h5/catalog?kind=product')).listings
   else items.value = await searchListings(section.value, q.value, selectedArea.value)
@@ -169,7 +182,6 @@ function copyLink() {
           <view v-if="categories.length" class="card">
             <view class="spread">
               <button class="text-button" @tap="areaPicker = true"><UiIcon name="location" />{{ areaLabel(selectedArea) || '选择商圈' }}</button>
-              <button v-if="section === 'services'" id="service-area-map" class="small" @tap="go('area-map')">商圈地图</button>
             </view>
             <view class="chips">
               <button :class="['chip', { active: !category }]" @tap="category = ''">全部</button>

@@ -60,6 +60,9 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
   req.tokenHash = tokenHash
   next()
 }
+export function optionalAuth(req: Request, res: Response, next: NextFunction) {
+  return tokenFor(req) ? requireAuth(req, res, next) : next()
+}
 async function storeSession(conn: PoolConnection, userId: string, token: string, admin = false) {
   const [[account]] = await conn.execute<RowDataPacket[]>(
     'SELECT is_admin AS isAdmin,disabled_at AS disabledAt FROM users WHERE id=? FOR UPDATE', [userId])

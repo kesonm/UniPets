@@ -1,12 +1,11 @@
 import { h5Areas } from '../../shared/h5-areas.mjs'
+import { serviceCategories } from '../../shared/h5-discovery.mjs'
 
 export const businessModules = {
   immortality: {title:'宠物数字永生', categories:[
     {id:'care',label:'临终关怀'}, {id:'farewell',label:'告别仪式'}, {id:'ecology',label:'生态纪念'}, {id:'keepsake',label:'纪念品定制'},
   ]},
-  services: {title:'宠物周边服务', categories:[
-    {id:'grooming',label:'洗护美容'}, {id:'self-service',label:'自助洗护烘干'}, {id:'photography',label:'宠物拍摄'}, {id:'package',label:'服务套餐'},
-  ]},
+  services: {title:'宠物周边服务', categories:[...serviceCategories, {id:'self-service',label:'自助洗护烘干'}]},
   charity: {title:'宠物公益慈善', categories:[
     {id:'activity',label:'公益活动'}, {id:'rescue',label:'救助资讯'}, {id:'adoption',label:'领养匹配'}, {id:'donation',label:'爱心捐赠'}, {id:'knowledge',label:'生命科普'},
   ]},

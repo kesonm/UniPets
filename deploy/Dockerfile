@@ -28,6 +28,7 @@ ENV PET_NOSEPRINT_PYTHON=/opt/petcloud-noseprint/bin/python
 
 COPY server/dist/ server/dist/
 COPY server/migrations/ server/migrations/
+COPY server/data/china-districts.json.gz server/data/
 COPY server/noseprint/scan.py server/noseprint/
 COPY shared/*.mjs shared/
 USER node

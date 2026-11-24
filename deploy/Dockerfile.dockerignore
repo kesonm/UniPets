@@ -13,6 +13,8 @@ server/*
 !server/dist/**
 !server/migrations/
 !server/migrations/**
+!server/data/
+!server/data/china-districts.json.gz
 !server/noseprint/
 !server/noseprint/requirements.txt
 !server/noseprint/scan.py

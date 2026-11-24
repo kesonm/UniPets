@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onHide, onShow } from '@dcloudio/uni-app'
+import { onHide, onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import type { H5Creator, H5Match } from '../../../../src/h5/types'
 import { areaLabel, type Engagement, type Listing } from '../../../../src/h5/business'
 import { selectedArea } from '../../lib/area'
 import { api, go, speciesNames, user } from '../../lib/client'
 import { pageLoad } from '../../lib/page'
+import { showFriendsFeed } from '../../lib/home'
 import { useTabPage } from '../../lib/tab-page'
 import AreaPicker from '../../components/AreaPicker.vue'
 import FeedSection from '../../components/FeedSection.vue'
@@ -28,6 +29,7 @@ const creators = ref<H5Creator[]>([])
 const groups = ref<Listing[]>([])
 const joined = ref<string[]>([])
 const progress = ref<Progress>()
+const feedReload = ref(0)
 const areaName = computed(() => areaLabel(selectedArea.value) || '筛选商圈')
 let revision = 0
 
@@ -55,8 +57,21 @@ const { loading, error, refresh } = pageLoad(async () => {
   }
 }, () => { progress.value = undefined; joined.value = [] })
 
-onShow(() => { active.value = true })
-onHide(() => { active.value = false; areaPicker.value = false })
+onShow(() => {
+  if (showFriendsFeed.value) {
+    section.value = 'feed'
+    showFriendsFeed.value = false
+  }
+  active.value = true
+})
+onHide(() => { active.value = false; areaPicker.value = false; endRefresh() })
+onPullDownRefresh(() => {
+  if (section.value === 'feed') feedReload.value++
+  else void refresh().finally(endRefresh)
+})
+function endRefresh() {
+  uni.stopPullDownRefresh()
+}
 
 function select(next: Section) {
   section.value = next
@@ -83,7 +98,7 @@ function openGroup(id: string) {
         @tap="select(item.id)"
       >{{ item.title }}</button>
     </view>
-    <FeedSection v-if="section === 'feed'" :active="active" @area="areaPicker = true" />
+    <FeedSection v-if="section === 'feed'" :active="active" :reload="feedReload" filterable @loaded="endRefresh" />
     <template v-else>
       <LoadState :loading="loading" :error="error" @retry="refresh" />
       <template v-if="section === 'matches'">
