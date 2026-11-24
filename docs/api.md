@@ -82,9 +82,7 @@
 | PUT | /h5/catalog/service-posts/:id/like | 为当前账号设置点赞，提交 `{ active }` |
 | GET / POST | /h5/catalog/service-posts/:id/comments | 读取评论，或登录后提交 `{ body }` |
 | GET | /h5/catalog/stores/mine | 读取当前账号绑定的门店及其发布条件 |
-| POST | /h5/catalog/stores/map/preview | 提交地图 `location`，读取对应区县和附近登记门店 |
-| POST | /h5/catalog/stores/map/bind | 提交地图 `location` 和附近门店 `storeId`，或提交 `name`、`address`、`phone` 登记门店并完成绑定 |
-| POST | /h5/catalog/stores/bind | 旧版客户端使用 `{ code }` 兑换门店绑定码 |
+| POST | /h5/catalog/stores/bind | 提交后台生成的门店码或扫码结果，绑定当前账号 |
 | GET | /h5/posts | 交友使用 `sort=latest`，可组合 `petType`、`breed`、`q` 和 `page` |
 | GET | /h5/posts/mine/counts | 当前账号的发布、点赞和收藏计数 |
 | GET | /h5/posts/mine | 按 `tab=published`、`likes` 或 `favorites` 读取对应列表，支持 `page` |
@@ -93,7 +91,7 @@
 
 首页推荐会参考登录用户的宠物类型、品种和近 30 天的公开求助，并加入按用户区分的随机排序。周边服务通过小程序「我的门店」发布，预约入口为门店电话。
 
-地图接口接收 GCJ-02 坐标，门店记录使用换算后的 WGS84。选点 150 米内的门店可供确认。登记时会匹配同名同地址或在选点附近的同名门店。无法识别服务城市时，登记可指定 `cityCode`。同一账号可以绑定多个门店，每家门店最多由一个账号绑定。
+门店管理可调用 `POST /admin/stores/location`，提交浏览器定位的 WGS84 经度和纬度，识别服务城市和区县。管理员可用 `POST /admin/stores/:id/binding-code` 为暂未绑定的营业门店生成同一次绑定的门店码和二维码，有效期 24 小时。二维码包含 `petcloud:store:` 前缀及门店码。绑定时消费该码，一个账号可以绑定多家门店，每家门店最多由一个账号绑定。
 
 发布记录包括动态、已发布的宠物故事和用户发出的门店服务帖。点赞列表包括三种内容，收藏列表包括动态和宠物故事。点赞和收藏只统计当前可打开的公开内容。
 

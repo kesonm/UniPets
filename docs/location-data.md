@@ -23,4 +23,4 @@ python3 scripts/build-district-data.py adm3.json CN.zip server/data/china-distri
 
 门店可以明确选择服务城市。旧门店缺少城市代码时，根据关联区县或商圈归入省市。距离排序使用填有门店坐标的记录，用户选择距离排序时只向 API 发送保留三位小数的坐标。
 
-门店自助绑定取微信原生地图的选点坐标，服务端将选中的门店位置换算为 WGS84，再匹配区县和已有门店。换算沿用 coordtransform 的 GCJ-02 偏移公式。[uni-app 地图组件](https://uniapp.dcloud.net.cn/component/map.html) · [coordtransform](https://github.com/wandergis/coordtransform)
+管理后台新增门店时可获取浏览器当前位置，使用 WGS84 经纬度匹配区县及服务城市。管理员在表单补充详细地址后保存门店。

@@ -8,3 +8,5 @@ export type ServiceSort = typeof serviceSorts[number]
 export function sortsByDistance(sort: ServiceSort): boolean
 export interface ServiceCoordinates { latitude: number; longitude: number }
 export function servicePhone(value: string): string
+export const storeBindingQrPrefix: 'petcloud:store:'
+export function parseStoreBindingCode(input: string): string

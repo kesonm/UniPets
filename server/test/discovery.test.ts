@@ -3,8 +3,10 @@ import { randomBytes } from 'node:crypto'
 import { once } from 'node:events'
 import test from 'node:test'
 import { districtAt } from '../../shared/h5-districts.mjs'
+import { storeBindingQrPrefix } from '../../shared/h5-discovery.mjs'
 import { createApp } from '../src/app.js'
 import { db } from '../src/db.js'
+import { renderQrCode } from '../src/identity-codes.js'
 
 test('nearby merchant posts, community filters and personalized home feed', { timeout: 30_000 }, async () => {
   const server = createApp().listen(0, '127.0.0.1')
@@ -47,6 +49,9 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     const result = await request('/admin/stores/'+storeId+'/binding-code','POST',{},manager)
     assert.equal(result.status,200)
     assert.match(result.data.code,/^[0-9A-F]{12}$/)
+    const image = result.data.qrCode as string
+    assert.match(image,/^data:image\/png;base64,/)
+    assert.deepEqual(Buffer.from(image.split(',')[1],'base64'),await renderQrCode(storeBindingQrPrefix+result.data.code))
     return result.data.code as string
   }
   async function addService(merchant: string, storeId: string, category: string, title: string) {
@@ -88,19 +93,31 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     const found = await request('/admin/districts?q='+encodeURIComponent('深圳 宝安'), 'GET', undefined, manager.token)
     assert.ok(found.data.items.some((district:{id:string;serviceCityCode:string}) =>
       district.id === '1816983' && district.serviceCityCode === '440300'))
-    const ba = await addStore(manager.token,'1816983',{coordinates:{latitude:22.55,longitude:113.885}})
+    const coordinates = {latitude:22.55,longitude:113.885}
+    const located = await request('/admin/stores/location','POST',coordinates,manager.token)
+    assert.equal(located.status,200)
+    assert.equal(located.data.district?.id,'1816983')
+    assert.equal(located.data.district?.serviceCityCode,'440300')
+    assert.equal((await request('/admin/stores/location','POST',coordinates,owner.token)).status,403)
+    const ba = await addStore(manager.token,located.data.district.id,{coordinates,cityCode:located.data.district.serviceCityCode})
+    const unboundStores = await request('/admin/stores?q='+suffix+'&state=unbound','GET',undefined,manager.token)
+    assert.ok(unboundStores.data.items.some((store:{id:string;bound:number}) => store.id === ba && !store.bound))
     const ns = await addStore(manager.token,'6571327')
     const guangzhou = await addStore(manager.token,null,{cityCode:'440100',coordinates:{latitude:23.14,longitude:113.32}})
     assert.equal((await request('/admin/stores/'+ba+'/binding-code','POST',{},owner.token)).status,403)
     const superseded = await codeFor(manager.token,ba)
     const bindingCode = await codeFor(manager.token,ba)
     const bindPath = '/h5/catalog/stores/bind'
+    assert.equal((await request('/h5/catalog/stores/map/bind','POST',{location:coordinates},owner.token)).status,404)
     assert.equal((await request(bindPath,'POST',{code:superseded},owner.token)).status,409)
     assert.equal((await request(bindPath,'POST',{code:bindingCode.toLowerCase()},owner.token)).status,200)
-    assert.equal((await request(bindPath,'POST',{code:bindingCode},dogOwner.token)).status,409)
+    assert.equal((await request(bindPath,'POST',{code:storeBindingQrPrefix+bindingCode},dogOwner.token)).status,409)
     assert.equal((await request('/admin/stores/'+ba+'/binding-code','POST',{},manager.token)).status,409)
+    const boundStores = await request('/admin/stores?q='+suffix+'&state=bound','GET',undefined,manager.token)
+    assert.ok(boundStores.data.items.some((store:{id:string;bound:number}) => store.id === ba && store.bound))
     for (const id of [ns,guangzhou]) {
-      assert.equal((await request(bindPath,'POST',{code:await codeFor(manager.token,id)},owner.token)).status,200)
+      const code = await codeFor(manager.token,id)
+      assert.equal((await request(bindPath,'POST',{code:storeBindingQrPrefix+code},owner.token)).status,200)
     }
     const bound = await request('/h5/catalog/stores/mine','GET',undefined,owner.token)
     assert.deepEqual(new Set(bound.data.stores.map((item:{id:string}) => item.id)),new Set([ba,ns,guangzhou]))

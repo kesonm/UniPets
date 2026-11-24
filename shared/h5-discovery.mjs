@@ -20,3 +20,11 @@ export function servicePhone(value) {
   const number = value.replace(/[\s()-]/g, '')
   return /^\+?[0-9]{5,20}$/.test(number) ? number : ''
 }
+
+export const storeBindingQrPrefix = 'petcloud:store:'
+
+export function parseStoreBindingCode(input) {
+  const value = input.trim()
+  const code = value.startsWith(storeBindingQrPrefix) ? value.slice(storeBindingQrPrefix.length).toUpperCase() : value.toUpperCase()
+  return /^[A-F0-9]{12}$/.test(code) ? code : ''
+}

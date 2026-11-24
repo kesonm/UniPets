@@ -6,7 +6,7 @@ import { photoThumbnail } from './assets.js'
 import { adminLogin, authLimiter, requireAuth } from './auth.js'
 import { catalogStore, catalogValues, catalogVisible, createCatalogItem, h5Area, managedCatalogInput, managedCatalogUpdate } from './catalog.js'
 import { db, rows, transaction } from './db.js'
-import { coordinatesInput, districtInput, listDistricts, serviceCityInput } from './districts.js'
+import { coordinatesInput, districtForPoint, districtInput, listDistricts, serviceCityInput } from './districts.js'
 import { HttpError } from './errors.js'
 import { hasStoreContact, issueStoreBindingCode, type StoreContact } from './h5-store-binding.js'
 import { petSchema, updatePetRecord } from './routes.js'
@@ -103,8 +103,12 @@ adminRouter.get('/stores',list({
     CAST(latitude AS DOUBLE) AS latitude,CAST(longitude AS DOUBLE) AS longitude,
     address,phone,enabled,(owner_user_id IS NOT NULL) AS bound,created_at AS createdAt`,
   from:'h5_stores', search:'name,address,phone,id', order:'created_at DESC,id DESC',
-  states:{enabled:'enabled=TRUE',disabled:'enabled=FALSE'},
+  states:{enabled:'enabled=TRUE',disabled:'enabled=FALSE',bound:'owner_user_id IS NOT NULL',unbound:'owner_user_id IS NULL'},
 }))
+adminRouter.post('/stores/location', (req,res) => {
+  const {latitude,longitude} = coordinatesInput.parse(req.body)
+  res.json({district:districtForPoint(latitude,longitude) ?? null})
+})
 adminRouter.post('/stores',async (req,res) => {
   const item = storeInput.parse(req.body)
   checkDistrict(item.districtCode)

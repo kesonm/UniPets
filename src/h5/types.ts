@@ -56,20 +56,6 @@ export interface BoundStore {
   ready: boolean
 }
 
-export interface StoreMapCandidate {
-  id: string
-  name: string
-  address: string
-  state: 'available' | 'mine' | 'bound' | 'disabled'
-  needsPhone: boolean
-}
-
-export interface StoreMapPreview {
-  district: string
-  cityCode: string
-  stores: StoreMapCandidate[]
-}
-
 export type PersonalContentTab = 'published' | 'likes' | 'favorites'
 export type PersonalContentCounts = Record<PersonalContentTab, number>
 export interface PersonalContentItem {

@@ -15,7 +15,7 @@
     "test:api": "pnpm --dir server test",
     "test:admin": "pnpm --dir server exec node --import tsx --test test/admin.test.ts",
     "test:wechat": "pnpm --dir server exec node --import tsx --test test/wechat.test.ts",
-    "test:h5": "pnpm --dir server exec node --import tsx --test test/h5.test.ts test/h5-programs.test.ts test/h5-business.test.ts test/discovery.test.ts test/store-map.test.ts",
+    "test:h5": "pnpm --dir server exec node --import tsx --test test/h5.test.ts test/h5-programs.test.ts test/h5-business.test.ts test/discovery.test.ts",
     "test:sprites": "node --test shared/test/*.test.mjs",
     "test:video": "pnpm --dir server test:video",
     "test:video-jobs": "pnpm --dir server test:video-jobs",

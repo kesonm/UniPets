@@ -6,7 +6,7 @@ import { api, ApiError } from '../lib/api'
 import type { User } from '../lib/types'
 import AdminEditor from './AdminEditor.vue'
 import AdminServiceCategories from './AdminServiceCategories.vue'
-import { canReview, detailTitle, recordAction, sections, tableCells, type AdminRecord } from './admin'
+import { canReview, detailTitle, recordAction, sections, tableCells, type AdminRecord, type Store } from './admin'
 import './admin.css'
 
 const logo = import.meta.env.BASE_URL + 'assets/brand-mark.png'
@@ -30,6 +30,7 @@ const hasMore = ref(false)
 const working = ref('')
 const drawer = ref<{record?:AdminRecord}|null>(null)
 const categoryManager = ref(false)
+const binding = ref<{store:string;code:string;qrCode:string;expiresAt:string}|null>(null)
 const rows = computed(() => records.value.map(record => ({record,cells:tableCells(record),action:recordAction(record)})))
 const createLabel = computed(() => 'create' in active.value ? active.value.create : '')
 const drawerTitle = computed(() => {
@@ -85,6 +86,7 @@ function navigate() {
 watch(active,() => {
   drawer.value = null
   categoryManager.value = false
+  binding.value = null
   records.value = []
   search.value = ''
   state.value = ''
@@ -113,6 +115,7 @@ function clearSession() {
   records.value = []
   drawer.value = null
   categoryManager.value = false
+  binding.value = null
   loading.value = false
   hasMore.value = false
   password.value = ''
@@ -163,6 +166,35 @@ function saved() {
   drawer.value = null
   void load()
   ElMessage.success('已保存')
+}
+
+async function issueBindingCode(store: Store) {
+  if (working.value) return
+  working.value = store.id
+  const owner = user.value?.id
+  try {
+    const result = await api<{code:string;qrCode:string;expiresAt:string}>('/admin/stores/'+store.id+'/binding-code',{method:'POST',body:{}})
+    if (owner === user.value?.id && active.value.id === 'stores') binding.value = {store:store.name,...result}
+  } catch (cause) {
+    ElMessage.error(errorMessage(cause,'生成门店码失败'))
+    if (active.value.id === 'stores') void load()
+  } finally {
+    working.value = ''
+  }
+}
+
+async function copyBindingCode() {
+  if (!binding.value) return
+  try {
+    await navigator.clipboard.writeText(binding.value.code)
+    ElMessage.success('已复制')
+  } catch {
+    ElMessage.error('请选择门店码手动复制')
+  }
+}
+
+function bindingExpiry(date: string) {
+  return new Date(date).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hourCycle:'h23'})
 }
 
 onMounted(async () => {
@@ -263,6 +295,8 @@ onBeforeUnmount(() => {
                       @click="drawer={record}">{{ 'hidden' in record ? '查看' : '编辑' }}</button>
                     <button v-if="action" class="admin-text-button" :class="{'admin-text-danger':action.notice}" type="button"
                       :disabled="Boolean(working) || loading" @click="applyAction(record)">{{ working===record.id ? '处理中…' : action.label }}</button>
+                    <button v-if="'bound' in record && record.enabled && !record.bound" class="admin-text-button" type="button"
+                      :disabled="Boolean(working) || loading" @click="issueBindingCode(record)">生成门店码</button>
                     <span v-if="'hidden' in record && !canReview(record)" class="admin-muted">—</span>
                   </td>
                 </tr>
@@ -294,6 +328,18 @@ onBeforeUnmount(() => {
     </el-drawer>
     <el-dialog v-model="categoryManager" title="服务分类" width="min(460px, 94vw)" destroy-on-close>
       <AdminServiceCategories @saved="load" />
+    </el-dialog>
+    <el-dialog :model-value="Boolean(binding)" title="门店绑定" width="min(460px, 94vw)"
+      @update:model-value="(open: boolean) => { if (!open) { binding=null; void load() } }">
+      <div v-if="binding" class="admin-editor">
+        <strong>{{ binding.store }}</strong>
+        <img class="admin-binding-qr" :src="binding.qrCode" alt="门店绑定二维码">
+        <label>门店码
+          <input class="admin-binding-code" :value="binding.code" aria-label="门店码" readonly @focus="($event.target as HTMLInputElement).select()">
+        </label>
+        <small>小程序可扫码或输入门店码，有效期至 {{ bindingExpiry(binding.expiresAt) }}。</small>
+        <button class="admin-button admin-primary" type="button" @click="copyBindingCode">复制门店码</button>
+      </div>
     </el-dialog>
   </div>
 </template>

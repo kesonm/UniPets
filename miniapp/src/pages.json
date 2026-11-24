@@ -58,13 +58,6 @@
       }
     },
     {
-      "path": "pages/store-map/index",
-      "style": {
-        "navigationBarTitleText": "地图绑定门店",
-        "navigationBarBackgroundColor": "#f5f4f1"
-      }
-    },
-    {
       "path": "pages/pet-edit/index",
       "style": {
         "navigationBarTitleText": "宠物档案"

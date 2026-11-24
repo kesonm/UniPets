@@ -143,6 +143,9 @@
 .admin-editor textarea { padding-block: 9px; resize: vertical; }
 .admin-editor-pair { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px 12px; }
 .admin-city-picker { width: 100%; }
+.admin-store-locate { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.admin-binding-qr { display: block; width: min(212px,100%); aspect-ratio: 1; object-fit: contain; margin-inline: auto; }
+.admin-binding-code { font-family: ui-monospace,monospace; letter-spacing: .08em; }
 .admin-editor .admin-check { display: flex; align-items: center; gap: 6px; }
 .admin-check input { accent-color: #84631c; }
 .admin-editor-actions {

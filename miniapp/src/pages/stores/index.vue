@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import type { ServiceCategory } from '../../../../shared/h5-discovery.mjs'
+import { parseStoreBindingCode, type ServiceCategory } from '../../../../shared/h5-discovery.mjs'
 import type { BoundStore } from '../../../../src/h5/types'
 import { api, go, toast, user } from '../../lib/client'
 import { pageLoad, submitAction } from '../../lib/page'
@@ -18,21 +18,52 @@ const category = ref('')
 const title = ref('')
 const description = ref('')
 const price = ref('')
+const code = ref('')
+const scanning = ref(false)
+const usableCode = computed(() => parseStoreBindingCode(code.value))
 const {run,busy,error:actionError} = submitAction()
+let revision = 0
 const {loading,error,refresh} = pageLoad(async () => {
+  const current = ++revision
   if (!user.value) return
   const {stores:owned} = await api<{stores:BoundStore[]}>('/h5/catalog/stores/mine')
+  if (current !== revision) return
   stores.value = owned
   if (storeId.value && selected.value?.ready && selected.value.enabled) {
-    categories.value = (await api<{items:ServiceCategory[]}>('/h5/catalog/service-categories')).items
+    const result = await api<{items:ServiceCategory[]}>('/h5/catalog/service-categories')
+    if (current !== revision) return
+    categories.value = result.items
     if (!categories.value.some(item => item.id === category.value)) category.value = categories.value[0]?.id ?? ''
   }
-}, () => { stores.value = []; categories.value = []; category.value = ''; title.value = ''; description.value = ''; price.value = '' })
+}, () => { revision++; stores.value = []; categories.value = []; category.value = ''; title.value = ''; description.value = ''; price.value = ''; code.value = '' })
 
 onLoad(options => {
   storeId.value = options?.storeId ?? ''
   if (storeId.value) uni.setNavigationBarTitle({title:'发布服务帖'})
 })
+
+function bindStore(value = code.value) {
+  return run(async () => {
+    const bindingCode = parseStoreBindingCode(value)
+    if (!bindingCode) throw new Error('请使用后台生成的门店二维码或门店码')
+    await api('/h5/catalog/stores/bind','POST',{code:bindingCode})
+    code.value = ''
+    await refresh()
+    toast('门店已绑定')
+  })
+}
+
+function scanStore() {
+  if (busy.value || scanning.value) return
+  scanning.value = true
+  actionError.value = ''
+  uni.scanCode({
+    scanType:['qrCode'],
+    success: result => { void bindStore(result.result) },
+    fail: result => { if (!result.errMsg?.includes('cancel')) toast('暂时无法扫码，请重试') },
+    complete: () => { scanning.value = false },
+  })
+}
 
 function publish() {
   return run(async () => {
@@ -56,17 +87,26 @@ function publish() {
     <template v-else>
       <LoadState :loading="loading" :error="error" @retry="refresh" />
       <template v-if="!storeId">
-        <view class="card store-map-entry">
-          <view class="store-map-intro">
-            <view class="store-map-icon"><UiIcon name="location" :size="23" /></view>
+        <view class="card store-binding-card">
+          <view class="store-binding-intro">
+            <view class="store-binding-icon" aria-hidden="true">
+              <view class="store-qr-mark"><view /><view /><view /><view /></view>
+            </view>
             <view>
-              <text class="heading">地图绑定门店</text>
-              <text class="sub">选择门店位置后确认绑定</text>
+              <text class="heading">绑定门店</text>
+              <text class="sub">扫码或输入后台生成的门店码</text>
             </view>
           </view>
-          <button id="open-store-map" class="primary store-map-button" @tap="go('store-map')">
-            <text>打开地图</text><UiIcon name="right" :size="13" />
+          <button id="scan-store-binding" class="primary store-scan-button" :disabled="busy || scanning" @tap="scanStore">
+            {{ scanning ? '打开扫码…' : '扫码绑定' }}
           </button>
+          <text class="label store-code-label">门店码</text>
+          <view class="store-code-row">
+            <input id="store-binding-code" v-model="code" maxlength="12" :disabled="busy || scanning"
+              aria-label="门店码" placeholder="输入 12 位门店码" confirm-type="done" @confirm="usableCode && bindStore()" />
+            <button id="bind-store" class="small" :disabled="busy || scanning || !usableCode" @tap="bindStore()">绑定</button>
+          </view>
+          <text v-if="actionError" class="error">{{ actionError }}</text>
         </view>
         <view class="spread store-list-heading">
           <text class="heading">已绑定门店</text>
@@ -111,11 +151,18 @@ function publish() {
 </template>
 
 <style scoped>
-.store-map-entry { padding: 15px; background: linear-gradient(135deg, #fff0b7, #fffcf0); border-color: #f0e0aa; }
-.store-map-intro { display: flex; align-items: center; gap: 12px; margin-bottom: 13px; }
-.store-map-intro .heading { margin: 0 0 4px; }
-.store-map-icon { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none; border-radius: 13px; background: #ffe187; }
-.store-map-button { display: flex; align-items: center; justify-content: space-between; width: 100%; padding-inline: 14px; }
+.store-binding-card { padding: 15px; background: linear-gradient(135deg, #fff0b7, #fffcf0); border-color: #f0e0aa; }
+.store-binding-intro { display: flex; align-items: center; gap: 12px; margin-bottom: 13px; }
+.store-binding-intro .heading { margin: 0 0 4px; }
+.store-binding-icon { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none; border-radius: 13px; background: #ffe187; }
+.store-qr-mark { display: grid; grid-template-columns: repeat(2,7px); gap: 3px; }
+.store-qr-mark view { width: 7px; height: 7px; box-sizing: border-box; border: 1.5px solid #6a4a0a; border-radius: 1px; }
+.store-qr-mark view:last-child { background: #6a4a0a; }
+.store-scan-button { width: 100%; }
+.store-code-label { margin-top: 13px; }
+.store-code-row { display: flex; align-items: stretch; gap: 8px; }
+.store-code-row input { flex: 1; min-width: 0; background: #fffefa; text-transform: uppercase; }
+.store-code-row button { flex: none; min-width: 55px; }
 .store-list-heading { margin: 18px 0 9px; }
 .store-list-heading .heading { margin: 0; }
 .store-heading { gap: 8px; }

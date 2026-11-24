@@ -16,9 +16,9 @@ function settings() {
   }))
 }
 
-export function deviceCoordinates(type: 'wgs84' | 'gcj02' = 'wgs84') {
+export function deviceCoordinates() {
   return new Promise<ServiceCoordinates>((resolve, reject) => uni.getLocation({
-    type, success: resolve, fail: () => reject(new Error('暂时无法获取当前位置')),
+    type:'wgs84', success: resolve, fail: () => reject(new Error('暂时无法获取当前位置')),
   }))
 }
 

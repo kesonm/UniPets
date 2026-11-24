@@ -32,6 +32,9 @@ const districts = ref<District[]>([])
 const selectedDistrict = ref<District>()
 const districtBusy = ref(false)
 const districtError = ref('')
+const locatingStore = ref(false)
+const locationStatus = ref('')
+const locationError = ref('')
 let districtRevision = 0
 const districtOptions = computed(() => selectedDistrict.value && !districts.value.some(item => item.id === selectedDistrict.value?.id)
   ? [selectedDistrict.value, ...districts.value] : districts.value)
@@ -61,6 +64,42 @@ async function findDistricts(q = '', id = '') {
 function chooseDistrict(id: string) {
   selectedDistrict.value = districtOptions.value.find(item => item.id === id)
   if (selectedDistrict.value?.serviceCityCode) storeForm.cityCode = selectedDistrict.value.serviceCityCode
+}
+
+async function locateStore() {
+  if (locatingStore.value || busy.value) return
+  locatingStore.value = true
+  locationError.value = ''
+  locationStatus.value = ''
+  try {
+    if (!navigator.geolocation) throw new Error('当前浏览器无法使用定位')
+    const coords = await new Promise<GeolocationCoordinates>((resolve,reject) => {
+      navigator.geolocation.getCurrentPosition(
+        position => resolve(position.coords),
+        failure => reject(new Error(failure.code === 1 ? '请允许此网站使用定位' : '暂时无法获取当前位置')),
+        {enableHighAccuracy:true,timeout:12000,maximumAge:0},
+      )
+    })
+    storeForm.latitude = coords.latitude.toFixed(6)
+    storeForm.longitude = coords.longitude.toFixed(6)
+    const result = await api<{district:District|null}>('/admin/stores/location',{
+      method:'POST',body:{latitude:coords.latitude,longitude:coords.longitude},
+    })
+    const district = result.district
+    if (district) {
+      selectedDistrict.value = district
+      storeForm.districtCode = district.id
+      if (district.serviceCityCode) storeForm.cityCode = district.serviceCityCode
+      if (!storeForm.address) storeForm.address = [...new Set([district.province,district.city,district.name].filter(Boolean))].join('')
+      locationStatus.value = districtLabel(district)
+    } else {
+      locationStatus.value = '经纬度已填写，请选择服务城市'
+    }
+  } catch (cause) {
+    locationError.value = cause instanceof Error ? cause.message : '定位失败'
+  } finally {
+    locatingStore.value = false
+  }
 }
 const petForm = reactive({name:pet?.name ?? '',species:pet?.species ?? 'other',breed:pet?.breed ?? '',
   gender:pet?.gender ?? 'unknown',birthday:pet?.birthday ?? '',notes:pet?.notes ?? ''})
@@ -164,7 +203,7 @@ function formValues() {
 }
 
 async function save() {
-  if (busy.value) return
+  if (busy.value || locatingStore.value) return
   busy.value = true
   error.value = ''
   const method = account ? 'PATCH' : record ? 'PUT' : 'POST'
@@ -205,6 +244,13 @@ onMounted(() => {
     </template>
     <template v-else-if="section==='stores'">
       <label>门店名称<input v-model.trim="storeForm.name" maxlength="120" required></label>
+      <div class="admin-store-locate">
+        <button id="admin-locate-store" class="admin-button" type="button" :disabled="locatingStore || busy" @click="locateStore">
+          {{ locatingStore ? '正在定位…' : '使用当前位置' }}
+        </button>
+        <span v-if="locationStatus" class="admin-muted" role="status">{{ locationStatus }}</span>
+      </div>
+      <p v-if="locationError" class="admin-error" role="alert">{{ locationError }}</p>
       <label>所在商圈
         <select v-model="storeForm.area"><option value="">未指定</option><option v-for="area in h5Areas" :key="area.id" :value="area.id">{{ area.label }}</option></select>
       </label>
@@ -220,7 +266,7 @@ onMounted(() => {
         <el-cascader v-model="storeForm.cityCode" class="admin-city-picker" aria-label="服务城市" :options="cityOptions"
           :props="cityPickerProps" filterable clearable placeholder="选择省份和城市" />
       </label>
-      <label>门店地址<input v-model.trim="storeForm.address" maxlength="160" autocomplete="street-address"></label>
+      <label>门店地址<input v-model.trim="storeForm.address" maxlength="160" autocomplete="street-address" placeholder="填写街道和门牌号"></label>
       <label>联系电话<input v-model.trim="storeForm.phone" type="tel" maxlength="40" autocomplete="tel"></label>
       <div class="admin-editor-pair">
         <label>门店经度<input v-model="storeForm.longitude" type="number" min="-179.999999" max="180" step="any" placeholder="WGS84"></label>
@@ -285,7 +331,7 @@ onMounted(() => {
     <p v-if="error" class="admin-error" role="alert">{{ error }}</p>
     <footer class="admin-editor-actions">
       <button class="admin-button" type="button" :disabled="busy" @click="emit('close')">取消</button>
-      <button class="admin-button admin-primary" type="submit" :disabled="busy || (usesServiceCategories && !localCategories.length)">{{ busy ? '正在保存…' : '保存' }}</button>
+      <button class="admin-button admin-primary" type="submit" :disabled="busy || locatingStore || (usesServiceCategories && !localCategories.length)">{{ busy ? '正在保存…' : '保存' }}</button>
     </footer>
   </form>
 </template>
