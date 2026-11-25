@@ -98,7 +98,9 @@
 
 `GET /admin/stores/bound` 分页读取已绑定门店，支持按门店名称、地址或电话搜索，并按营业状态筛选。
 
-`GET /admin/stores/binding-codes` 返回当前的 10 个绑定码。`GET /admin/stores/binding-codes/:slot/qr` 返回相应绑定码的二维码。二维码包含 `petcloud:store:` 前缀及绑定码。创建门店、绑定账号、消费旧码和补发该位置的新码在同一事务完成。未使用的绑定码持续有效，一个账号可以通过多个绑定码登记多家门店。
+`GET /admin/stores/binding-codes` 返回当前 10 个绑定码和对应的二维码 `qrCode`。`GET /admin/stores/binding-codes/:slot/qr` 可单独读取一条。二维码包含 `petcloud:store:` 前缀及绑定码。商户成功绑定后会自动补发对应位置的新码，一个账号可以通过多个码登记多家门店。
+
+管理员可用 `POST /admin/stores/binding-codes/:slot/refresh` 提交当前 `code`，原子地作废这一位置的旧码并返回新码和二维码。页面提交的码已更换时返回 `409`。
 
 发布记录包括动态、已发布的宠物故事和用户发出的门店服务帖。点赞列表包括三种内容，收藏列表包括动态和宠物故事。点赞和收藏只统计当前可打开的公开内容。
 

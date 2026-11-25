@@ -241,7 +241,6 @@ onBeforeUnmount(() => {
           </div>
         </header>
         <div :class="{'admin-store-workspace':isStores}">
-          <AdminStoreCodes v-if="isStores" @updated="load" />
           <section class="admin-panel" :class="{'admin-bound-stores':isStores}" :aria-label="listTitle" :aria-busy="loading">
             <header v-if="isStores" class="admin-bound-stores-header">
               <h2>{{ listTitle }}</h2>
@@ -302,6 +301,7 @@ onBeforeUnmount(() => {
               </div>
             </footer>
           </section>
+          <AdminStoreCodes v-if="isStores" @updated="load" />
         </div>
       </main>
     </div>

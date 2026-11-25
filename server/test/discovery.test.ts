@@ -52,7 +52,7 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
   async function bindingCodes(admin: string) {
     const result = await request(codesPath,'GET',undefined,admin)
     assert.equal(result.status,200)
-    return result.data.codes as {slot:number;code:string}[]
+    return result.data.codes as {slot:number;code:string;qrCode:string}[]
   }
   async function addService(merchant: string, storeId: string, category: string, title: string) {
     const result = await request(servicePath,'POST',{
@@ -100,6 +100,7 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     const qr = await request(codesPath+'/1/qr','GET',undefined,manager.token)
     assert.equal(qr.status,200)
     assert.equal(qr.data.code,codes[0].code)
+    assert.equal(qr.data.qrCode,codes[0].qrCode)
     assert.match(qr.data.qrCode,/^data:image\/png;base64,/)
     assert.deepEqual(Buffer.from(qr.data.qrCode.split(',')[1],'base64'),await renderQrCode(storeBindingQrPrefix+codes[0].code))
 
@@ -125,6 +126,22 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     assert.equal((await request(bindPath,'POST',{...storeDetails('重放验证'),code:bindingCode},dogOwner.token)).status,409)
     assert.equal((await request(bindPath,'POST',{...profile,code:codes[1].code},dogOwner.token)).status,409)
     assert.deepEqual(await bindingCodes(manager.token),rotated)
+
+    const old = rotated[9]
+    const refreshPath = `${codesPath}/${old.slot}/refresh`
+    assert.equal((await request(refreshPath,'POST',{code:old.code},owner.token)).status,403)
+    assert.equal((await request(refreshPath,'POST',{code:rotated[0].code},manager.token)).status,409)
+    const refreshes = await Promise.all([1,2].map(() => request(refreshPath,'POST',{code:old.code},manager.token)))
+    assert.deepEqual(refreshes.map(result => result.status).sort(),[200,409])
+    const replacement = refreshes.find(result => result.status===200)!.data
+    assert.equal(replacement.slot,old.slot)
+    assert.notEqual(replacement.code,old.code)
+    assert.deepEqual(Buffer.from(replacement.qrCode.split(',')[1],'base64'),await renderQrCode(storeBindingQrPrefix+replacement.code))
+    assert.deepEqual(await bindingCodes(manager.token),[...rotated.slice(0,9),replacement])
+    assert.equal((await request(codeCheck,'POST',{code:old.code},owner.token)).status,409)
+    assert.equal((await request(bindPath,'POST',{...storeDetails('旧码刷新验证'),code:storeBindingQrPrefix+old.code},owner.token)).status,409)
+    assert.equal((await request(codeCheck,'POST',{code:replacement.code},owner.token)).status,200)
+
     const boundStores = await request('/admin/stores/bound?q='+suffix,'GET',undefined,manager.token)
     assert.ok(boundStores.data.items.some((store:{id:string;bound:number}) => store.id === ba && store.bound))
     const ns = await bindStore(owner.token,storeBindingQrPrefix+codes[1].code,storeDetails('南山测试门店',22.533,113.93))

@@ -7,7 +7,7 @@ import { adminLogin, authLimiter, requireAuth } from './auth.js'
 import { catalogStore, catalogValues, catalogVisible, createCatalogItem, managedCatalogInput, managedCatalogUpdate } from './catalog.js'
 import { db, rows, transaction } from './db.js'
 import { HttpError } from './errors.js'
-import { hasStoreContact, listStoreBindingCodes, storeBindingQr, type StoreContact } from './h5-store-binding.js'
+import { hasStoreContact, listStoreBindingCodes, refreshStoreBindingCode, storeBindingQr, type StoreContact } from './h5-store-binding.js'
 import { petSchema, updatePetRecord } from './routes.js'
 import { checkServiceCategory, getServiceCategories, serviceCategoryId, serviceCategoryJoin, serviceCategoryLabel, serviceCategoryName } from './service-categories.js'
 
@@ -91,14 +91,17 @@ const storeList: ListQuery = {
   from:'h5_stores', search:'name,address,phone,id', order:'created_at DESC,id DESC',
   states:{enabled:'enabled=TRUE',disabled:'enabled=FALSE',bound:'owner_user_id IS NOT NULL',unbound:'owner_user_id IS NULL'},
 }
+const bindingCodeSlot = z.coerce.number().int().min(1).max(10)
 adminRouter.get('/stores',list(storeList))
 adminRouter.get('/stores/bound',list({...storeList,scope:'owner_user_id IS NOT NULL'}))
 adminRouter.get('/stores/binding-codes', async (_req,res) => {
   res.json({codes:await listStoreBindingCodes()})
 })
 adminRouter.get('/stores/binding-codes/:slot/qr', async (req,res) => {
-  const slot = z.coerce.number().int().min(1).max(10).parse(req.params.slot)
-  res.json(await storeBindingQr(slot))
+  res.json(await storeBindingQr(bindingCodeSlot.parse(req.params.slot)))
+})
+adminRouter.post('/stores/binding-codes/:slot/refresh', async (req,res) => {
+  res.json(await refreshStoreBindingCode(bindingCodeSlot.parse(req.params.slot),req.body))
 })
 adminRouter.patch('/stores/:id',async (req,res) => {
   const {enabled} = enabledInput.parse(req.body)

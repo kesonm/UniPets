@@ -27,7 +27,9 @@ const profileInput = z.object({
   location:coordinatesInput,
   cityCode:serviceCityInput.optional(),
 }).strict()
-const invalidCode = '绑定码无效或已被使用，请获取新的绑定码'
+const invalidCode = '绑定码无效或已失效，请获取新的绑定码'
+interface BindingCode { slot: number; code: string }
+const bindingQrCache = new Map<number, BindingCode & {qrCode:string}>()
 
 export interface StoreContact {
   area: string|null
@@ -40,19 +42,34 @@ export function hasStoreContact(store: StoreContact) {
   return Boolean((store.area || store.cityCode || store.districtCode) && servicePhone(store.phone))
 }
 
-export function listStoreBindingCodes() {
-  return rows<{slot:number;code:string}>('SELECT slot,code FROM h5_store_binding_codes WHERE slot IS NOT NULL ORDER BY slot')
+async function withBindingQr(item: BindingCode) {
+  const cached = bindingQrCache.get(item.slot)
+  if (cached?.code === item.code) return cached
+  const qrCode = 'data:image/png;base64,'+(await renderQrCode(storeBindingQrPrefix+item.code)).toString('base64')
+  const result = {...item,qrCode}
+  bindingQrCache.set(item.slot,result)
+  return result
+}
+
+export async function listStoreBindingCodes() {
+  const active = await rows<BindingCode>('SELECT slot,code FROM h5_store_binding_codes WHERE slot IS NOT NULL ORDER BY slot')
+  return Promise.all(active.map(withBindingQr))
 }
 
 export async function storeBindingQr(slot: number) {
   const [active] = await rows<{code:string}>('SELECT code FROM h5_store_binding_codes WHERE slot=?',[slot])
   if (!active) throw new HttpError(404,'绑定码不存在')
-  const qrCode = 'data:image/png;base64,'+(await renderQrCode(storeBindingQrPrefix+active.code)).toString('base64')
-  return {slot,code:active.code,qrCode}
+  return withBindingQr({slot,code:active.code})
 }
 
 function isDuplicate(error: unknown) {
   return (error as {code?:string})?.code === 'ER_DUP_ENTRY'
+}
+
+async function lockBindingSlot(conn: PoolConnection, code: string) {
+  const [[active]] = await conn.execute<(RowDataPacket & {slot:number})[]>(
+    'SELECT slot FROM h5_store_binding_codes WHERE code=? AND slot IS NOT NULL FOR UPDATE',[code])
+  return active?.slot
 }
 
 async function replaceBindingCode(conn: PoolConnection, code: string, slot: number) {
@@ -61,12 +78,21 @@ async function replaceBindingCode(conn: PoolConnection, code: string, slot: numb
     const nextCode = randomBytes(6).toString('hex').toUpperCase()
     try {
       await conn.execute('INSERT INTO h5_store_binding_codes (code,slot) VALUES (?,?)',[nextCode,slot])
-      return
+      return nextCode
     } catch (error) {
       if (!isDuplicate(error)) throw error
     }
   }
   throw new HttpError(503,'生成绑定码失败，请稍后重试')
+}
+
+export function refreshStoreBindingCode(slot: number, body: unknown) {
+  const {code} = bindingCodeInput.parse(body)
+  return transaction(async conn => {
+    if (await lockBindingSlot(conn,code) !== slot) throw new HttpError(409,'绑定码已更新，请使用新码')
+    const nextCode = await replaceBindingCode(conn,code,slot)
+    return withBindingQr({slot,code:nextCode})
+  })
 }
 
 function storeLocation(point: z.infer<typeof coordinatesInput>) {
@@ -112,13 +138,12 @@ h5StoreBindingRouter.post(route + '/bind', requireAuth, bindingAttempts, async (
   const id = randomUUID()
   try {
     await transaction(async conn => {
-      const [[active]] = await conn.execute<(RowDataPacket & {slot:number})[]>(
-        'SELECT slot FROM h5_store_binding_codes WHERE code=? AND slot IS NOT NULL FOR UPDATE',[code])
-      if (!active) throw new HttpError(409,invalidCode)
+      const slot = await lockBindingSlot(conn,code)
+      if (slot === undefined) throw new HttpError(409,invalidCode)
       await conn.execute(`INSERT INTO h5_stores
         (id,owner_user_id,name,address,phone,district_code,city_code,latitude,longitude,registration_key)
         VALUES (?,?,?,?,?,?,?,?,?,?)`,[id,req.user.id,...fields])
-      await replaceBindingCode(conn,code,active.slot)
+      await replaceBindingCode(conn,code,slot)
     })
   } catch (error) {
     if (isDuplicate(error)) throw new HttpError(409,'同名同地址的门店已绑定，请核对门店资料')

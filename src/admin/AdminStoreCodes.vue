@@ -1,36 +1,38 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { Refresh } from '@element-plus/icons-vue'
+import { DocumentCopy, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { api } from '../lib/api'
 
-interface BindingCode { slot: number; code: string }
+interface BindingCode { slot: number; code: string; qrCode: string }
 const emit = defineEmits<{updated:[]}>()
 const endpoint = '/admin/stores/binding-codes'
 const codes = ref<BindingCode[]>([])
 const loading = ref(false)
 const error = ref('')
-const qr = ref<(BindingCode & {qrCode:string})|null>(null)
-const qrLoading = ref(false)
+const qr = ref<BindingCode|null>(null)
+const refreshingSlot = ref<number|null>(null)
 let active = true
 let timer = 0
+let revision = 0
 
 async function refresh() {
-  if (loading.value) return
+  if (loading.value || refreshingSlot.value !== null) return
+  const currentRevision = revision
   loading.value = true
   try {
     const {codes:current} = await api<{codes:BindingCode[]}>(endpoint)
-    if (!active) return
+    if (!active || currentRevision !== revision) return
     const changed = codes.value.length !== current.length || codes.value.some((item,index) => item.code !== current[index]?.code)
     codes.value = current
     if (changed) emit('updated')
     error.value = ''
     if (qr.value && !current.some(item => item.code === qr.value?.code)) {
       qr.value = null
-      ElMessage.info('这个绑定码已被使用，已补发新码')
+      ElMessage.info('该绑定码已更新，请使用新码')
     }
   } catch (cause) {
-    if (active) error.value = cause instanceof Error ? cause.message : '绑定码读取失败'
+    if (active && currentRevision === revision) error.value = cause instanceof Error ? cause.message : '绑定码读取失败'
   } finally {
     loading.value = false
   }
@@ -49,18 +51,21 @@ async function copy(code: string) {
   }
 }
 
-async function showQr(slot: number) {
-  if (qrLoading.value) return
-  qrLoading.value = true
+async function refreshCode(item: BindingCode) {
+  if (refreshingSlot.value !== null) return
+  // Ignore any polling response that started before this replacement.
+  revision++
+  refreshingSlot.value = item.slot
   try {
-    const result = await api<BindingCode & {qrCode:string}>(endpoint+'/'+slot+'/qr')
+    const result = await api<BindingCode>(`${endpoint}/${item.slot}/refresh`,{method:'POST',body:{code:item.code}})
     if (!active) return
-    qr.value = result
-    if (!codes.value.some(item => item.code === result.code)) void refresh()
+    codes.value = codes.value.map(code => code.slot === item.slot ? result : code)
+    ElMessage.success('已刷新，旧码已失效')
   } catch (cause) {
-    if (active) ElMessage.error(cause instanceof Error ? cause.message : '二维码读取失败')
+    if (active) ElMessage.error(cause instanceof Error ? cause.message : '绑定码刷新失败')
   } finally {
-    qrLoading.value = false
+    refreshingSlot.value = null
+    if (active) void refresh()
   }
 }
 
@@ -79,24 +84,34 @@ onBeforeUnmount(() => {
 <template>
   <section class="admin-panel admin-store-codes" aria-labelledby="store-codes-title">
     <header class="admin-store-codes-header">
-      <div>
-        <div class="admin-store-codes-title">
-          <h2 id="store-codes-title">门店绑定码</h2>
-          <span v-if="codes.length" class="admin-status admin-status-positive">{{ codes.length }} 个可用</span>
-        </div>
-        <p v-if="codes.length" class="admin-muted">使用后自动补发</p>
+      <div class="admin-store-codes-title">
+        <h2 id="store-codes-title">门店绑定码</h2>
+        <span v-if="codes.length" class="admin-status admin-status-positive">{{ codes.length }} 个可用</span>
       </div>
-      <button class="admin-button admin-icon-button" type="button" title="刷新绑定码" aria-label="刷新绑定码"
-        :disabled="loading" @click="refresh"><el-icon><Refresh /></el-icon></button>
+      <p class="admin-muted">使用后自动补发。刷新会作废本行旧码。</p>
     </header>
-    <p v-if="error" class="admin-error" role="alert">{{ error }}</p>
+    <div v-if="error" class="admin-store-codes-error">
+      <p class="admin-error" role="alert">{{ error }}</p>
+      <button class="admin-button" type="button" :disabled="loading" @click="refresh">重试</button>
+    </div>
     <p v-else-if="!codes.length" class="admin-muted" role="status">{{ loading ? '正在读取绑定码…' : '暂无可用绑定码' }}</p>
     <ul v-else class="admin-store-codes-grid">
       <li v-for="item in codes" :key="item.slot" class="admin-store-code">
-        <code class="admin-binding-code">{{ item.code }}</code>
-        <div class="admin-store-code-actions">
-          <button class="admin-text-button" type="button" :disabled="!!error" @click="copy(item.code)">复制</button>
-          <button class="admin-text-button" type="button" :disabled="qrLoading || !!error" @click="showQr(item.slot)">二维码</button>
+        <button class="admin-store-code-qr" type="button" :aria-label="`放大第 ${item.slot} 个绑定码的二维码`"
+          :disabled="refreshingSlot === item.slot" @click="qr=item">
+          <img :src="item.qrCode" alt="" width="72" height="72">
+        </button>
+        <div class="admin-store-code-details">
+          <code class="admin-binding-code">{{ item.code }}</code>
+          <div class="admin-store-code-actions">
+            <button class="admin-button" type="button" :disabled="refreshingSlot === item.slot" @click="copy(item.code)">
+              <el-icon aria-hidden="true"><DocumentCopy /></el-icon>复制
+            </button>
+            <button class="admin-button" type="button" title="刷新并作废本行旧码" :disabled="refreshingSlot !== null"
+              @click="refreshCode(item)">
+              <el-icon aria-hidden="true"><Refresh /></el-icon>{{ refreshingSlot === item.slot ? '刷新中…' : '刷新' }}
+            </button>
+          </div>
         </div>
       </li>
     </ul>
