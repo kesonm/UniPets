@@ -6,6 +6,7 @@ import { api, ApiError } from '../lib/api'
 import type { User } from '../lib/types'
 import AdminEditor from './AdminEditor.vue'
 import AdminServiceCategories from './AdminServiceCategories.vue'
+import AdminStoreCodes from './AdminStoreCodes.vue'
 import AdminStoreMap from './AdminStoreMap.vue'
 import { canReview, detailTitle, recordAction, sections, tableCells, type AdminRecord, type Store, type StoreOnMap } from './admin'
 import './admin.css'
@@ -29,11 +30,10 @@ const state = ref('')
 const page = ref(1)
 const hasMore = ref(false)
 const working = ref('')
-const drawer = ref<{record?:AdminRecord;openStorePicker?:boolean}|null>(null)
+const drawer = ref<{record?:AdminRecord}|null>(null)
 const categoryManager = ref(false)
 const storeMapOpen = ref(false)
 const focusStoreId = ref('')
-const binding = ref<{store:string;code:string;qrCode:string;expiresAt:string}|null>(null)
 const rows = computed(() => records.value.map(record => ({record,cells:tableCells(record),action:recordAction(record)})))
 const storesOnMap = computed(() => records.value.filter((record):record is StoreOnMap => 'mapPoint' in record))
 const createLabel = computed(() => 'create' in active.value ? active.value.create : '')
@@ -97,11 +97,6 @@ function storeHasCoordinates(store: Store) {
   return store.latitude != null && store.longitude != null
 }
 
-function locateOnMap(store: Store) {
-  if (storeHasCoordinates(store)) showStoreMap(true,store.id)
-  else drawer.value = {record:store,openStorePicker:true}
-}
-
 function navigate() {
   active.value = fromHash()
   navigationOpen.value = false
@@ -109,7 +104,6 @@ function navigate() {
 watch(active,() => {
   drawer.value = null
   categoryManager.value = false
-  binding.value = null
   storeMapOpen.value = false
   focusStoreId.value = ''
   records.value = []
@@ -142,7 +136,6 @@ function clearSession() {
   categoryManager.value = false
   storeMapOpen.value = false
   focusStoreId.value = ''
-  binding.value = null
   loading.value = false
   hasMore.value = false
   password.value = ''
@@ -193,35 +186,6 @@ function saved() {
   drawer.value = null
   void load()
   ElMessage.success('已保存')
-}
-
-async function issueBindingCode(store: Store) {
-  if (working.value) return
-  working.value = store.id
-  const owner = user.value?.id
-  try {
-    const result = await api<{code:string;qrCode:string;expiresAt:string}>('/admin/stores/'+store.id+'/binding-code',{method:'POST',body:{}})
-    if (owner === user.value?.id && active.value.id === 'stores') binding.value = {store:store.name,...result}
-  } catch (cause) {
-    ElMessage.error(errorMessage(cause,'生成门店码失败'))
-    if (active.value.id === 'stores') void load()
-  } finally {
-    working.value = ''
-  }
-}
-
-async function copyBindingCode() {
-  if (!binding.value) return
-  try {
-    await navigator.clipboard.writeText(binding.value.code)
-    ElMessage.success('已复制')
-  } catch {
-    ElMessage.error('请选择门店码手动复制')
-  }
-}
-
-function bindingExpiry(date: string) {
-  return new Date(date).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hourCycle:'h23'})
 }
 
 onMounted(async () => {
@@ -286,14 +250,15 @@ onBeforeUnmount(() => {
       <main class="admin-main">
         <header class="admin-page-title">
           <h1>{{ active.title }}</h1>
-          <div v-if="createLabel" class="admin-title-actions">
+          <div v-if="createLabel || active.id==='stores'" class="admin-title-actions">
             <button v-if="active.id==='services'" class="admin-button" type="button" @click="categoryManager=true">管理分类</button>
             <button v-if="active.id==='stores'" class="admin-button" type="button" @click="showStoreMap(!storeMapOpen)">
               <el-icon><component :is="storeMapOpen ? Menu : Location" /></el-icon>{{ storeMapOpen ? '门店列表' : '门店地图' }}
             </button>
-            <button class="admin-button admin-primary" type="button" @click="drawer={}"><el-icon><Plus /></el-icon>{{ createLabel }}</button>
+            <button v-if="createLabel" class="admin-button admin-primary" type="button" @click="drawer={}"><el-icon><Plus /></el-icon>{{ createLabel }}</button>
           </div>
         </header>
+        <AdminStoreCodes v-if="active.id==='stores'" @redeemed="load" />
         <section class="admin-panel" :aria-label="storeMapOpen ? '门店地图与筛选' : active.title+'列表'" :aria-busy="loading">
           <form class="admin-toolbar" role="search" @submit.prevent="filterRecords">
             <div class="admin-search">
@@ -312,8 +277,7 @@ onBeforeUnmount(() => {
             <div v-if="listError" class="admin-empty" role="alert">
               <p>{{ listError }}</p><button class="admin-button" type="button" @click="load">重试</button>
             </div>
-            <AdminStoreMap v-else :stores="storesOnMap" :focus-id="focusStoreId" :loading="loading"
-              @edit="store => drawer={record:store,openStorePicker:!store.mapPoint}" />
+            <AdminStoreMap v-else :stores="storesOnMap" :focus-id="focusStoreId" :loading="loading" />
           </template>
           <template v-else>
           <div class="admin-table-scroll" tabindex="0" :aria-label="active.title+'表格'">
@@ -329,15 +293,12 @@ onBeforeUnmount(() => {
                     </template>
                   </td>
                   <td class="admin-actions">
-                    <button v-if="!('hidden' in record) || canReview(record)" class="admin-text-button" type="button"
+                    <button v-if="!('bound' in record) && (!('hidden' in record) || canReview(record))" class="admin-text-button" type="button"
                       @click="drawer={record}">{{ 'hidden' in record ? '查看' : '编辑' }}</button>
-                    <button v-if="'bound' in record" class="admin-text-button" type="button" @click="locateOnMap(record)">
-                      {{ storeHasCoordinates(record) ? '定位' : '补位置' }}
-                    </button>
+                    <button v-if="'bound' in record && storeHasCoordinates(record)" class="admin-text-button" type="button"
+                      @click="showStoreMap(true,record.id)">查看位置</button>
                     <button v-if="action" class="admin-text-button" :class="{'admin-text-danger':action.notice}" type="button"
                       :disabled="Boolean(working) || loading" @click="applyAction(record)">{{ working===record.id ? '处理中…' : action.label }}</button>
-                    <button v-if="'bound' in record && record.enabled && !record.bound" class="admin-text-button" type="button"
-                      :disabled="Boolean(working) || loading" @click="issueBindingCode(record)">生成门店码</button>
                     <span v-if="'hidden' in record && !canReview(record)" class="admin-muted">—</span>
                   </td>
                 </tr>
@@ -366,23 +327,11 @@ onBeforeUnmount(() => {
     </div>
     <el-drawer :model-value="Boolean(drawer)" :title="drawerTitle" class="admin-drawer" size="min(500px, 100%)" :close-on-click-modal="false"
       @update:model-value="(open: boolean) => { if (!open) drawer=null }">
-      <AdminEditor v-if="drawer" :section="active.id" :record="drawer.record" :open-store-picker="drawer.openStorePicker"
+      <AdminEditor v-if="drawer" :section="active.id" :record="drawer.record"
         @saved="saved" @close="drawer=null" @stale="load" />
     </el-drawer>
     <el-dialog v-model="categoryManager" title="服务分类" width="min(460px, 94vw)" destroy-on-close>
       <AdminServiceCategories @saved="load" />
-    </el-dialog>
-    <el-dialog :model-value="Boolean(binding)" title="门店绑定" width="min(460px, 94vw)"
-      @update:model-value="(open: boolean) => { if (!open) { binding=null; void load() } }">
-      <div v-if="binding" class="admin-editor">
-        <strong>{{ binding.store }}</strong>
-        <img class="admin-binding-qr" :src="binding.qrCode" alt="门店绑定二维码">
-        <label>门店码
-          <input class="admin-binding-code" :value="binding.code" aria-label="门店码" readonly @focus="($event.target as HTMLInputElement).select()">
-        </label>
-        <small>小程序可扫码或输入门店码，有效期至 {{ bindingExpiry(binding.expiresAt) }}。</small>
-        <button class="admin-button admin-primary" type="button" @click="copyBindingCode">复制门店码</button>
-      </div>
     </el-dialog>
   </div>
 </template>

@@ -5,7 +5,6 @@ import type { StoreOnMap } from './admin'
 import { getTencentMapKey, loadTencentMap, storeMarkerUrl, type MapView, type MultiMarker, type TencentMap } from './tencent-map'
 
 const props = defineProps<{stores:StoreOnMap[];focusId:string;loading:boolean}>()
-const emit = defineEmits<{edit:[store:StoreOnMap]}>()
 const host = ref<HTMLElement>()
 const selectedId = ref(props.focusId)
 const selected = computed(() => props.stores.find(store => store.id === selectedId.value))
@@ -100,10 +99,8 @@ onBeforeUnmount(() => {
           <strong>{{ selected.name }}</strong>
           <p>{{ selected.address || '待补充地址' }}</p>
           <a v-if="selected.phone" :href="'tel:'+selected.phone">{{ selected.phone }}</a>
-          <div class="admin-store-map-actions">
-            <button class="admin-button" type="button" @click="emit('edit',selected)">{{ selected.mapPoint ? '编辑门店' : '补录位置' }}</button>
-            <a v-if="selected.mapPoint" :href="storeMarkerUrl(selected.mapPoint)" target="_blank" rel="noopener noreferrer">在腾讯地图打开</a>
-          </div>
+          <a v-if="selected.mapPoint" :href="storeMarkerUrl(selected.mapPoint)" target="_blank" rel="noopener noreferrer">在腾讯地图打开</a>
+          <p v-else>门店负责人可在小程序补录位置。</p>
         </div>
         <p v-if="loading && !stores.length" class="admin-muted" role="status">正在读取门店…</p>
         <p v-else-if="!stores.length" class="admin-muted">暂无符合条件的门店</p>

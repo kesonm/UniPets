@@ -2,15 +2,17 @@
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { parseStoreBindingCode, type ServiceCategory } from '../../../../shared/h5-discovery.mjs'
-import type { BoundStore } from '../../../../src/h5/types'
+import type { BoundStore, MerchantStoreProfile } from '../../../../src/h5/types'
 import { api, go, toast, user } from '../../lib/client'
 import { pageLoad, submitAction } from '../../lib/page'
 import ChoiceField from '../../components/ChoiceField.vue'
 import LoadState from '../../components/LoadState.vue'
 import LoginCard from '../../components/LoginCard.vue'
+import StoreDetailsForm from '../../components/StoreDetailsForm.vue'
 import UiIcon from '../../components/UiIcon.vue'
 
 const stores = ref<BoundStore[]>([])
+const endpoint = '/h5/catalog/stores'
 const storeId = ref('')
 const selected = computed(() => stores.value.find(store => store.id === storeId.value))
 const categories = ref<ServiceCategory[]>([])
@@ -19,6 +21,8 @@ const title = ref('')
 const description = ref('')
 const price = ref('')
 const code = ref('')
+const verifiedCode = ref('')
+const editingStore = ref<BoundStore>()
 const scanning = ref(false)
 const usableCode = computed(() => parseStoreBindingCode(code.value))
 const {run,busy,error:actionError} = submitAction()
@@ -26,7 +30,7 @@ let revision = 0
 const {loading,error,refresh} = pageLoad(async () => {
   const current = ++revision
   if (!user.value) return
-  const {stores:owned} = await api<{stores:BoundStore[]}>('/h5/catalog/stores/mine')
+  const {stores:owned} = await api<{stores:BoundStore[]}>(endpoint+'/mine')
   if (current !== revision) return
   stores.value = owned
   if (storeId.value && selected.value?.ready && selected.value.enabled) {
@@ -35,21 +39,55 @@ const {loading,error,refresh} = pageLoad(async () => {
     categories.value = result.items
     if (!categories.value.some(item => item.id === category.value)) category.value = categories.value[0]?.id ?? ''
   }
-}, () => { revision++; stores.value = []; categories.value = []; category.value = ''; title.value = ''; description.value = ''; price.value = ''; code.value = '' })
+}, () => {
+  revision++
+  stores.value = []
+  categories.value = []
+  category.value = ''
+  title.value = ''
+  description.value = ''
+  price.value = ''
+  code.value = ''
+  closeStoreForm()
+})
 
 onLoad(options => {
   storeId.value = options?.storeId ?? ''
   if (storeId.value) uni.setNavigationBarTitle({title:'发布服务帖'})
 })
 
-function bindStore(value = code.value) {
+function verifyCode(value = code.value) {
   return run(async () => {
     const bindingCode = parseStoreBindingCode(value)
-    if (!bindingCode) throw new Error('请使用后台生成的门店二维码或门店码')
-    await api('/h5/catalog/stores/bind','POST',{code:bindingCode})
-    code.value = ''
+    if (!bindingCode) throw new Error('请使用后台生成的门店绑定码')
+    await api(endpoint+'/binding-code/check','POST',{code:bindingCode})
+    code.value = bindingCode
+    verifiedCode.value = bindingCode
+  })
+}
+
+function closeStoreForm() {
+  verifiedCode.value = ''
+  editingStore.value = undefined
+  actionError.value = ''
+}
+
+function editStore(store: BoundStore) {
+  closeStoreForm()
+  editingStore.value = store
+}
+
+function saveStore(profile: MerchantStoreProfile) {
+  return run(async () => {
+    const existing = editingStore.value
+    if (existing) await api(endpoint+'/mine/'+existing.id,'PUT',{...profile})
+    else {
+      await api(endpoint+'/bind','POST',{...profile,code:verifiedCode.value})
+      code.value = ''
+    }
+    closeStoreForm()
     await refresh()
-    toast('门店已绑定')
+    toast(existing ? '门店资料已保存' : '门店已绑定')
   })
 }
 
@@ -59,7 +97,7 @@ function scanStore() {
   actionError.value = ''
   uni.scanCode({
     scanType:['qrCode'],
-    success: result => { void bindStore(result.result) },
+    success: result => { void verifyCode(result.result) },
     fail: result => { if (!result.errMsg?.includes('cancel')) toast('暂时无法扫码，请重试') },
     complete: () => { scanning.value = false },
   })
@@ -86,7 +124,9 @@ function publish() {
     <LoginCard v-if="!user" />
     <template v-else>
       <LoadState :loading="loading" :error="error" @retry="refresh" />
-      <template v-if="!storeId">
+      <StoreDetailsForm v-if="verifiedCode || editingStore" :store="editingStore" :busy="busy" :error="actionError"
+        @cancel="closeStoreForm" @save="saveStore" />
+      <template v-else-if="!storeId">
         <view class="card store-binding-card">
           <view class="store-binding-intro">
             <view class="store-binding-icon" aria-hidden="true">
@@ -94,17 +134,17 @@ function publish() {
             </view>
             <view>
               <text class="heading">绑定门店</text>
-              <text class="sub">扫码或输入后台生成的门店码</text>
+              <text class="sub">验证绑定码后，填写门店资料并选点</text>
             </view>
           </view>
           <button id="scan-store-binding" class="primary store-scan-button" :disabled="busy || scanning" @tap="scanStore">
-            {{ scanning ? '打开扫码…' : '扫码绑定' }}
+            {{ scanning ? '打开扫码…' : '扫描绑定码' }}
           </button>
-          <text class="label store-code-label">门店码</text>
+          <text class="label store-code-label">绑定码</text>
           <view class="store-code-row">
             <input id="store-binding-code" v-model="code" maxlength="12" :disabled="busy || scanning"
-              aria-label="门店码" placeholder="输入 12 位门店码" confirm-type="done" @confirm="usableCode && bindStore()" />
-            <button id="bind-store" class="small" :disabled="busy || scanning || !usableCode" @tap="bindStore()">绑定</button>
+              aria-label="门店绑定码" placeholder="输入 12 位绑定码" confirm-type="done" @confirm="usableCode && verifyCode()" />
+            <button id="bind-store" class="small" :disabled="busy || scanning || !usableCode" @tap="verifyCode()">下一步</button>
           </view>
           <text v-if="actionError" class="error">{{ actionError }}</text>
         </view>
@@ -120,6 +160,7 @@ function publish() {
           <view v-if="store.address" class="store-address"><UiIcon name="location" :size="13" /><text>{{ store.address }}</text></view>
           <text v-if="store.enabled && !store.ready" class="sub">完善地区和联系电话后可以发布服务帖</text>
           <view class="store-card-actions">
+            <button class="small" :disabled="busy || scanning" @tap="editStore(store)">编辑门店</button>
             <button class="small" :disabled="!store.enabled || !store.ready" @tap="go('stores',{storeId:store.id})">发服务帖</button>
           </view>
         </view>
@@ -170,6 +211,6 @@ function publish() {
 .store-badge { flex: none; padding: 3px 7px; border-radius: 6px; background: #eef5e9; color: #386436; font-size: 11px; }
 .store-badge.paused { background: #f1eeea; color: #75695c; }
 .store-address { display: flex; align-items: center; gap: 5px; margin-top: 6px; color: var(--muted); font-size: 12px; }
-.store-card-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+.store-card-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .store-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 27px 12px; color: var(--muted); font-size: 13px; }
 </style>

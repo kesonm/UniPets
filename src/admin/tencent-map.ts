@@ -37,25 +37,13 @@ declare global {
   }
 }
 
-export const locationPickerOrigin = 'https://apis.map.qq.com'
-
 export async function getTencentMapKey() {
   const {key} = await api<{key:string|null}>('/admin/stores/map-settings')
   return key
 }
 
-export function locationPickerUrl(key: string, point?: ServiceCoordinates) {
-  const url = new URL('/tools/locpicker',locationPickerOrigin)
-  url.search = new URLSearchParams({key,referer:'PetCloud',type:'1',search:'1'}).toString()
-  if (point) {
-    url.searchParams.set('coord',`${point.latitude},${point.longitude}`)
-    url.searchParams.set('coordtype','1')
-  }
-  return url.href
-}
-
 export function storeMarkerUrl(point: ServiceCoordinates) {
-  const url = new URL('/uri/v1/marker',locationPickerOrigin)
+  const url = new URL('https://apis.map.qq.com/uri/v1/marker')
   url.search = new URLSearchParams({marker:`coord:${point.latitude},${point.longitude}`,referer:'PetCloud'}).toString()
   return url.href
 }

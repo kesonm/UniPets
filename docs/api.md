@@ -82,7 +82,10 @@
 | PUT | /h5/catalog/service-posts/:id/like | 为当前账号设置点赞，提交 `{ active }` |
 | GET / POST | /h5/catalog/service-posts/:id/comments | 读取评论，或登录后提交 `{ body }` |
 | GET | /h5/catalog/stores/mine | 读取当前账号绑定的门店及其发布条件 |
-| POST | /h5/catalog/stores/bind | 提交后台生成的门店码或扫码结果，绑定当前账号 |
+| POST | /h5/catalog/stores/binding-code/check | 验证绑定码可用性 |
+| POST | /h5/catalog/stores/location | 根据小程序地图选点识别区县和服务城市 |
+| POST | /h5/catalog/stores/bind | 提交 `code`、`name`、`address`、`phone`、`location`，创建门店并绑定当前账号 |
+| PUT | /h5/catalog/stores/mine/:id | 修改自己已绑定门店的资料和位置 |
 | GET | /h5/posts | 交友使用 `sort=latest`，可组合 `petType`、`breed`、`q` 和 `page` |
 | GET | /h5/posts/mine/counts | 当前账号的发布、点赞和收藏计数 |
 | GET | /h5/posts/mine | 按 `tab=published`、`likes` 或 `favorites` 读取对应列表，支持 `page` |
@@ -91,11 +94,11 @@
 
 首页推荐会参考登录用户的宠物类型、品种和近 30 天的公开求助，并加入按用户区分的随机排序。周边服务通过小程序「我的门店」发布，预约入口为门店电话。
 
-门店管理可调用 `POST /admin/stores/location`，提交 `latitude`、`longitude` 和可选的 `system`。浏览器定位使用 `wgs84`（默认），腾讯地图选点使用 `gcj02`。接口返回用于保存的 WGS84 坐标 `coordinates` 和识别出的服务城市及区县 `district`。
+小程序的门店选点使用 GCJ-02 经纬度。服务端识别城市和区县后以 WGS84 保存坐标。边界数据无法识别城市时，绑定和修改接口允许提交手动选择的 `cityCode`。
 
-`GET /admin/stores/map` 按 `q` 和 `state` 筛选全部门店记录，包含用于腾讯地图展示的 `mapPoint`。缺少经纬度的门店返回 `mapPoint: null`，列表提示管理员补录位置。`GET /admin/stores/map-settings` 返回管理员页面使用的腾讯地图网页 Key。
+`GET /admin/stores/map` 按 `q` 和 `state` 筛选全部门店记录，包含用于腾讯地图展示的 `mapPoint`。缺少经纬度的门店返回 `mapPoint: null`。`GET /admin/stores/map-settings` 返回管理员页面使用的腾讯地图网页 Key。
 
-管理员可用 `POST /admin/stores/:id/binding-code` 为暂未绑定的营业门店生成同一次绑定的门店码和二维码，有效期 24 小时。二维码包含 `petcloud:store:` 前缀及门店码。绑定时消费该码，一个账号可以绑定多家门店，每家门店最多由一个账号绑定。
+`GET /admin/stores/binding-codes` 返回当前的 10 个绑定码。`GET /admin/stores/binding-codes/:slot/qr` 返回相应绑定码的二维码。二维码包含 `petcloud:store:` 前缀及绑定码。创建门店、绑定账号、消费旧码和补发该位置的新码在同一事务完成。未使用的绑定码持续有效，一个账号可以通过多个绑定码登记多家门店。
 
 发布记录包括动态、已发布的宠物故事和用户发出的门店服务帖。点赞列表包括三种内容，收藏列表包括动态和宠物故事。点赞和收藏只统计当前可打开的公开内容。
 

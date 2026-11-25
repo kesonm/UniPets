@@ -11,7 +11,7 @@ export const sections = [
   {id:'users',title:'用户管理',icon:User,search:'搜索昵称、账号或用户 ID',
     columns:['用户','登录方式','宠物档案','注册时间','状态'],
     filters:[{id:'enabled',label:'正常'},{id:'disabled',label:'已停用'}]},
-  {id:'stores',title:'门店管理',icon:Shop,search:'搜索门店、地址或电话',create:'新增门店',
+  {id:'stores',title:'门店管理',icon:Shop,search:'搜索门店、地址或电话',
     columns:['门店','地区','联系电话','创建时间','状态','绑定'],
     filters:[{id:'enabled',label:'营业中'},{id:'disabled',label:'已停用'},{id:'bound',label:'已被绑定'},{id:'unbound',label:'暂未绑定'}]},
   {id:'products',title:'商品管理',icon:Goods,search:'搜索商品或门店',create:'新增商品',

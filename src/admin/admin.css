@@ -142,11 +142,6 @@
 .admin-editor label { display: grid; gap: 6px; color: #444d42; font-size: 13px; font-weight: 620; }
 .admin-editor textarea { padding-block: 9px; resize: vertical; }
 .admin-editor-pair { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px 12px; }
-.admin-city-picker { width: 100%; }
-.admin-store-locate { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.admin-store-picker { padding: 10px; border: 1px solid var(--admin-line); border-radius: 10px; background: var(--admin-bg); }
-.admin-store-picker p { margin: 0; font-size: 12px; }
-.admin-store-picker iframe { display: block; width: 100%; height: clamp(370px, 58dvh, 550px); margin-top: 8px; border: 0; border-radius: 7px; background: #fff; }
 .admin-store-map { padding: 0 18px 18px; }
 .admin-store-map-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; margin-bottom: 9px; color: var(--admin-muted); font-size: 13px; }
 .admin-store-map-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(205px, 288px); gap: 12px; }
@@ -169,7 +164,14 @@
 .admin-store-map-selection { position: sticky; top: 0; z-index: 1; display: grid; justify-items: start; gap: 6px; padding: 13px; border-bottom: 1px solid var(--admin-line); background: #f8f7f0; overflow-wrap: anywhere; font-size: 13px; }
 .admin-store-map-selection p { margin: 0; color: var(--admin-muted); }
 .admin-store-map-selection a { color: #755717; }
-.admin-store-map-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.admin-store-codes { margin-bottom: 15px; padding: 16px 18px; }
+.admin-store-codes-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.admin-store-codes h2 { margin: 0; font-size: 16px; }
+.admin-store-codes p { margin: 4px 0 0; font-size: 12px; }
+.admin-store-codes-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); gap: 7px; padding: 0; margin: 0; list-style: none; }
+.admin-store-code { padding: 9px 10px 5px; border: 1px solid #eee7ca; border-radius: 8px; background: #fdfbf4; }
+.admin-store-code > code { display: block; overflow-wrap: anywhere; font-size: 13px; font-weight: 700; }
+.admin-store-code > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .admin-binding-qr { display: block; width: min(212px,100%); aspect-ratio: 1; object-fit: contain; margin-inline: auto; }
 .admin-binding-code { font-family: ui-monospace,monospace; letter-spacing: .08em; }
 .admin-editor .admin-check { display: flex; align-items: center; gap: 6px; }

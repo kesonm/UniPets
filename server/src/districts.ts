@@ -47,18 +47,6 @@ export function districtsInServiceRegion(code: string) {
     ? provinces.get(district.province ?? '')?.id === code : serviceCity(district) === code).map(district => district.id)
 }
 
-export function listDistricts(query: string, id?: string): District[] {
-  const words = query.toLowerCase().trim().split(/\s+/)
-  return boundaries().filter(item => {
-    if (id) return item.id === id
-    const label = [item.province,item.city,item.name,item.id].join('').toLowerCase()
-    return words.every(word => label.includes(word))
-  }).slice(0, 40).map(district => {
-    const {id, name, city, province} = district
-    return {id, name, city, province, serviceCityCode:serviceCity(district)}
-  })
-}
-
 districtRouter.get('/catalog/district-boundaries', (req, res) => {
   const { x, y } = z.object({
     x: z.coerce.number().int().min(-180).max(180),

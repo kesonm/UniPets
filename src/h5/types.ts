@@ -1,6 +1,6 @@
 import type { Pet } from '../lib/types'
 import type { BusinessModule } from './business'
-import type { PostPetType } from '../../shared/h5-discovery.mjs'
+import type { PostPetType, ServiceCoordinates } from '../../shared/h5-discovery.mjs'
 export type { District } from '../../shared/h5-districts.mjs'
 
 export type H5Tab = 'home'|'friends'|'cart'|'identity'|'me'|'shop'|'cloud'|'events'|'training'|'stories'|BusinessModule
@@ -54,6 +54,16 @@ export interface BoundStore {
   phone: string
   enabled: boolean
   ready: boolean
+  cityCode: string | null
+  location: ServiceCoordinates | null
+}
+
+export interface MerchantStoreProfile {
+  name: string
+  address: string
+  phone: string
+  location: ServiceCoordinates
+  cityCode?: string
 }
 
 export type PersonalContentTab = 'published' | 'likes' | 'favorites'

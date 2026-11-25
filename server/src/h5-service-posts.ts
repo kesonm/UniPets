@@ -133,7 +133,7 @@ h5ServicePostsRouter.post(route, requireAuth, async (req,res) => {
       name,phone,area,city_code AS cityCode,district_code AS districtCode FROM h5_stores
       WHERE id=? AND owner_user_id=? AND enabled=TRUE FOR SHARE`, [item.storeId,req.user.id])
     if (!store) throw new HttpError(403,'请选择自己绑定且营业中的门店')
-    if (!hasStoreContact(store)) throw new HttpError(400,'请让管理员补齐门店地区和联系电话')
+    if (!hasStoreContact(store)) throw new HttpError(400,'请在「我的门店」补齐地区和联系电话')
     return createCatalogItem({
       ...item, module:'services', kind:'article', provider:store.name, publisherId:req.user.id,
       area:null, venue:null, startsAt:null, closesAt:null, stock:null, externalUrl:null, published:true,

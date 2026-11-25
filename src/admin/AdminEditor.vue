@@ -1,18 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { h5Areas } from '../../shared/h5-areas.mjs'
-import type { ServiceCategory, ServiceCoordinates } from '../../shared/h5-discovery.mjs'
-import { legacyDistricts, type District } from '../../shared/h5-districts.mjs'
-import { serviceRegions } from '../../shared/h5-service-regions.mjs'
+import type { ServiceCategory } from '../../shared/h5-discovery.mjs'
 import { api, ApiError, apiUrl } from '../lib/api'
 import { detailTitle, genderNames, kinds, listingGroups, speciesNames, type AdminRecord, type Section, type Store } from './admin'
-import AdminStoreLocationPicker from './AdminStoreLocationPicker.vue'
 
-const props = defineProps<{section:Section;record?:AdminRecord;openStorePicker?:boolean}>()
+const props = defineProps<{section:Section;record?:AdminRecord}>()
 const emit = defineEmits<{saved:[];close:[];stale:[]}>()
 const record = props.record
 const account = record && 'username' in record ? record : undefined
-const store = record && 'phone' in record ? record : undefined
 const pet = record && 'owner' in record ? record : undefined
 const item = record && 'storeId' in record ? record : undefined
 const content = record && 'hidden' in record ? record : undefined
@@ -21,108 +17,6 @@ const busy = ref(false)
 const error = ref('')
 const detail = ref<{body?:string;scenes?:string[];hasImage:boolean|number}>()
 const name = ref(account?.displayName ?? '')
-const storeForm = reactive({name:store?.name ?? '',area:store?.area ?? '',districtCode:store?.districtCode ?? '',
-  cityCode:store?.cityCode ?? '',address:store?.address ?? '',phone:store?.phone ?? '',
-  latitude:store?.latitude?.toString() ?? '', longitude:store?.longitude?.toString() ?? ''})
-const storePoint = computed(() => {
-  if (storeForm.latitude === '' || storeForm.longitude === '') return undefined
-  const latitude = Number(storeForm.latitude)
-  const longitude = Number(storeForm.longitude)
-  if (latitude >= -90 && latitude <= 90 && longitude > -180 && longitude <= 180) return {latitude,longitude}
-})
-const cityOptions = serviceRegions.map(province => ({
-  value:province.id,label:province.label,
-  children:province.cities.length ? province.cities.map(city => ({value:city.id,label:city.label})) : undefined,
-}))
-const cityPickerProps = {emitPath:false}
-const districts = ref<District[]>([])
-const selectedDistrict = ref<District>()
-const districtBusy = ref(false)
-const districtError = ref('')
-const locatingStore = ref(false)
-const storePickerOpen = ref(Boolean(props.openStorePicker))
-const locationStatus = ref('')
-const locationError = ref('')
-let districtRevision = 0
-const districtOptions = computed(() => selectedDistrict.value && !districts.value.some(item => item.id === selectedDistrict.value?.id)
-  ? [selectedDistrict.value, ...districts.value] : districts.value)
-
-function districtLabel(district: District) {
-  return [...new Set([district.province,district.city,district.name].filter(Boolean))].join(' · ')
-}
-async function findDistricts(q = '', id = '') {
-  const revision = ++districtRevision
-  districtBusy.value = true
-  districtError.value = ''
-  try {
-    const params = new URLSearchParams(id ? {id} : {q})
-    const {items} = await api<{items:District[]}>('/admin/districts?' + params)
-    if (revision !== districtRevision) return
-    districts.value = items
-    if (id) {
-      selectedDistrict.value = items[0]
-      if (!storeForm.cityCode && items[0]?.serviceCityCode) storeForm.cityCode = items[0].serviceCityCode
-    }
-  } catch (cause) {
-    if (revision === districtRevision) districtError.value = cause instanceof Error ? cause.message : '区县读取失败'
-  } finally {
-    if (revision === districtRevision) districtBusy.value = false
-  }
-}
-function chooseDistrict(id: string) {
-  selectedDistrict.value = districtOptions.value.find(item => item.id === id)
-  if (selectedDistrict.value?.serviceCityCode) storeForm.cityCode = selectedDistrict.value.serviceCityCode
-}
-
-function currentPosition() {
-  if (!navigator.geolocation) throw new Error('当前浏览器无法使用定位')
-  return new Promise<ServiceCoordinates>((resolve,reject) => {
-    navigator.geolocation.getCurrentPosition(
-      ({coords}) => resolve({latitude:coords.latitude,longitude:coords.longitude}),
-      failure => reject(new Error(failure.code === 1 ? '请允许此网站使用定位' : '暂时无法获取当前位置')),
-      {enableHighAccuracy:true,timeout:12000,maximumAge:0},
-    )
-  })
-}
-
-function setStorePoint({latitude,longitude}: ServiceCoordinates) {
-  storeForm.latitude = latitude.toFixed(6)
-  storeForm.longitude = longitude.toFixed(6)
-}
-
-async function locateStore(point?: ServiceCoordinates, place?: {name:string;address:string}) {
-  if (locatingStore.value || busy.value) return
-  locatingStore.value = true
-  locationError.value = ''
-  locationStatus.value = ''
-  try {
-    const coords = point ?? await currentPosition()
-    if (!point) setStorePoint(coords)
-    const {coordinates,district} = await api<{coordinates:ServiceCoordinates;district:District|null}>('/admin/stores/location',{
-      method:'POST',body:{...coords,system:point ? 'gcj02' : 'wgs84'},
-    })
-    setStorePoint(coordinates)
-    if (place?.address) storeForm.address = place.address
-    if (place?.name && !storeForm.name) storeForm.name = place.name
-    if (district) {
-      districtRevision++
-      districtBusy.value = false
-      districtError.value = ''
-      selectedDistrict.value = district
-      storeForm.districtCode = district.id
-      storeForm.cityCode = district.serviceCityCode ?? ''
-      if (!storeForm.address) storeForm.address = [...new Set([district.province,district.city,district.name].filter(Boolean))].join('')
-      locationStatus.value = districtLabel(district)
-    } else {
-      locationStatus.value = '经纬度已填写，请核对城市和区县'
-    }
-    storePickerOpen.value = false
-  } catch (cause) {
-    locationError.value = cause instanceof Error ? cause.message : '定位失败'
-  } finally {
-    locatingStore.value = false
-  }
-}
 const petForm = reactive({name:pet?.name ?? '',species:pet?.species ?? 'other',breed:pet?.breed ?? '',
   gender:pet?.gender ?? 'unknown',birthday:pet?.birthday ?? '',notes:pet?.notes ?? ''})
 
@@ -211,12 +105,6 @@ const media = computed(() => content && apiUrl('/admin/'+props.section+'/'+conte
 function formValues() {
   if (account) return {displayName:name.value}
   if (pet) return {...petForm,birthday:petForm.birthday || null}
-  if (props.section === 'stores') {
-    const {latitude, longitude, ...fields} = storeForm
-    if ((latitude === '') !== (longitude === '')) throw new Error('请同时填写门店的经度和纬度')
-    return {...fields,area:fields.area || null,districtCode:fields.districtCode || null,cityCode:fields.cityCode || null,
-      coordinates:latitude === '' ? null : {latitude:Number(latitude),longitude:Number(longitude)}}
-  }
   const {price,stock,startsAt,closesAt,...fields} = listing
   return {...fields,area:fields.area || null,venue:fields.venue || null,storeId:fields.storeId || null,
     startsAt:scheduledAt(startsAt,item?.startsAt),closesAt:scheduledAt(closesAt,item?.closesAt),
@@ -225,7 +113,7 @@ function formValues() {
 }
 
 async function save() {
-  if (busy.value || locatingStore.value) return
+  if (busy.value) return
   busy.value = true
   error.value = ''
   const method = account ? 'PATCH' : record ? 'PUT' : 'POST'
@@ -241,7 +129,6 @@ async function save() {
 }
 onMounted(() => {
   if (content) void readContent()
-  if (props.section === 'stores' && storeForm.districtCode) void findDistricts('', storeForm.districtCode)
   if (props.section === 'products' || props.section === 'services') void findStores()
   if (props.section === 'services') void readServiceCategories()
 })
@@ -263,41 +150,6 @@ onMounted(() => {
     <template v-if="account">
       <div class="admin-record-identifier">{{ account.username }}</div>
       <label>昵称<input v-model.trim="name" maxlength="40" required></label>
-    </template>
-    <template v-else-if="section==='stores'">
-      <label>门店名称<input v-model.trim="storeForm.name" maxlength="120" required></label>
-      <div class="admin-store-locate">
-        <button class="admin-button" type="button" :aria-expanded="storePickerOpen" :disabled="locatingStore || busy" @click="storePickerOpen=!storePickerOpen">
-          {{ storePickerOpen ? '收起地图' : '腾讯地图选点' }}
-        </button>
-        <button id="admin-locate-store" class="admin-button" type="button" :disabled="locatingStore || busy" @click="locateStore()">
-          {{ locatingStore ? '正在定位…' : '使用当前位置' }}
-        </button>
-        <span v-if="locationStatus" class="admin-muted" role="status">{{ locationStatus }}</span>
-      </div>
-      <AdminStoreLocationPicker v-if="storePickerOpen" :point="storePoint" @select="locateStore" />
-      <p v-if="locationError" class="admin-error" role="alert">{{ locationError }}</p>
-      <label>所在商圈
-        <select v-model="storeForm.area"><option value="">未指定</option><option v-for="area in h5Areas" :key="area.id" :value="area.id">{{ area.label }}</option></select>
-      </label>
-      <label>服务区县
-        <el-select v-model="storeForm.districtCode" aria-label="服务区县" filterable remote clearable :value-on-clear="''"
-          :placeholder="legacyDistricts[storeForm.area] ? '沿用商圈对应区县，或搜索区县' : '输入区县名或城市与区县'"
-          :loading="districtBusy" :remote-method="findDistricts" @change="chooseDistrict">
-          <el-option v-for="entry in districtOptions" :key="entry.id" :value="entry.id" :label="districtLabel(entry)" />
-        </el-select>
-      </label>
-      <p v-if="districtError" class="admin-error" role="alert">{{ districtError }}</p>
-      <label>服务城市
-        <el-cascader v-model="storeForm.cityCode" class="admin-city-picker" aria-label="服务城市" :options="cityOptions"
-          :props="cityPickerProps" filterable clearable placeholder="选择省份和城市" />
-      </label>
-      <label>门店地址<input v-model.trim="storeForm.address" maxlength="160" autocomplete="street-address" placeholder="填写街道和门牌号"></label>
-      <label>联系电话<input v-model.trim="storeForm.phone" type="tel" maxlength="40" autocomplete="tel"></label>
-      <div class="admin-editor-pair">
-        <label>门店经度<input v-model="storeForm.longitude" type="number" min="-179.999999" max="180" step="any" placeholder="WGS84"></label>
-        <label>门店纬度<input v-model="storeForm.latitude" type="number" min="-90" max="90" step="any" placeholder="WGS84"></label>
-      </div>
     </template>
     <template v-else-if="pet">
       <div class="admin-record-identifier">{{ pet.owner }} · {{ pet.identityNumber ?? '未登记宠物编号' }}</div>
@@ -357,7 +209,7 @@ onMounted(() => {
     <p v-if="error" class="admin-error" role="alert">{{ error }}</p>
     <footer class="admin-editor-actions">
       <button class="admin-button" type="button" :disabled="busy" @click="emit('close')">取消</button>
-      <button class="admin-button admin-primary" type="submit" :disabled="busy || locatingStore || (usesServiceCategories && !localCategories.length)">{{ busy ? '正在保存…' : '保存' }}</button>
+      <button class="admin-button admin-primary" type="submit" :disabled="busy || (usesServiceCategories && !localCategories.length)">{{ busy ? '正在保存…' : '保存' }}</button>
     </footer>
   </form>
 </template>

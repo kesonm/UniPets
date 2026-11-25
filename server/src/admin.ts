@@ -1,16 +1,15 @@
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { Router, type RequestHandler } from 'express'
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 import { z } from 'zod'
 import { photoThumbnail } from './assets.js'
 import { adminLogin, authLimiter, requireAuth } from './auth.js'
-import { catalogStore, catalogValues, catalogVisible, createCatalogItem, h5Area, managedCatalogInput, managedCatalogUpdate } from './catalog.js'
+import { catalogStore, catalogValues, catalogVisible, createCatalogItem, managedCatalogInput, managedCatalogUpdate } from './catalog.js'
 import { config } from './config.js'
 import { db, rows, transaction } from './db.js'
-import { coordinatesInput, districtForPoint, districtInput, listDistricts, serviceCityInput } from './districts.js'
 import { HttpError } from './errors.js'
-import { hasStoreContact, issueStoreBindingCode, type StoreContact } from './h5-store-binding.js'
-import { mapPointToWgs84, wgs84ToMapPoint } from './map-coordinates.js'
+import { hasStoreContact, listStoreBindingCodes, storeBindingQr, type StoreContact } from './h5-store-binding.js'
+import { wgs84ToMapPoint } from './map-coordinates.js'
 import { petSchema, updatePetRecord } from './routes.js'
 import { checkServiceCategory, getServiceCategories, serviceCategoryId, serviceCategoryJoin, serviceCategoryLabel, serviceCategoryName } from './service-categories.js'
 
@@ -88,22 +87,6 @@ adminRouter.patch('/users/:id',async (req,res) => {
   res.json({ok:true})
 })
 
-const storeInput = z.object({
-  name:z.string().trim().min(1,'请填写门店名称').max(120),
-  area:h5Area.nullable(),
-  districtCode:districtInput.nullable().optional(),
-  cityCode:serviceCityInput.nullable().optional(),
-  coordinates:coordinatesInput.nullable().optional(),
-  address:z.string().trim().max(160),
-  phone:z.string().trim().max(40),
-}).strict()
-adminRouter.get('/districts', (req,res) => {
-  const {q,id} = z.object({q:z.string().trim().max(60).default(''),id:districtInput.optional()}).parse(req.query)
-  res.json({items:listDistricts(q,id)})
-})
-function checkDistrict(id: string | null | undefined) {
-  if (id && !listDistricts('',id).length) throw new HttpError(400,'请选择有效的服务区县')
-}
 const storeList: ListQuery = {
   select:`id,name,area,district_code AS districtCode,city_code AS cityCode,
     CAST(latitude AS DOUBLE) AS latitude,CAST(longitude AS DOUBLE) AS longitude,
@@ -112,6 +95,13 @@ const storeList: ListQuery = {
   states:{enabled:'enabled=TRUE',disabled:'enabled=FALSE',bound:'owner_user_id IS NOT NULL',unbound:'owner_user_id IS NULL'},
 }
 adminRouter.get('/stores',list(storeList))
+adminRouter.get('/stores/binding-codes', async (_req,res) => {
+  res.json({codes:await listStoreBindingCodes()})
+})
+adminRouter.get('/stores/binding-codes/:slot/qr', async (req,res) => {
+  const slot = z.coerce.number().int().min(1).max(10).parse(req.params.slot)
+  res.json(await storeBindingQr(slot))
+})
 adminRouter.get('/stores/map-settings', (_req,res) => {
   res.json({key:config.tencentMapBrowserKey || null})
 })
@@ -125,40 +115,10 @@ adminRouter.get('/stores/map',async (req,res) => {
     }),
   }))})
 })
-const storeLocationInput = coordinatesInput.extend({system:z.enum(['wgs84','gcj02']).default('wgs84')})
-adminRouter.post('/stores/location', (req,res) => {
-  const {latitude,longitude,system} = storeLocationInput.parse(req.body)
-  const point = {latitude,longitude}
-  const coordinates = system === 'gcj02' ? mapPointToWgs84(point) : point
-  res.json({coordinates,district:districtForPoint(coordinates.latitude,coordinates.longitude) ?? null})
-})
-adminRouter.post('/stores',async (req,res) => {
-  const item = storeInput.parse(req.body)
-  checkDistrict(item.districtCode)
-  const id = randomUUID()
-  await db.execute(`INSERT INTO h5_stores (id,name,area,district_code,city_code,latitude,longitude,address,phone)
-    VALUES (?,?,?,?,?,?,?,?,?)`,
-    [id,item.name,item.area,item.districtCode ?? null,item.cityCode ?? null,
-      item.coordinates?.latitude ?? null,item.coordinates?.longitude ?? null,item.address,item.phone])
-  res.status(201).json({id})
-})
-adminRouter.put('/stores/:id',async (req,res) => {
-  const item = storeInput.parse(req.body)
-  checkDistrict(item.districtCode)
-  await update(`UPDATE h5_stores SET name=?,area=?,district_code=IF(?,?,district_code),city_code=IF(?,?,city_code),
-    latitude=IF(?,?,latitude),longitude=IF(?,?,longitude),address=?,phone=? WHERE id=?`,
-  [item.name,item.area,item.districtCode!==undefined,item.districtCode ?? null,item.cityCode!==undefined,item.cityCode ?? null,
-    item.coordinates!==undefined,item.coordinates?.latitude ?? null,item.coordinates!==undefined,item.coordinates?.longitude ?? null,
-    item.address,item.phone,uuid.parse(req.params.id)],'门店不存在')
-  res.json({ok:true})
-})
 adminRouter.patch('/stores/:id',async (req,res) => {
   const {enabled} = enabledInput.parse(req.body)
   await update('UPDATE h5_stores SET enabled=? WHERE id=?',[enabled,uuid.parse(req.params.id)],'门店不存在')
   res.json({ok:true})
-})
-adminRouter.post('/stores/:id/binding-code', async (req,res) => {
-  res.set('Cache-Control','no-store').json(await issueStoreBindingCode(uuid.parse(req.params.id)))
 })
 
 async function checkStore(id: string|null, localService = false) {
@@ -170,7 +130,7 @@ async function checkStore(id: string|null, localService = false) {
     'SELECT phone,area,district_code AS districtCode,city_code AS cityCode FROM h5_stores WHERE id=?',[id])
   if (!store) throw new HttpError(400,'关联门店不存在，请重新选择')
   if (localService && !hasStoreContact(store)) {
-    throw new HttpError(400,'请先在门店管理填写地区和联系电话')
+    throw new HttpError(400,'请联系门店负责人补齐地区和联系电话')
   }
 }
 
