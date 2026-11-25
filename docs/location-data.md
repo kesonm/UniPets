@@ -4,6 +4,8 @@
 
 用户在小程序地图选点后，服务器将选点转为 WGS84 并识别区县。浏览用的选点保存在本机，动态和公开交友名片只保存选中的区县编号。交友筛选按选点所在城市匹配，距离排序采用所选坐标作为起点。
 
+地图页的店名和门牌号使用腾讯位置服务。服务端通过环境变量 `TMAP_WEBSERVICE_KEY` 读取已启用 WebService API 的 Key。地图停止移动后请求当前位置的地址，用户主动搜索时请求对应地点。接口缺少配置或地址无数据时，地图页可以按区县选点，也可以显示用户点中的地图地标名称。
+
 `server/data/china-districts.json.gz` 由两份公开数据匹配区县名称、简化边界并量化坐标生成。部分边界和名称可能早于当地最新的行政区划调整。
 
 - 边界源是 geoBoundaries CHN ADM3，版本 `9469f09`，对应的 OpenStreetMap 数据标注为 2017 年。项目中的边界及派生边界数据采用 ODbL 1.0。© OpenStreetMap 贡献者。[数据元信息](https://www.geoboundaries.org/api/current/gbOpen/CHN/ADM3/) · [OpenStreetMap 版权](https://www.openstreetmap.org/copyright) · [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/)

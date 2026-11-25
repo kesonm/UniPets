@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import type { ServiceCoordinates } from '../../../shared/h5-discovery.mjs'
+import type { MapPlace, ServiceCoordinates } from '../../../shared/h5-discovery.mjs'
 import type { District } from '../../../shared/h5-districts.mjs'
 import { areaLabel } from '../../../src/h5/business'
 import { toast } from './client'
@@ -9,6 +9,7 @@ export interface MapLocation {
   point: ServiceCoordinates
   coordinates: ServiceCoordinates
   district: District
+  place?: MapPlace
 }
 
 const key = 'petcloud.map-location.v1'

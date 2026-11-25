@@ -5,11 +5,12 @@ import test from 'node:test'
 import { districtAt } from '../../shared/h5-districts.mjs'
 import { storeBindingQrPrefix } from '../../shared/h5-discovery.mjs'
 import { createApp } from '../src/app.js'
+import { config } from '../src/config.js'
 import { db, rows } from '../src/db.js'
 import { renderQrCode } from '../src/identity-codes.js'
 import { wgs84ToMapPoint } from '../src/map-coordinates.js'
 
-test('nearby merchant posts, community filters and personalized home feed', { timeout: 30_000 }, async () => {
+test('nearby merchant posts, community filters and personalized home feed', { timeout: 30_000 }, async (t) => {
   const server = createApp().listen(0, '127.0.0.1')
   await once(server, 'listening')
   const address = server.address()
@@ -82,6 +83,42 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     assert.equal(location.data.district.serviceCityCode,'440300')
     assert.ok(Math.abs(location.data.coordinates.longitude-point.longitude)<0.00001)
     const district = location.data.district.id as string
+
+    await t.test('map point addresses and place search', async (subtest) => {
+      const previousKey = config.tencentMapKey
+      const realFetch = globalThis.fetch
+      config.tencentMapKey = 'test-maps-key'
+      subtest.after(() => { config.tencentMapKey = previousKey })
+      const nearby = {id:'fixture-poi',title:'示例宠物店',address:'示例路12号',location:{lat:22.547,lng:113.887},_distance:4}
+      subtest.mock.method(globalThis,'fetch',async (requestUrl: string|URL|Request, init?: RequestInit) => {
+        const url = new URL(requestUrl instanceof Request ? requestUrl.url : requestUrl)
+        if (url.hostname !== 'apis.map.qq.com') return realFetch(requestUrl,init)
+        assert.equal(url.searchParams.get('key'),'test-maps-key')
+        if (url.pathname === '/ws/place/v1/suggestion') {
+          assert.equal(url.searchParams.get('keyword'),'示例宠物店')
+          assert.equal(url.searchParams.get('region'),'深圳市')
+          return Response.json({status:0,data:[nearby,{...nearby,id:'invalid',location:null}]})
+        }
+        assert.equal(url.pathname,'/ws/geocoder/v1/')
+        assert.equal(url.searchParams.get('get_poi'),'1')
+        const hasShop = url.searchParams.get('location')?.startsWith('22.546955,')
+        return Response.json({status:0,result:{
+          address:'深圳市宝安区示例路',formatted_addresses:{standard_address:'深圳市宝安区示例路12号'},
+          address_component:{street:'示例路',street_number:'12号'},
+          pois:[{...nearby,title:'街对面的店',_distance:46},...(hasShop ? [nearby] : [])],
+        }})
+      })
+      const center = wgs84ToMapPoint(point)
+      const search = await request('/h5/catalog/map-search','POST',{keyword:'示例宠物店',center})
+      assert.equal(search.status,200)
+      assert.deepEqual(search.data.places,[{id:'fixture-poi',name:'示例宠物店',address:'示例路12号',point:{latitude:22.547,longitude:113.887}}])
+      const named = await request('/h5/catalog/map-location','POST',{...center,address:true})
+      assert.equal(named.status,200)
+      assert.equal(named.data.district.id,district)
+      assert.deepEqual(named.data.place,{name:'示例宠物店',address:'示例路12号'})
+      const numbered = await request('/h5/catalog/map-location','POST',{...center,latitude:center.latitude+0.0005,address:true})
+      assert.deepEqual(numbered.data.place,{name:'示例路12号',address:'深圳市宝安区示例路12号'})
+    })
 
     const owner = await signup('owner')
     const dogOwner = await signup('dog')

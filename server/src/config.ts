@@ -13,6 +13,7 @@ export const config = {
   allowHttpAuth: process.env.PETCLOUD_ALLOW_HTTP_AUTH === '1',
   wechatAppId: process.env.WECHAT_APP_ID?.trim() || '',
   wechatAppSecret: process.env.WECHAT_APP_SECRET?.trim() || '',
+  tencentMapKey: process.env.TMAP_WEBSERVICE_KEY?.trim() || '',
   h5DemoOwnerId: process.env.H5_DEMO_OWNER_ID?.trim() || '',
   h5DemoMotionPetId: process.env.H5_DEMO_MOTION_PET_ID?.trim() || '',
   h5OperatorIds: (process.env.H5_OPERATOR_USER_IDS ?? '').split(',').map(id=>id.trim()).filter(Boolean),
