@@ -76,6 +76,9 @@ function open(entry: StoreContent) {
   const module = entry.kind === 'product' ? 'shop' : entry.module
   go(kinds[entry.kind].page,{id:entry.id,...(module ? {module} : {})})
 }
+function excerpt(value: string) {
+  return value.replace(/\s+/g,' ').trim()
+}
 function call() {
   const phoneNumber = servicePhone(store.value?.phone || '')
   if (phoneNumber) uni.makePhoneCall({phoneNumber})
@@ -105,7 +108,7 @@ function call() {
           </view>
           <view class="browse-card-copy">
             <text class="browse-card-title">{{ entry.title }}</text>
-            <text v-if="entry.excerpt" class="browse-card-meta">{{ entry.excerpt }}</text>
+            <text v-if="entry.excerpt" class="browse-card-meta">{{ excerpt(entry.excerpt) }}</text>
             <view class="storefront-card-foot">
               <text>{{ kinds[entry.kind].label }}</text>
               <text v-if="entry.priceCents !== null" class="storefront-price">{{ money(entry.priceCents) }}</text>
