@@ -5,11 +5,9 @@ import { z } from 'zod'
 import { photoThumbnail } from './assets.js'
 import { adminLogin, authLimiter, requireAuth } from './auth.js'
 import { catalogStore, catalogValues, catalogVisible, createCatalogItem, managedCatalogInput, managedCatalogUpdate } from './catalog.js'
-import { config } from './config.js'
 import { db, rows, transaction } from './db.js'
 import { HttpError } from './errors.js'
 import { hasStoreContact, listStoreBindingCodes, storeBindingQr, type StoreContact } from './h5-store-binding.js'
-import { wgs84ToMapPoint } from './map-coordinates.js'
 import { petSchema, updatePetRecord } from './routes.js'
 import { checkServiceCategory, getServiceCategories, serviceCategoryId, serviceCategoryJoin, serviceCategoryLabel, serviceCategoryName } from './service-categories.js'
 
@@ -89,31 +87,18 @@ adminRouter.patch('/users/:id',async (req,res) => {
 
 const storeList: ListQuery = {
   select:`id,name,area,district_code AS districtCode,city_code AS cityCode,
-    CAST(latitude AS DOUBLE) AS latitude,CAST(longitude AS DOUBLE) AS longitude,
     address,phone,enabled,(owner_user_id IS NOT NULL) AS bound,created_at AS createdAt`,
   from:'h5_stores', search:'name,address,phone,id', order:'created_at DESC,id DESC',
   states:{enabled:'enabled=TRUE',disabled:'enabled=FALSE',bound:'owner_user_id IS NOT NULL',unbound:'owner_user_id IS NULL'},
 }
 adminRouter.get('/stores',list(storeList))
+adminRouter.get('/stores/bound',list({...storeList,scope:'owner_user_id IS NOT NULL'}))
 adminRouter.get('/stores/binding-codes', async (_req,res) => {
   res.json({codes:await listStoreBindingCodes()})
 })
 adminRouter.get('/stores/binding-codes/:slot/qr', async (req,res) => {
   const slot = z.coerce.number().int().min(1).max(10).parse(req.params.slot)
   res.json(await storeBindingQr(slot))
-})
-adminRouter.get('/stores/map-settings', (_req,res) => {
-  res.json({key:config.tencentMapBrowserKey || null})
-})
-adminRouter.get('/stores/map',async (req,res) => {
-  const {q,state} = pageInput.omit({page:true}).parse(req.query)
-  const records = await rows<RowDataPacket & {latitude:number|null;longitude:number|null}>(
-    `SELECT ${storeList.select} FROM ${storeList.from} ${listWhere(storeList,state)} ORDER BY ${storeList.order}`,[q,q])
-  res.json({items:records.map(record => ({...record,
-    mapPoint:record.latitude === null || record.longitude === null ? null : wgs84ToMapPoint({
-      latitude:record.latitude,longitude:record.longitude,
-    }),
-  }))})
 })
 adminRouter.patch('/stores/:id',async (req,res) => {
   const {enabled} = enabledInput.parse(req.body)

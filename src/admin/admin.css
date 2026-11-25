@@ -142,36 +142,25 @@
 .admin-editor label { display: grid; gap: 6px; color: #444d42; font-size: 13px; font-weight: 620; }
 .admin-editor textarea { padding-block: 9px; resize: vertical; }
 .admin-editor-pair { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px 12px; }
-.admin-store-map { padding: 0 18px 18px; }
-.admin-store-map-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; margin-bottom: 9px; color: var(--admin-muted); font-size: 13px; }
-.admin-store-map-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(205px, 288px); gap: 12px; }
-.admin-store-map-stage { position: relative; min-width: 0; min-height: 485px; overflow: hidden; border: 1px solid var(--admin-line); border-radius: 10px; background: #eef1ea; }
-.admin-store-map-canvas, .admin-store-map-message { position: absolute; inset: 0; }
-.admin-store-map-message { display: grid; align-content: center; justify-items: center; gap: 8px; padding: 16px; color: var(--admin-muted); text-align: center; font-size: 13px; }
-.admin-store-map-message .el-icon { color: #806629; font-size: 28px; }
-.admin-store-map-message p { margin: 0; }
-.admin-store-map-list { min-width: 0; max-height: 485px; overflow: auto; border: 1px solid var(--admin-line); border-radius: 10px; background: #fff; }
-.admin-store-map-list > p { margin: 0; padding: 16px; font-size: 13px; }
-.admin-store-map-list ul { margin: 0; padding: 0; list-style: none; }
-.admin-store-map-list li + li { border-top: 1px solid var(--admin-line); }
-.admin-store-map-list li button { display: grid; justify-items: start; gap: 5px; width: 100%; padding: 12px 13px; border: 0; background: #fff; color: var(--admin-ink); text-align: left; cursor: pointer; }
-.admin-store-map-list li button:hover { background: #f6f7f3; }
-.admin-store-map-list li button[aria-pressed=true] { background: #fff5d7; }
-.admin-store-map-list li button:focus-visible { outline-offset: -3px; }
-.admin-store-map-list li strong { display: flex; align-items: baseline; gap: 4px; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
-.admin-store-map-list li .el-icon { flex: none; color: #806629; }
-.admin-store-map-list li small { color: var(--admin-muted); overflow-wrap: anywhere; }
-.admin-store-map-selection { position: sticky; top: 0; z-index: 1; display: grid; justify-items: start; gap: 6px; padding: 13px; border-bottom: 1px solid var(--admin-line); background: #f8f7f0; overflow-wrap: anywhere; font-size: 13px; }
-.admin-store-map-selection p { margin: 0; color: var(--admin-muted); }
-.admin-store-map-selection a { color: #755717; }
-.admin-store-codes { margin-bottom: 15px; padding: 16px 18px; }
-.admin-store-codes-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-.admin-store-codes h2 { margin: 0; font-size: 16px; }
+.admin-store-workspace { display: grid; grid-template-columns: minmax(0,1fr); gap: 16px; align-items: start; }
+.admin-store-codes { min-width: 0; padding: 18px; container-type: inline-size; }
+.admin-store-codes-header, .admin-bound-stores-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.admin-store-codes-header { margin-bottom: 14px; }
+.admin-store-codes-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.admin-store-workspace h2 { margin: 0; font-size: 17px; font-weight: 700; }
 .admin-store-codes p { margin: 4px 0 0; font-size: 12px; }
-.admin-store-codes-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); gap: 7px; padding: 0; margin: 0; list-style: none; }
-.admin-store-code { padding: 9px 10px 5px; border: 1px solid #eee7ca; border-radius: 8px; background: #fdfbf4; }
-.admin-store-code > code { display: block; overflow-wrap: anywhere; font-size: 13px; font-weight: 700; }
-.admin-store-code > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.admin-store-codes-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; padding: 0; margin: 0; list-style: none; }
+.admin-store-code { min-width: 0; padding: 10px 10px 5px; border: 1px solid #eee7ca; border-radius: 9px; background: #fdfbf4; }
+.admin-store-code > code { display: block; overflow-wrap: anywhere; font-size: 14px; font-weight: 700; }
+.admin-store-code-actions { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 3px; }
+.admin-store-code-actions button { min-height: 28px; }
+.admin-bound-stores { min-width: 0; }
+.admin-bound-stores-header { padding: 16px 18px 12px; }
+.admin-bound-stores .admin-toolbar { flex-wrap: wrap; padding-top: 0; }
+.admin-bound-stores .admin-search { flex: 1; width: auto; max-width: 410px; }
+.admin-bound-stores .admin-empty { border-top: 1px solid var(--admin-line); gap: 7px; }
+.admin-bound-stores .admin-empty > p { font-weight: 650; color: var(--admin-ink); }
+.admin-bound-stores .admin-empty > small { font-size: 12px; }
 .admin-binding-qr { display: block; width: min(212px,100%); aspect-ratio: 1; object-fit: contain; margin-inline: auto; }
 .admin-binding-code { font-family: ui-monospace,monospace; letter-spacing: .08em; }
 .admin-editor .admin-check { display: flex; align-items: center; gap: 6px; }
@@ -190,6 +179,15 @@
 .admin-content-image { display: block; width: 100%; max-height: 365px; object-fit: contain; border-radius: 9px; background: var(--admin-bg); }
 .admin-confirm { max-width: calc(100% - 24px); }
 
+@container (min-width: 675px) {
+  .admin-store-codes-grid { grid-template-columns: repeat(5,minmax(0,1fr)); }
+}
+@container (max-width: 280px) {
+  .admin-store-code > code { font-size: 12px; letter-spacing: .055em; }
+}
+@media (min-width: 1280px) {
+  .admin-store-workspace { grid-template-columns: 320px minmax(0,1fr); }
+}
 @media (max-width: 930px) {
   .admin-shell { grid-template-columns: 175px minmax(0, 1fr); }
   .admin-sidebar { padding-inline: 10px; }
@@ -211,10 +209,8 @@
   .admin-search { width: auto; min-width: 145px; flex: 1; }
   .admin-toolbar select { min-width: 91px; }
   .admin-reload { margin-left: auto; }
-  .admin-store-map { padding: 0 12px 12px; }
-  .admin-store-map-grid { grid-template-columns: minmax(0, 1fr); }
-  .admin-store-map-stage { min-height: 335px; }
-  .admin-store-map-list { max-height: 310px; }
+  .admin-store-codes { padding: 14px; }
+  .admin-bound-stores-header { padding: 14px 12px 10px; }
 }
 @media (max-width: 450px) {
   .admin-search { flex-basis: 100%; }

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { api } from '../lib/api'
 
 interface BindingCode { slot: number; code: string }
-const emit = defineEmits<{redeemed:[]}>()
+const emit = defineEmits<{updated:[]}>()
 const endpoint = '/admin/stores/binding-codes'
 const codes = ref<BindingCode[]>([])
 const loading = ref(false)
@@ -20,8 +21,9 @@ async function refresh() {
   try {
     const {codes:current} = await api<{codes:BindingCode[]}>(endpoint)
     if (!active) return
-    if (codes.value.some((item,index) => item.code !== current[index]?.code)) emit('redeemed')
+    const changed = codes.value.length !== current.length || codes.value.some((item,index) => item.code !== current[index]?.code)
     codes.value = current
+    if (changed) emit('updated')
     error.value = ''
     if (qr.value && !current.some(item => item.code === qr.value?.code)) {
       qr.value = null
@@ -78,17 +80,21 @@ onBeforeUnmount(() => {
   <section class="admin-panel admin-store-codes" aria-labelledby="store-codes-title">
     <header class="admin-store-codes-header">
       <div>
-        <h2 id="store-codes-title">门店绑定码</h2>
-        <p v-if="codes.length" class="admin-muted">{{ codes.length }} 个可用 · 使用后自动补发</p>
+        <div class="admin-store-codes-title">
+          <h2 id="store-codes-title">门店绑定码</h2>
+          <span v-if="codes.length" class="admin-status admin-status-positive">{{ codes.length }} 个可用</span>
+        </div>
+        <p v-if="codes.length" class="admin-muted">使用后自动补发</p>
       </div>
-      <button class="admin-button" type="button" :disabled="loading" @click="refresh">刷新绑定码</button>
+      <button class="admin-button admin-icon-button" type="button" title="刷新绑定码" aria-label="刷新绑定码"
+        :disabled="loading" @click="refresh"><el-icon><Refresh /></el-icon></button>
     </header>
     <p v-if="error" class="admin-error" role="alert">{{ error }}</p>
     <p v-else-if="!codes.length" class="admin-muted" role="status">{{ loading ? '正在读取绑定码…' : '暂无可用绑定码' }}</p>
     <ul v-else class="admin-store-codes-grid">
       <li v-for="item in codes" :key="item.slot" class="admin-store-code">
         <code class="admin-binding-code">{{ item.code }}</code>
-        <div>
+        <div class="admin-store-code-actions">
           <button class="admin-text-button" type="button" :disabled="!!error" @click="copy(item.code)">复制</button>
           <button class="admin-text-button" type="button" :disabled="qrLoading || !!error" @click="showQr(item.slot)">二维码</button>
         </div>

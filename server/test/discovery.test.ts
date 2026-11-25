@@ -125,7 +125,7 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     assert.equal((await request(bindPath,'POST',{...storeDetails('重放验证'),code:bindingCode},dogOwner.token)).status,409)
     assert.equal((await request(bindPath,'POST',{...profile,code:codes[1].code},dogOwner.token)).status,409)
     assert.deepEqual(await bindingCodes(manager.token),rotated)
-    const boundStores = await request('/admin/stores?q='+suffix+'&state=bound','GET',undefined,manager.token)
+    const boundStores = await request('/admin/stores/bound?q='+suffix,'GET',undefined,manager.token)
     assert.ok(boundStores.data.items.some((store:{id:string;bound:number}) => store.id === ba && store.bound))
     const ns = await bindStore(owner.token,storeBindingQrPrefix+codes[1].code,storeDetails('南山测试门店',22.533,113.93))
     await db.execute('UPDATE h5_stores SET latitude=NULL,longitude=NULL WHERE id=?',[ns])

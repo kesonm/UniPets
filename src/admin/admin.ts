@@ -1,6 +1,5 @@
 import { ChatDotRound, CollectionTag, Film, FirstAidKit, Goods, Shop, User } from '@element-plus/icons-vue'
 import { h5Areas } from '../../shared/h5-areas.mjs'
-import type { ServiceCoordinates } from '../../shared/h5-discovery.mjs'
 import { serviceRegions } from '../../shared/h5-service-regions.mjs'
 import { businessModules, type Listing } from '../h5/business'
 import { categories } from '../h5/catalog'
@@ -12,8 +11,8 @@ export const sections = [
     columns:['用户','登录方式','宠物档案','注册时间','状态'],
     filters:[{id:'enabled',label:'正常'},{id:'disabled',label:'已停用'}]},
   {id:'stores',title:'门店管理',icon:Shop,search:'搜索门店、地址或电话',
-    columns:['门店','地区','联系电话','创建时间','状态','绑定'],
-    filters:[{id:'enabled',label:'营业中'},{id:'disabled',label:'已停用'},{id:'bound',label:'已被绑定'},{id:'unbound',label:'暂未绑定'}]},
+    columns:['门店','地区','联系电话','登记时间','营业状态'],
+    filters:[{id:'enabled',label:'营业中'},{id:'disabled',label:'已停用'}]},
   {id:'products',title:'商品管理',icon:Goods,search:'搜索商品或门店',create:'新增商品',
     columns:['商品','门店 / 提供方','价格','库存','状态'],filters:catalogFilters()},
   {id:'pets',title:'宠物管理',icon:CollectionTag,search:'搜索宠物、主人或宠物编号',
@@ -42,7 +41,7 @@ export interface Account extends BaseRow {
 }
 export interface Store extends BaseRow {
   name: string; area: string|null; districtCode: string|null; cityCode: string|null; address: string; phone: string
-  latitude: number|null; longitude: number|null; enabled: Flag; bound: Flag; createdAt: string
+  enabled: Flag; bound: Flag; createdAt: string
 }
 export interface CatalogItem extends Listing {
   storeId: string|null; storeName: string|null; storeEnabled: Flag|null; visible: Flag; published: Flag; updatedAt: string
@@ -63,7 +62,6 @@ export interface Story extends BaseRow {
   publishedAt: string|null; updatedAt: string
 }
 export type AdminRecord = Account|Store|CatalogItem|Pet|Post|Story
-export type StoreOnMap = Store & {mapPoint:ServiceCoordinates|null}
 export type Content = Post|Story
 
 export const listingGroups = {...businessModules,shop:{title:'宠物品牌超市',categories:categories.filter(item => item.id !== 'all')},
@@ -90,7 +88,6 @@ export function tableCells(row: AdminRecord): Cell[] {
   if ('phone' in row) return [
     cell(row.name,row.address),cell(cities.get(row.cityCode ?? '') ?? h5Areas.find(area => area.id===row.area)?.label ?? row.area),
     cell(row.phone || null),date(row.createdAt),row.enabled ? status('营业中','positive') : status('已停用','warning'),
-    row.bound ? status('已被绑定','positive') : status('暂未绑定','muted'),
   ]
   if ('storeId' in row) {
     const category = row.categoryLabel ?? listingGroups[row.module].categories.find(item => item.id===row.category)?.label ?? row.category

@@ -77,7 +77,7 @@ test('admin management updates the same records used by the customer APIs', {tim
 
     const newStore = {name:'测试门店 '+suffix,area:'shenzhen-nanshan',address:'测试地址',phone:'0755-00000000'}
     const storeId = randomUUID()
-    const mappedId = randomUUID()
+    const boundId = randomUUID()
     await db.execute('INSERT INTO h5_stores (id,name,area,address,phone) VALUES (?,?,?,?,?)',
       [storeId,newStore.name,newStore.area,newStore.address,newStore.phone])
     stores.push(storeId)
@@ -85,19 +85,21 @@ test('admin management updates the same records used by the customer APIs', {tim
     assert.equal((await admin('/stores','POST',newStore)).status,404)
     assert.equal((await admin('/stores/'+storeId,'PUT',newStore)).status,404)
 
-    assert.equal((await request('/admin/stores/map','GET',undefined,member.cookie)).status,403)
-    assert.equal((await request('/admin/stores/map-settings')).status,401)
-    assert.equal((await admin('/stores/map-settings')).data.key,config.tencentMapBrowserKey || null)
-    await db.execute(`INSERT INTO h5_stores (id,name,address,phone,latitude,longitude,city_code)
-      VALUES (?,?,?,?,?,?,?)`,[mappedId,'定位门店 '+suffix,newStore.address,newStore.phone,22.55,113.882,'440300'])
-    stores.push(mappedId)
-    const mapRecords = (await admin('/stores/map?q='+suffix+'&state=unbound')).data.items
-    assert.equal(mapRecords.length,2)
-    assert.equal(mapRecords.find((row: {id:string}) => row.id===storeId).mapPoint,null)
-    const marker = mapRecords.find((row: {id:string}) => row.id===mappedId).mapPoint
-    assert.ok(Math.abs(marker.latitude-22.55)<0.01)
-    assert.ok(Math.abs(marker.longitude-113.882)>0.001)
-    assert.deepEqual((await admin('/stores/map?q='+suffix+'&state=bound')).data.items,[])
+    assert.equal((await request('/admin/stores/bound','GET',undefined,member.cookie)).status,403)
+    assert.equal((await admin('/stores/map-settings')).status,404)
+    assert.equal((await admin('/stores/map')).status,404)
+    await db.execute(`INSERT INTO h5_stores (id,name,address,phone,city_code,owner_user_id)
+      VALUES (?,?,?,?,?,?)`,[boundId,'已绑定门店 '+suffix,newStore.address,newStore.phone,'440300',member.id])
+    stores.push(boundId)
+    const boundUrl = '/stores/bound?q='+suffix
+    const boundRecords = (await admin(boundUrl)).data
+    assert.deepEqual(boundRecords.items.map((row:{id:string}) => row.id),[boundId])
+    assert.ok(boundRecords.items[0].bound)
+    assert.equal(boundRecords.hasMore,false)
+    assert.deepEqual((await admin(boundUrl+'&state=disabled')).data.items,[])
+    assert.equal((await admin('/stores/'+boundId,'PATCH',{enabled:false})).status,200)
+    assert.equal((await admin(boundUrl+'&state=disabled')).data.items[0].id,boundId)
+    assert.deepEqual((await admin(boundUrl+'&state=enabled')).data.items,[])
 
     const listing = {module:'shop',kind:'product',category:'food',title:'测试商品 '+suffix,provider:'',
       description:'测试详情',area:null,venue:null,startsAt:null,closesAt:null,priceCents:2590,

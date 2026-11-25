@@ -96,7 +96,7 @@
 
 小程序的门店选点使用 GCJ-02 经纬度。服务端识别城市和区县后以 WGS84 保存坐标。边界数据无法识别城市时，绑定和修改接口允许提交手动选择的 `cityCode`。
 
-`GET /admin/stores/map` 按 `q` 和 `state` 筛选全部门店记录，包含用于腾讯地图展示的 `mapPoint`。缺少经纬度的门店返回 `mapPoint: null`。`GET /admin/stores/map-settings` 返回管理员页面使用的腾讯地图网页 Key。
+`GET /admin/stores/bound` 分页读取已绑定门店，支持按门店名称、地址或电话搜索，并按营业状态筛选。
 
 `GET /admin/stores/binding-codes` 返回当前的 10 个绑定码。`GET /admin/stores/binding-codes/:slot/qr` 返回相应绑定码的二维码。二维码包含 `petcloud:store:` 前缀及绑定码。创建门店、绑定账号、消费旧码和补发该位置的新码在同一事务完成。未使用的绑定码持续有效，一个账号可以通过多个绑定码登记多家门店。
 

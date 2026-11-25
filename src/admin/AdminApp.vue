@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowLeft, ArrowRight, Document, Location, Menu, Plus, Refresh, Search, SwitchButton } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Document, Menu, Plus, Refresh, Search, Shop, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api, ApiError } from '../lib/api'
 import type { User } from '../lib/types'
 import AdminEditor from './AdminEditor.vue'
 import AdminServiceCategories from './AdminServiceCategories.vue'
 import AdminStoreCodes from './AdminStoreCodes.vue'
-import AdminStoreMap from './AdminStoreMap.vue'
-import { canReview, detailTitle, recordAction, sections, tableCells, type AdminRecord, type Store, type StoreOnMap } from './admin'
+import { canReview, detailTitle, recordAction, sections, tableCells, type AdminRecord } from './admin'
 import './admin.css'
 
 const logo = import.meta.env.BASE_URL + 'assets/brand-mark.png'
@@ -32,10 +31,13 @@ const hasMore = ref(false)
 const working = ref('')
 const drawer = ref<{record?:AdminRecord}|null>(null)
 const categoryManager = ref(false)
-const storeMapOpen = ref(false)
-const focusStoreId = ref('')
+const isStores = computed(() => active.value.id === 'stores')
+const listTitle = computed(() => isStores.value ? '已绑定门店' : active.value.title+'列表')
+const emptyText = computed(() => {
+  if (keyword.value || state.value) return isStores.value ? '没有符合条件的已绑定门店' : '没有符合条件的记录'
+  return isStores.value ? '暂无已绑定门店' : '暂无记录'
+})
 const rows = computed(() => records.value.map(record => ({record,cells:tableCells(record),action:recordAction(record)})))
-const storesOnMap = computed(() => records.value.filter((record):record is StoreOnMap => 'mapPoint' in record))
 const createLabel = computed(() => 'create' in active.value ? active.value.create : '')
 const drawerTitle = computed(() => {
   if (!drawer.value?.record) return createLabel.value
@@ -50,20 +52,18 @@ async function load() {
   const current = ++revision
   loading.value = true
   listError.value = ''
-  const section = active.value.id
-  const showingMap = section === 'stores' && storeMapOpen.value
-  const filter = new URLSearchParams({q:keyword.value})
-  if (!showingMap) filter.set('page',String(page.value))
+  const resource = isStores.value ? 'stores/bound' : active.value.id
+  const filter = new URLSearchParams({q:keyword.value,page:String(page.value)})
   if (state.value) filter.set('state',state.value)
   try {
-    const result = await api<{items:AdminRecord[];hasMore?:boolean}>('/admin/'+section+(showingMap ? '/map' : '')+'?'+filter)
+    const result = await api<{items:AdminRecord[];hasMore:boolean}>('/admin/'+resource+'?'+filter)
     if (current !== revision) return
     if (!result.items.length && page.value > 1) {
       page.value--
       return void load()
     }
     records.value = result.items
-    hasMore.value = Boolean(result.hasMore)
+    hasMore.value = result.hasMore
   } catch (cause) {
     if (current === revision) {
       listError.value = errorMessage(cause,'读取失败')
@@ -86,17 +86,6 @@ function movePage(offset: number) {
   void load()
 }
 
-function showStoreMap(open: boolean, storeId = '') {
-  storeMapOpen.value = open
-  focusStoreId.value = storeId
-  records.value = []
-  filterRecords()
-}
-
-function storeHasCoordinates(store: Store) {
-  return store.latitude != null && store.longitude != null
-}
-
 function navigate() {
   active.value = fromHash()
   navigationOpen.value = false
@@ -104,8 +93,6 @@ function navigate() {
 watch(active,() => {
   drawer.value = null
   categoryManager.value = false
-  storeMapOpen.value = false
-  focusStoreId.value = ''
   records.value = []
   search.value = ''
   state.value = ''
@@ -134,8 +121,6 @@ function clearSession() {
   records.value = []
   drawer.value = null
   categoryManager.value = false
-  storeMapOpen.value = false
-  focusStoreId.value = ''
   loading.value = false
   hasMore.value = false
   password.value = ''
@@ -250,79 +235,74 @@ onBeforeUnmount(() => {
       <main class="admin-main">
         <header class="admin-page-title">
           <h1>{{ active.title }}</h1>
-          <div v-if="createLabel || active.id==='stores'" class="admin-title-actions">
+          <div v-if="createLabel" class="admin-title-actions">
             <button v-if="active.id==='services'" class="admin-button" type="button" @click="categoryManager=true">管理分类</button>
-            <button v-if="active.id==='stores'" class="admin-button" type="button" @click="showStoreMap(!storeMapOpen)">
-              <el-icon><component :is="storeMapOpen ? Menu : Location" /></el-icon>{{ storeMapOpen ? '门店列表' : '门店地图' }}
-            </button>
-            <button v-if="createLabel" class="admin-button admin-primary" type="button" @click="drawer={}"><el-icon><Plus /></el-icon>{{ createLabel }}</button>
+            <button class="admin-button admin-primary" type="button" @click="drawer={}"><el-icon><Plus /></el-icon>{{ createLabel }}</button>
           </div>
         </header>
-        <AdminStoreCodes v-if="active.id==='stores'" @redeemed="load" />
-        <section class="admin-panel" :aria-label="storeMapOpen ? '门店地图与筛选' : active.title+'列表'" :aria-busy="loading">
-          <form class="admin-toolbar" role="search" @submit.prevent="filterRecords">
-            <div class="admin-search">
-              <el-icon aria-hidden="true"><Search /></el-icon>
-              <input v-model="search" type="search" maxlength="120" :aria-label="active.search" :placeholder="active.search" @search="!search && keyword && filterRecords()">
+        <div :class="{'admin-store-workspace':isStores}">
+          <AdminStoreCodes v-if="isStores" @updated="load" />
+          <section class="admin-panel" :class="{'admin-bound-stores':isStores}" :aria-label="listTitle" :aria-busy="loading">
+            <header v-if="isStores" class="admin-bound-stores-header">
+              <h2>{{ listTitle }}</h2>
+              <button class="admin-button admin-icon-button" type="button" title="刷新门店" aria-label="刷新门店" :disabled="loading"
+                @click="load"><el-icon><Refresh /></el-icon></button>
+            </header>
+            <form class="admin-toolbar" role="search" @submit.prevent="filterRecords">
+              <div class="admin-search">
+                <el-icon aria-hidden="true"><Search /></el-icon>
+                <input v-model="search" type="search" maxlength="120" :aria-label="active.search" :placeholder="active.search" @search="!search && keyword && filterRecords()">
+              </div>
+              <select v-model="state" :aria-label="isStores ? '营业状态' : active.id==='pets' ? '宠物种类' : '状态'" @change="filterRecords">
+                <option value="">{{ isStores ? '全部营业状态' : active.id==='pets' ? '全部种类' : '全部状态' }}</option>
+                <option v-for="choice in active.filters" :key="choice.id" :value="choice.id">{{ choice.label }}</option>
+              </select>
+              <button class="admin-button admin-search-submit" type="submit">搜索</button>
+              <button v-if="!isStores" class="admin-button admin-icon-button admin-reload" type="button" title="刷新" aria-label="刷新" :disabled="loading"
+                @click="load"><el-icon><Refresh /></el-icon></button>
+            </form>
+            <div v-if="!isStores || rows.length" class="admin-table-scroll" tabindex="0" :aria-label="listTitle">
+              <table>
+                <thead><tr><th v-for="column in active.columns" :key="column" scope="col">{{ column }}</th><th scope="col">操作</th></tr></thead>
+                <tbody v-if="rows.length">
+                  <tr v-for="{record,cells,action} in rows" :key="record.id">
+                    <td v-for="(value,index) in cells" :key="index">
+                      <span v-if="value.tone" :class="['admin-status','admin-status-'+value.tone]">{{ value.title }}</span>
+                      <template v-else>
+                        <span :class="{'admin-record-title':index===0}" :title="value.title">{{ value.title }}</span>
+                        <small v-if="value.detail" :title="value.detail">{{ value.detail }}</small>
+                      </template>
+                    </td>
+                    <td class="admin-actions">
+                      <button v-if="!('bound' in record) && (!('hidden' in record) || canReview(record))" class="admin-text-button" type="button"
+                        @click="drawer={record}">{{ 'hidden' in record ? '查看' : '编辑' }}</button>
+                      <button v-if="action" class="admin-text-button" :class="{'admin-text-danger':action.notice}" type="button"
+                        :disabled="Boolean(working) || loading" @click="applyAction(record)">{{ working===record.id ? '处理中…' : action.label }}</button>
+                      <span v-if="'hidden' in record && !canReview(record)" class="admin-muted">—</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <select v-model="state" :aria-label="active.id==='pets' ? '宠物种类' : '状态'" @change="filterRecords">
-              <option value="">{{ active.id==='pets' ? '全部种类' : '全部状态' }}</option>
-              <option v-for="choice in active.filters" :key="choice.id" :value="choice.id">{{ choice.label }}</option>
-            </select>
-            <button class="admin-button admin-search-submit" type="submit">搜索</button>
-            <button class="admin-button admin-icon-button admin-reload" type="button" title="刷新" aria-label="刷新" :disabled="loading"
-              @click="load"><el-icon><Refresh /></el-icon></button>
-          </form>
-          <template v-if="storeMapOpen">
-            <div v-if="listError" class="admin-empty" role="alert">
+            <div v-if="loading && !rows.length" class="admin-empty" role="status">正在读取…</div>
+            <div v-else-if="listError" class="admin-empty" role="alert">
               <p>{{ listError }}</p><button class="admin-button" type="button" @click="load">重试</button>
             </div>
-            <AdminStoreMap v-else :stores="storesOnMap" :focus-id="focusStoreId" :loading="loading" />
-          </template>
-          <template v-else>
-          <div class="admin-table-scroll" tabindex="0" :aria-label="active.title+'表格'">
-            <table>
-              <thead><tr><th v-for="column in active.columns" :key="column" scope="col">{{ column }}</th><th scope="col">操作</th></tr></thead>
-              <tbody v-if="rows.length">
-                <tr v-for="{record,cells,action} in rows" :key="record.id">
-                  <td v-for="(value,index) in cells" :key="index">
-                    <span v-if="value.tone" :class="['admin-status','admin-status-'+value.tone]">{{ value.title }}</span>
-                    <template v-else>
-                      <span :class="{'admin-record-title':index===0}" :title="value.title">{{ value.title }}</span>
-                      <small v-if="value.detail" :title="value.detail">{{ value.detail }}</small>
-                    </template>
-                  </td>
-                  <td class="admin-actions">
-                    <button v-if="!('bound' in record) && (!('hidden' in record) || canReview(record))" class="admin-text-button" type="button"
-                      @click="drawer={record}">{{ 'hidden' in record ? '查看' : '编辑' }}</button>
-                    <button v-if="'bound' in record && storeHasCoordinates(record)" class="admin-text-button" type="button"
-                      @click="showStoreMap(true,record.id)">查看位置</button>
-                    <button v-if="action" class="admin-text-button" :class="{'admin-text-danger':action.notice}" type="button"
-                      :disabled="Boolean(working) || loading" @click="applyAction(record)">{{ working===record.id ? '处理中…' : action.label }}</button>
-                    <span v-if="'hidden' in record && !canReview(record)" class="admin-muted">—</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-if="loading && !rows.length" class="admin-empty" role="status">正在读取…</div>
-          <div v-else-if="listError" class="admin-empty" role="alert">
-            <p>{{ listError }}</p><button class="admin-button" type="button" @click="load">重试</button>
-          </div>
-          <div v-else-if="!rows.length" class="admin-empty">
-            <span class="admin-empty-icon"><el-icon><Document /></el-icon></span>
-            <p>{{ keyword || state ? '没有符合条件的记录' : '暂无记录' }}</p>
-          </div>
-          <footer class="admin-pagination">
-            <span>本页 {{ rows.length }} 条</span>
-            <div>
-              <button class="admin-button admin-icon-button" type="button" :disabled="page===1 || loading" title="上一页" aria-label="上一页" @click="movePage(-1)"><el-icon><ArrowLeft /></el-icon></button>
-              <span>第 {{ page }} 页</span>
-              <button class="admin-button admin-icon-button" type="button" :disabled="!hasMore || loading" title="下一页" aria-label="下一页" @click="movePage(1)"><el-icon><ArrowRight /></el-icon></button>
+            <div v-else-if="!rows.length" class="admin-empty">
+              <span class="admin-empty-icon"><el-icon><component :is="isStores ? Shop : Document" /></el-icon></span>
+              <p>{{ emptyText }}</p>
+              <small v-if="isStores && !keyword && !state">商户绑定后，门店资料会出现在这里。</small>
             </div>
-          </footer>
-          </template>
-        </section>
+            <footer v-if="!isStores || rows.length" class="admin-pagination">
+              <span>本页 {{ rows.length }} {{ isStores ? '家' : '条' }}</span>
+              <div v-if="!isStores || page>1 || hasMore">
+                <button class="admin-button admin-icon-button" type="button" :disabled="page===1 || loading" title="上一页" aria-label="上一页" @click="movePage(-1)"><el-icon><ArrowLeft /></el-icon></button>
+                <span>第 {{ page }} 页</span>
+                <button class="admin-button admin-icon-button" type="button" :disabled="!hasMore || loading" title="下一页" aria-label="下一页" @click="movePage(1)"><el-icon><ArrowRight /></el-icon></button>
+              </div>
+            </footer>
+          </section>
+        </div>
       </main>
     </div>
     <el-drawer :model-value="Boolean(drawer)" :title="drawerTitle" class="admin-drawer" size="min(500px, 100%)" :close-on-click-modal="false"
