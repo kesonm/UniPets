@@ -3,7 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { ArrowLeft, ArrowRight, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { employmentTypes, jobCategories, jobCityLabel, jobStatuses, type JobStatus, type StoreJob } from '../../shared/h5-jobs.mjs'
-import { api } from '../lib/api'
+import { api, apiUrl } from '../lib/api'
 
 const endpoint = '/admin/stores/jobs'
 const search = ref('')
@@ -111,12 +111,12 @@ onBeforeUnmount(() => { active = false; revision++ })
             <td>{{ job.storeName }}</td>
             <td>{{ jobCityLabel(job.cityCode) || '—' }}</td>
             <td>{{ job.salary }}</td>
-            <td><span :class="['admin-status','admin-status-'+statusTones[job.status]]">{{ jobStatuses[job.status] }}</span></td>
+            <td><span :class="['admin-status','admin-status-'+statusTones[job.status]]">{{ job.internalDemo ? '内部演示' : jobStatuses[job.status] }}</span></td>
             <td>
             <div class="admin-actions">
               <button class="admin-text-button" type="button" @click="detail=job">查看</button>
                 <template v-if="job.status==='pending'">
-                <button class="admin-text-button" type="button" :disabled="!!working || loading" @click="review(job,'published')">通过</button>
+                <button v-if="!job.internalDemo" class="admin-text-button" type="button" :disabled="!!working || loading" @click="review(job,'published')">通过</button>
                 <button class="admin-text-button admin-text-danger" type="button" :disabled="!!working || loading" @click="review(job,'rejected')">驳回</button>
                 </template>
               <button v-if="job.status==='published'" class="admin-text-button admin-text-danger" type="button" :disabled="!!working || loading"
@@ -144,11 +144,16 @@ onBeforeUnmount(() => { active = false; revision++ })
       <h3>{{ detail.title }}</h3>
       <p>{{ jobCategories[detail.category] }} · {{ employmentTypes[detail.employmentType] }} · {{ detail.salary }}</p>
       <p>{{ detail.storeName }} · {{ detail.address }} · {{ detail.phone }}</p>
+      <div v-if="detail.imageCount" class="admin-job-images">
+        <a v-for="position in detail.imageCount" :key="position" :href="apiUrl(endpoint+'/'+detail.id+'/images/'+position)" target="_blank" rel="noopener">
+          <img :src="apiUrl(endpoint+'/'+detail.id+'/images/'+position)" :alt="'招聘配图 '+position">
+        </a>
+      </div>
       <p class="admin-job-description">{{ detail.description }}</p>
     </div>
     <template v-if="detail?.status==='pending'" #footer>
       <button class="admin-button" type="button" :disabled="!!working || loading" @click="review(detail,'rejected')">驳回</button>
-      <button class="admin-button admin-primary" type="button" :disabled="!!working || loading" @click="review(detail,'published')">审核通过</button>
+      <button v-if="!detail.internalDemo" class="admin-button admin-primary" type="button" :disabled="!!working || loading" @click="review(detail,'published')">审核通过</button>
     </template>
   </el-dialog>
 </template>
@@ -159,5 +164,7 @@ onBeforeUnmount(() => { active = false; revision++ })
 .admin-store-jobs td:first-child { min-width: 145px; }
 .admin-job-detail h3 { margin: 0 0 10px; color: var(--admin-ink); }
 .admin-job-detail p { margin: 0 0 8px; }
+.admin-job-images { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin: 12px 0; }
+.admin-job-images img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; }
 .admin-job-description { max-height: 42vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>

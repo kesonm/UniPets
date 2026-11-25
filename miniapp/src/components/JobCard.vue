@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { employmentTypes, jobCategories, jobCityLabel, type StoreJob } from '../../../shared/h5-jobs.mjs'
-import { go } from '../lib/client'
+import { go, publicImage } from '../lib/client'
 import UiIcon from './UiIcon.vue'
 
 defineProps<{job:StoreJob;compact?:boolean}>()
@@ -8,6 +8,7 @@ defineProps<{job:StoreJob;compact?:boolean}>()
 
 <template>
 <button :id="'job-'+job.id" class="card job-card" :class="{compact}" @tap="go('jobs',{id:job.id})">
+  <image v-if="job.imageCount" class="job-cover" :src="publicImage('/h5/jobs/'+job.id+'/images/1')" mode="aspectFill" lazy-load />
   <view class="job-card-heading">
     <text class="heading job-title">{{ job.title }}</text>
     <text class="job-salary">{{ job.salary }}</text>
@@ -27,6 +28,7 @@ defineProps<{job:StoreJob;compact?:boolean}>()
 
 <style scoped>
 .job-card { width: 100%; margin: 0 0 10px; text-align: left; }
+.job-cover { display: block; width: 100%; height: 132px; margin-bottom: 9px; border-radius: 8px; background: var(--canvas); }
 .job-card-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 3px 12px; }
 .job-title { min-width: 0; overflow-wrap: anywhere; }
 .job-salary { color: var(--gold-ink); font-weight: 750; font-size: 14px; overflow-wrap: anywhere; }

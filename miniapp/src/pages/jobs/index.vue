@@ -8,7 +8,7 @@ import ChoiceField from '../../components/ChoiceField.vue'
 import JobList from '../../components/JobList.vue'
 import LoadState from '../../components/LoadState.vue'
 import UiIcon from '../../components/UiIcon.vue'
-import { api } from '../../lib/client'
+import { api, publicImage } from '../../lib/client'
 import { pageLoad } from '../../lib/page'
 
 const endpoint = '/h5/jobs'
@@ -26,6 +26,8 @@ const id = ref('')
 const active = ref(false)
 const filters = computed(() => ({city:city.value.id,category:category.value,type:type.value}))
 const job = ref<StoreJob>()
+const images = computed(() => Array.from({length:job.value?.imageCount || 0}, (_,index) =>
+  publicImage(`/h5/jobs/${id.value}/images/${index+1}`)))
 
 onLoad(options => {
   id.value = options?.id || ''
@@ -58,6 +60,10 @@ function callStore() {
   const phone = servicePhone(job.value?.phone || '')
   if (phone) uni.makePhoneCall({phoneNumber:phone})
 }
+
+function previewImage(current: string) {
+  uni.previewImage({urls:images.value,current})
+}
 </script>
 
 <template>
@@ -80,6 +86,9 @@ function callStore() {
         </view>
         <view class="job-meta">
           <text>{{ jobCategories[job.category] }}</text><text>{{ employmentTypes[job.employmentType] }}</text>
+        </view>
+        <view v-if="images.length" class="job-detail-images">
+          <image v-for="url in images" :key="url" :src="url" mode="aspectFill" @tap="previewImage(url)" />
         </view>
         <text class="label">岗位职责与要求</text>
         <text class="job-description">{{ job.description }}</text>
@@ -105,6 +114,9 @@ function callStore() {
 .job-salary { color: var(--gold-ink); font-weight: 750; font-size: 14px; overflow-wrap: anywhere; }
 .job-meta { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 0; }
 .job-meta text { padding: 2px 7px; border-radius: 5px; background: #f5f0e4; color: #675328; font-size: 11px; }
+.job-detail-images { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin-top: 12px; }
+.job-detail-images image { display: block; width: 100%; height: 102px; border-radius: 8px; background: var(--canvas); }
+.job-detail-images image:only-child { grid-column: 1 / -1; height: 180px; }
 .job-description { display: block; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
 .job-detail-address { display: flex; align-items: flex-start; gap: 6px; margin-top: 8px; }
 .job-detail-address .ui-icon { margin-top: 2px; }

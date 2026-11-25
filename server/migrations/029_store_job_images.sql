@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS h5_store_job_images (
+  job_id CHAR(36) NOT NULL,
+  position TINYINT UNSIGNED NOT NULL,
+  image MEDIUMBLOB NOT NULL,
+  PRIMARY KEY (job_id,position),
+  FOREIGN KEY (job_id) REFERENCES h5_store_jobs(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

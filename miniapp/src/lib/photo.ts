@@ -1,12 +1,17 @@
 export async function choosePhoto(sourceType: ('album'|'camera')[] = ['album', 'camera']): Promise<string | null> {
-  const chosen = await new Promise<string | null>((resolve, reject) =>
+  const chosen = await choosePhotoPath(sourceType)
+  return chosen ? readPhoto(chosen) : null
+}
+
+export function choosePhotoPath(sourceType: ('album'|'camera')[] = ['album', 'camera'], limitMb = 8): Promise<string | null> {
+  return new Promise((resolve, reject) =>
     uni.chooseImage({
       count: 1,
       sizeType: ['compressed'],
       sourceType,
       success: (r) => {
         const file = Array.isArray(r.tempFiles) ? r.tempFiles[0] : r.tempFiles
-        if (file && file.size > 8 * 1024 * 1024) return reject(new Error('请选择 8 MB 以内的照片'))
+        if (file && file.size > limitMb * 1024 * 1024) return reject(new Error(`请选择 ${limitMb} MB 以内的照片`))
         resolve(Array.isArray(r.tempFilePaths) ? r.tempFilePaths[0] : r.tempFilePaths)
       },
       fail: (e) =>
@@ -15,18 +20,17 @@ export async function choosePhoto(sourceType: ('album'|'camera')[] = ['album', '
         )),
     }),
   )
-  return chosen ? readPhoto(chosen) : null
 }
 
-export function readPhoto(filePath: string): Promise<string> {
+export function readPhoto(filePath: string, limitMb = 8): Promise<string> {
   return new Promise((resolve, reject) =>
     uni.getFileSystemManager().readFile({
       filePath,
       encoding: 'base64',
       success: (r) => {
         const b64 = String(r.data)
-        if (b64.length > 4 * Math.ceil((8 * 1024 * 1024) / 3)) {
-          return reject(new Error('请选择 8 MB 以内的照片'))
+        if (b64.length > 4 * Math.ceil((limitMb * 1024 * 1024) / 3)) {
+          return reject(new Error(`请选择 ${limitMb} MB 以内的照片`))
         }
         const mime = b64.startsWith('/9j/')
           ? 'jpeg'

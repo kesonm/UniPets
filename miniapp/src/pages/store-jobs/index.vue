@@ -6,8 +6,9 @@ import { employmentTypes, jobCategories, jobCityLabel, jobStatuses, type StoreJo
 import ChoiceField from '../../components/ChoiceField.vue'
 import LoadState from '../../components/LoadState.vue'
 import LoginCard from '../../components/LoginCard.vue'
-import { api, confirm, message, toast, user } from '../../lib/client'
+import { api, confirm, downloadJobImage, message, toast, user } from '../../lib/client'
 import { pageLoad, submitAction } from '../../lib/page'
+import { choosePhotoPath, readPhoto } from '../../lib/photo'
 
 type Store = {name:string;address:string;phone:string;cityCode:string|null;enabled:boolean}
 const storeId = ref('')
@@ -19,6 +20,9 @@ const categoryOptions = Object.entries(jobCategories).map(([id,label]) => ({id,l
 const typeOptions = Object.entries(employmentTypes).map(([id,label]) => ({id,label}))
 const emptyForm = () => ({title:'',category:'',employmentType:'',salary:'',description:''})
 const form = reactive(emptyForm())
+const photos = ref<string[]>([])
+const choosingPhoto = ref(false)
+const imageLimit = 2
 const storeReady = computed(() => Boolean(store.value?.enabled && store.value.address.trim() &&
   jobCityLabel(store.value.cityCode) && servicePhone(store.value.phone)))
 const canSubmit = computed(() => storeReady.value && form.title.trim() && form.category &&
@@ -51,18 +55,54 @@ const {loading,error,refresh} = pageLoad(async () => {
   jobs.value = []
   hasMore.value = false
   showForm.value = false
+  photos.value = []
   Object.assign(form,emptyForm())
 })
 
 const {run,busy,error:actionError} = submitAction()
 
+function startJob() {
+  Object.assign(form,emptyForm())
+  photos.value = []
+  actionError.value = ''
+  showForm.value = true
+}
+
+async function addPhoto() {
+  if (choosingPhoto.value || busy.value || photos.value.length >= 3) return
+  choosingPhoto.value = true
+  const owner = user.value?.id
+  try {
+    const path = await choosePhotoPath(['album','camera'],imageLimit)
+    if (path && owner === user.value?.id && showForm.value) photos.value.push(path)
+  } catch (cause) {
+    toast(message(cause))
+  } finally {
+    choosingPhoto.value = false
+  }
+}
+
+function viewPhotos(job: StoreJob) {
+  void run(async () => {
+    const urls = await Promise.all(Array.from({length:job.imageCount}, (_,index) => downloadJobImage(job.storeId,job.id,index+1)))
+    uni.previewImage({urls})
+  })
+}
+
+function previewDraftPhoto(path: string) {
+  uni.previewImage({urls:photos.value,current:path})
+}
+
 function submit() {
-  if (!canSubmit.value) return
+  if (!canSubmit.value || choosingPhoto.value) return
   void run(async () => {
     const owner = user.value?.id
-    await api(endpoint.value,'POST',{...form})
+    const images = await Promise.all(photos.value.map(path => readPhoto(path,imageLimit)))
+    if (!owner || user.value?.id !== owner) return
+    await api(endpoint.value,'POST',{...form,images},35000)
     if (!owner || user.value?.id !== owner) return
     Object.assign(form,emptyForm())
+    photos.value = []
     showForm.value = false
     toast('岗位已提交审核')
     await refresh()
@@ -104,7 +144,7 @@ async function more() {
         <view class="card store-recruiting-summary">
           <view class="spread">
             <text class="heading">{{ store.name }}</text>
-            <button v-if="storeReady && !showForm" id="new-store-job" class="small primary" :disabled="busy || loading" @tap="showForm=true">发布岗位</button>
+            <button v-if="storeReady && !showForm" id="new-store-job" class="small primary" :disabled="busy || loading" @tap="startJob">发布岗位</button>
           </view>
           <text class="sub">{{ [jobCityLabel(store.cityCode),store.address,store.phone].filter(Boolean).join(' · ') }}</text>
           <text v-if="!storeReady" class="sub">{{ store.enabled ? '请先完善门店城市、地址和联系电话' : '门店已停用' }}</text>
@@ -126,10 +166,18 @@ async function more() {
           <input id="store-job-salary" v-model="form.salary" :always-embed="true" maxlength="40" placeholder="例如 5000–7000 元/月" />
           <text class="label">岗位职责与要求</text>
           <textarea id="store-job-description" v-model="form.description" maxlength="2000" placeholder="填写工作内容、任职要求和工作时间" />
+          <text class="label">招聘配图（选填，最多 3 张）</text>
+          <view class="store-job-photos">
+            <view v-for="(path,index) in photos" :key="index" class="store-job-photo">
+              <image :src="path" mode="aspectFill" @tap="previewDraftPhoto(path)" />
+              <button class="chip store-job-remove-photo" :disabled="busy" :aria-label="'移除第 '+(index+1)+' 张'" @tap="photos.splice(index,1)">×</button>
+            </view>
+            <button v-if="photos.length < 3" class="small store-job-add-photo" :disabled="busy || choosingPhoto" @tap="addPhoto">＋ 添加图片</button>
+          </view>
           <text v-if="actionError" class="error">{{ actionError }}</text>
           <view class="actions">
-            <button :disabled="busy" @tap="showForm=false">取消</button>
-            <button id="submit-store-job" class="primary" :disabled="busy || !canSubmit" :loading="busy" @tap="submit">提交审核</button>
+            <button :disabled="busy || choosingPhoto" @tap="showForm=false">取消</button>
+            <button id="submit-store-job" class="primary" :disabled="busy || choosingPhoto || !canSubmit" :loading="busy" @tap="submit">提交审核</button>
           </view>
         </view>
         <template v-else>
@@ -137,9 +185,10 @@ async function more() {
           <view v-for="job in jobs" :key="job.id" class="card">
             <view class="spread">
               <text class="heading">{{ job.title }}</text>
-              <text :class="['recruiting-status',job.status]">{{ jobStatuses[job.status] }}</text>
+              <text :class="['recruiting-status',job.status]">{{ job.internalDemo ? '内部演示' : jobStatuses[job.status] }}</text>
             </view>
             <text class="sub">{{ jobCategories[job.category] }} · {{ employmentTypes[job.employmentType] }} · {{ job.salary }}</text>
+            <button v-if="job.imageCount" class="small store-job-close" :disabled="busy" @tap="viewPhotos(job)">查看配图（{{ job.imageCount }}）</button>
             <button v-if="job.status==='pending' || job.status==='published'" class="small store-job-close" :disabled="busy || loading" @tap="closeJob(job)">
               {{ job.status==='pending' ? '撤回' : '关闭招聘' }}
             </button>
@@ -155,6 +204,11 @@ async function more() {
 <style scoped>
 .store-recruiting-summary .sub { margin-top: 6px; }
 .store-job-form-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 8px; }
+.store-job-photos { display: flex; flex-wrap: wrap; gap: 8px; }
+.store-job-photo { position: relative; width: 80px; height: 80px; }
+.store-job-photo image { display: block; width: 100%; height: 100%; border-radius: 8px; }
+.store-job-remove-photo { position: absolute; top: 4px; right: 4px; padding: 0; width: 26px; height: 26px; }
+.store-job-add-photo { min-height: 80px; border-style: dashed; border-radius: 8px; }
 .recruiting-status { flex: none; padding: 3px 7px; border-radius: 8px; color: #66543e; background: #f1ede5; font-size: 11px; }
 .recruiting-status.pending { color: #73521b; background: #fff2c9; }
 .recruiting-status.published { color: #2d6949; background: #e5f2e7; }

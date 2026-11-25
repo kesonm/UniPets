@@ -144,7 +144,7 @@ function downloadImage(path: string, label: string): Promise<string> {
   return new Promise((resolve, reject) =>
     uni.downloadFile({
       url: apiUrl(path),
-      header: { Authorization: 'Bearer ' + usedToken },
+      header: { Authorization: 'Bearer ' + usedToken, 'X-PetCloud-Client': 'miniprogram' },
       success: (r) =>
         r.statusCode === 200 && token === usedToken
           ? resolve(r.tempFilePath)
@@ -155,6 +155,9 @@ function downloadImage(path: string, label: string): Promise<string> {
 }
 export function downloadAsset(id: string) {
   return downloadImage('/assets/' + id + '/file', '照片')
+}
+export function downloadJobImage(storeId: string, jobId: string, position: number) {
+  return downloadImage(`/h5/jobs/mine/${storeId}/${jobId}/images/${position}`, '招聘配图')
 }
 export function downloadAvatar(version: string) {
   return downloadImage('/auth/profile/avatar?v=' + encodeURIComponent(version), '头像')

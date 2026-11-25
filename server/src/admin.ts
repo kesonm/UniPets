@@ -7,7 +7,7 @@ import { adminLogin, authLimiter, requireAuth } from './auth.js'
 import { catalogStore, catalogValues, catalogVisible, createCatalogItem, managedCatalogInput, managedCatalogUpdate } from './catalog.js'
 import { db, rows, transaction } from './db.js'
 import { HttpError } from './errors.js'
-import { reviewStoreJob, storeJobFields, storeJobsFrom } from './h5-jobs.js'
+import { getStoreJobImage, reviewStoreJob, storeJobFields, storeJobsFrom } from './h5-jobs.js'
 import { hasStoreContact, listStoreBindingCodes, refreshStoreBindingCode, storeBindingQr, type StoreContact } from './h5-store-binding.js'
 import { petSchema, updatePetRecord } from './routes.js'
 import { checkServiceCategory, getServiceCategories, serviceCategoryId, serviceCategoryJoin, serviceCategoryLabel, serviceCategoryName } from './service-categories.js'
@@ -99,6 +99,9 @@ adminRouter.get('/stores/jobs',list({
   select:storeJobFields, from:storeJobsFrom, search:'j.title,s.name,s.address', order:"(j.status='pending') DESC,j.created_at DESC,j.id DESC",
   states:{pending:"j.status='pending'",published:"j.status='published'",rejected:"j.status='rejected'",closed:"j.status='closed'"},
 }))
+adminRouter.get('/stores/jobs/:id/images/:position', async (req,res) => {
+  res.type('webp').send(await getStoreJobImage(req.params.id,req.params.position))
+})
 adminRouter.patch('/stores/jobs/:id',async (req,res) => {
   const {status} = z.object({status:z.enum(['published','rejected','closed'])}).strict().parse(req.body)
   await reviewStoreJob(uuid.parse(req.params.id),status)

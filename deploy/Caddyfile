@@ -33,6 +33,10 @@ http://:8080 {
 		method GET HEAD
 		path_regexp "^/api/h5/events/[0-9a-fA-F-]{36}$"
 	}
+	@jobImage {
+		method GET HEAD
+		path_regexp "^/api/h5/jobs/[0-9a-fA-F-]{36}/images/[1-3]$"
+	}
 	@publishedDetail {
 		method GET HEAD
 		path_regexp "^/api/h5/((catalog|creators)/[0-9a-fA-F-]{36}|stories/[0-9a-fA-F-]{36}(/cover)?)$"
@@ -47,6 +51,9 @@ http://:8080 {
 		reverse_proxy api:3008
 	}
 	handle @eventDetail {
+		reverse_proxy api:3008
+	}
+	handle @jobImage {
 		reverse_proxy api:3008
 	}
 	handle @publishedDetail {

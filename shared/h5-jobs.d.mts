@@ -20,6 +20,8 @@ export interface StoreJob {
   salary: string
   description: string
   status: JobStatus
+  imageCount: number
+  internalDemo: boolean
   createdAt: string
   publishedAt: string | null
 }

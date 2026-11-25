@@ -1,0 +1,1 @@
+ALTER TABLE h5_store_jobs ADD COLUMN internal_demo BOOLEAN NOT NULL DEFAULT FALSE;

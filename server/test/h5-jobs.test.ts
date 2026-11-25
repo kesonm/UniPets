@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import test from 'node:test'
+import sharp from 'sharp'
 import { createApp } from '../src/app.js'
 import { config } from '../src/config.js'
 import { db } from '../src/db.js'
@@ -53,17 +54,31 @@ test('only approved openings at active stores appear in the job directory', {tim
     const secondStore = await createStore(owner.id,'440300')
     const mine = '/h5/jobs/mine/'+store
     const form = {title:'测试宠物美容师 '+suffix,category:'grooming',employmentType:'full-time',salary:'5000–7000 元/月',description:'洗护与日常美容'}
+    const cover = 'data:image/png;base64,'+(await sharp({create:{width:24,height:20,channels:3,background:'#e8c253'}}).png().toBuffer()).toString('base64')
+    const image = (path: string, cookie?: string) => fetch(base+path,{headers:cookie ? {Cookie:cookie} : undefined})
 
     assert.equal((await request(mine)).status,401)
     assert.equal((await request(mine,'GET',undefined,other.cookie)).status,404)
     assert.equal((await request(mine,'POST',form,other.cookie)).status,404)
     assert.equal((await request(mine,'POST',{...form,phone:'123'},owner.cookie)).status,400)
     assert.equal((await request('/admin/stores/jobs','GET',undefined,owner.cookie)).status,403)
-    const submitted = await request(mine,'POST',form,owner.cookie)
+    assert.equal((await request(mine,'POST',{...form,images:[cover,'data:image/png;base64,AAAA']},owner.cookie)).status,400)
+    assert.equal((await request(mine,'POST',{...form,images:[cover,cover,cover,cover]},owner.cookie)).status,400)
+    assert.deepEqual((await request(mine,'GET',undefined,owner.cookie)).data.items,[])
+    const submitted = await request(mine,'POST',{...form,images:[cover,cover,cover]},owner.cookie)
     assert.equal(submitted.status,201)
     const id = submitted.data.id as string
     const pending = await request(mine,'GET',undefined,owner.cookie)
     assert.equal(pending.data.items[0].status,'pending')
+    assert.equal(pending.data.items[0].imageCount,3)
+    const publicPhoto = '/h5/jobs/'+id+'/images/1'
+    const ownerPhoto = mine+'/'+id+'/images/2'
+    const adminPhoto = '/admin/stores/jobs/'+id+'/images/3'
+    assert.equal((await image(publicPhoto)).status,404)
+    assert.equal((await image(ownerPhoto,other.cookie)).status,404)
+    assert.equal((await image(ownerPhoto,owner.cookie)).headers.get('content-type'),'image/webp')
+    assert.equal((await image(adminPhoto,owner.cookie)).status,403)
+    assert.equal((await image(adminPhoto,login.cookie)).headers.get('content-type'),'image/webp')
     assert.equal((await request('/h5/jobs/'+id)).status,404)
     assert.deepEqual((await admin('/jobs?state=pending&q='+suffix)).data.items.map((job: {id:string}) => job.id),[id])
 
@@ -74,6 +89,10 @@ test('only approved openings at active stores appear in the job directory', {tim
     assert.equal(detail.data.job.phone,'0791-00000000')
     assert.equal(detail.data.job.address,'测试门店地址')
     assert.ok(detail.data.job.publishedAt)
+    const photo = await image(publicPhoto)
+    assert.equal(photo.status,200)
+    assert.equal(photo.headers.get('content-type'),'image/webp')
+    assert.equal((await sharp(Buffer.from(await photo.arrayBuffer())).metadata()).width,24)
     assert.equal((await admin('/jobs/'+id,'PATCH',{status:'rejected'})).status,409)
 
     const second = await request('/h5/jobs/mine/'+secondStore,'POST',
@@ -96,6 +115,12 @@ test('only approved openings at active stores appear in the job directory', {tim
     assert.ok(!(await ids('?category=care')).includes(id))
     assert.ok(!(await ids('?type=part-time')).includes(id))
     assert.equal((await request('/h5/jobs?category=unknown')).status,400)
+
+    const demo = await request(mine,'POST',{...form,title:'内部演示 '+suffix,images:[cover],internalDemo:true},owner.cookie)
+    assert.equal(demo.status,201)
+    assert.ok((await request(mine,'GET',undefined,owner.cookie)).data.items.find((job: {id:string}) => job.id===demo.data.id)?.internalDemo)
+    assert.equal((await admin('/jobs/'+demo.data.id,'PATCH',{status:'published'})).status,409)
+    assert.equal((await image('/h5/jobs/'+demo.data.id+'/images/1')).status,404)
 
     assert.equal((await admin('/'+store,'PATCH',{enabled:false})).status,200)
     assert.equal((await request('/h5/jobs/'+id)).status,404)
