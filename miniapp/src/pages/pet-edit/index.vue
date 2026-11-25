@@ -64,14 +64,14 @@ function save() {
       <LoadState :error="error" :loading="loading" @retry="refresh" />
       <view v-if="ready" class="card">
         <text class="label">宠物名字 *</text>
-        <input v-model="form.name" maxlength="40" placeholder="它叫什么名字？" />
+        <input v-model="form.name" :always-embed="true" maxlength="40" placeholder="它叫什么名字？" />
         <text class="label">种类 *</text>
         <text v-if="speciesLocked" class="field">
           {{ species.find((o) => o.id === form.species)?.label }}
         </text>
         <ChoiceField v-else v-model="form.species" :options="species" />
         <text class="label">品种</text>
-        <input v-model="form.breed" maxlength="80" placeholder="选填" />
+        <input v-model="form.breed" :always-embed="true" maxlength="80" placeholder="选填" />
         <text class="label">性别</text>
         <ChoiceField v-model="form.gender" :options="genders" />
         <text class="label">生日</text>

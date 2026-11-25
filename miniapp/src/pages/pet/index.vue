@@ -225,7 +225,7 @@ function addTribute() {
               <ChoiceField v-model="kind" :options="healthKinds" />
             </template>
             <text class="label">标题</text>
-            <input v-model="title" maxlength="100" />
+            <input v-model="title" :always-embed="true" maxlength="100" />
             <text class="label">记录内容</text>
             <textarea v-model="content" :maxlength="tab === '健康' ? 1500 : 5000" />
             <template v-if="tab === '成长记忆' && photos.length">
@@ -260,7 +260,7 @@ function addTribute() {
         <view v-if="tab === '纪念馆'" class="card">
           <text class="heading">纪念馆</text>
           <text class="label">名称</text>
-          <input v-model="memorialTitle" maxlength="100" />
+          <input v-model="memorialTitle" :always-embed="true" maxlength="100" />
           <text class="label">纪念文字</text>
           <textarea v-model="remembrance" maxlength="3000" />
           <view class="actions">
@@ -270,7 +270,7 @@ function addTribute() {
           </view>
           <template v-if="records?.memorial">
             <text class="label">纪念留言</text>
-            <input v-model="tribute" maxlength="500" />
+            <input v-model="tribute" :always-embed="true" maxlength="500" />
             <view class="actions">
               <button :disabled="busy || !tribute.trim()" @tap="addTribute">留言</button>
             </view>

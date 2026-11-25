@@ -44,6 +44,7 @@ function back() {
         <input
           v-model="input"
           class="immortality-input"
+          :always-embed="true"
           maxlength="60"
           placeholder="名称、机构或地点"
           aria-label="搜索名称、机构或地点"
@@ -113,6 +114,7 @@ function back() {
   flex: 1;
   width: 0;
   min-width: 0;
+  height: 28px;
   min-height: 28px;
   padding: 0;
   border: 0;

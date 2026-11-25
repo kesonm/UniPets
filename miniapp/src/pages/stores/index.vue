@@ -142,7 +142,7 @@ function publish() {
           </button>
           <text class="label store-code-label">绑定码</text>
           <view class="store-code-row">
-            <input id="store-binding-code" v-model="code" maxlength="12" :disabled="busy || scanning"
+            <input id="store-binding-code" v-model="code" :always-embed="true" maxlength="12" :disabled="busy || scanning"
               aria-label="门店绑定码" placeholder="输入 12 位绑定码" confirm-type="done" @confirm="usableCode && verifyCode()" />
             <button id="bind-store" class="small" :disabled="busy || scanning || !usableCode" @tap="verifyCode()">下一步</button>
           </view>
@@ -175,11 +175,11 @@ function publish() {
           <text class="label">分类</text>
           <ChoiceField v-model="category" :options="categories" placeholder="选择服务分类" />
           <text class="label">服务名称</text>
-          <input id="service-publish-title" v-model="title" maxlength="120" placeholder="例如宠物洗护" />
+          <input id="service-publish-title" v-model="title" :always-embed="true" maxlength="120" placeholder="例如宠物洗护" />
           <text class="label">服务详情</text>
           <textarea id="service-publish-description" v-model="description" maxlength="5000" placeholder="填写服务内容" />
           <text class="label">价格（元，选填）</text>
-          <input v-model="price" type="digit" maxlength="9" placeholder="填写价格" />
+          <input v-model="price" :always-embed="true" type="digit" maxlength="9" placeholder="填写价格" />
           <text v-if="actionError" class="error">{{ actionError }}</text>
           <view class="actions">
             <button id="publish-service-post" class="primary" :disabled="busy || loading || !category || !title.trim() || !description.trim()" @tap="publish">发布服务帖</button>

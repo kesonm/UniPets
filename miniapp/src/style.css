@@ -129,15 +129,19 @@ button.text-button {
 input, textarea, .field {
   display: block;
   width: 100%;
-  height: auto;
   min-height: 39px;
-  padding: 8px 10px;
   border: 1px solid #e7dfcb;
   border-radius: 9px;
   background: #fffdf7;
   color: var(--ink);
   font-size: 14px;
 }
+input {
+  height: 39px;
+  padding: 0 10px;
+  line-height: 20px;
+}
+textarea, .field { padding: 8px 10px; }
 textarea { height: 98px; }
 .thumb {
   flex: none;

@@ -206,7 +206,7 @@ function comment() {
   <view class="screen service-screen">
     <template v-if="!id">
       <view class="card service-search">
-        <input v-model="input" maxlength="60" placeholder="搜索服务或商家" confirm-type="search" @confirm="search" />
+        <input v-model="input" :always-embed="true" maxlength="60" placeholder="搜索服务或商家" confirm-type="search" @confirm="search" />
         <button class="small primary" @tap="search">搜索</button>
       </view>
       <view class="card service-filters" aria-label="服务筛选">

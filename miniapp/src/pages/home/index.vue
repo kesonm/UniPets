@@ -95,7 +95,7 @@ watch([query, kind, () => browseDistrict.value?.id, retry], async ([term, target
         </button>
         <view class="market-search">
           <UiIcon name="search" :size="15" />
-          <input v-model="queryInput" maxlength="60" placeholder="服务、商品、动态" confirm-type="search" aria-label="搜索服务、商品或动态" @confirm="search" />
+          <input v-model="queryInput" :always-embed="true" maxlength="60" placeholder="服务、商品、动态" confirm-type="search" aria-label="搜索服务、商品或动态" @confirm="search" />
           <button @tap="search">搜索</button>
         </view>
       </view>
@@ -209,6 +209,7 @@ watch([query, kind, () => browseDistrict.value?.id, retry], async ([term, target
   flex: 1;
   width: 0;
   min-width: 0;
+  height: 28px;
   min-height: 28px;
   padding: 0;
   border: 0;

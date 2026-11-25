@@ -66,6 +66,7 @@ function signOut() {
         </button>
         <text class="label">昵称</text>
         <input
+          :always-embed="true"
           id="profile-nickname"
           name="nickname"
           type="nickname"

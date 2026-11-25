@@ -125,7 +125,7 @@ async function like(post: H5Post) {
   <view class="feed-section">
     <view v-if="filterable" class="card feed-filters">
       <view class="feed-search">
-        <input v-model="input" maxlength="60" placeholder="搜索帖子或宠物" confirm-type="search" @confirm="search" />
+        <input v-model="input" :always-embed="true" maxlength="60" placeholder="搜索帖子或宠物" confirm-type="search" @confirm="search" />
         <button class="small primary" @tap="search">搜索</button>
       </view>
       <view class="feed-choices">

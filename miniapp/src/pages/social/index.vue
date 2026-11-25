@@ -158,7 +158,7 @@ function send() {
           <text class="body">{{ m.body }}</text>
         </view>
         <text class="label">发消息</text>
-        <input v-model="chat" maxlength="500" />
+        <input v-model="chat" :always-embed="true" maxlength="500" />
         <view class="actions">
           <button class="primary" :disabled="busy || !chat.trim()" @tap="send">发送</button>
           <button @tap="refresh">刷新</button>

@@ -127,6 +127,7 @@ function open(s: StorySummary) {
     <template v-if="mode === 'all' || (mode === 'mine' && user)">
       <view class="card row">
         <input
+          :always-embed="true"
           v-if="mode === 'all'"
           v-model="q"
           class="grow"
@@ -158,7 +159,7 @@ function open(s: StorySummary) {
     <view v-if="mode === 'write' && user" class="card">
       <PetPicker v-if="!id" v-model="petId" :pets="pets" />
       <text class="label">标题</text>
-      <input v-model="title" maxlength="100" />
+      <input v-model="title" :always-embed="true" maxlength="100" />
       <text class="label">封面照片</text>
       <ChoiceField v-model="cover" :options="photos" />
       <view v-for="(_, i) in scenes" :key="i">

@@ -69,11 +69,11 @@ function save() {
   <view class="card merchant-store-form">
     <text class="heading">{{ store ? '编辑门店' : '填写门店资料' }}</text>
     <text class="label">门店名称</text>
-    <input id="merchant-store-name" v-model="name" maxlength="120" placeholder="填写门店名称" />
+    <input id="merchant-store-name" v-model="name" :always-embed="true" maxlength="120" placeholder="填写门店名称" />
     <text class="label">详细地址</text>
-    <input id="merchant-store-address" v-model="address" maxlength="160" placeholder="街道、门牌号" />
+    <input id="merchant-store-address" v-model="address" :always-embed="true" maxlength="160" placeholder="街道、门牌号" />
     <text class="label">联系电话</text>
-    <input id="merchant-store-phone" v-model="phone" maxlength="40" placeholder="填写手机号或座机" />
+    <input id="merchant-store-phone" v-model="phone" :always-embed="true" maxlength="40" placeholder="填写手机号或座机" />
     <text class="label">门店位置</text>
     <button id="open-merchant-store-map" class="small merchant-location-button" :disabled="busy || choosing" :loading="choosing" @tap="openMap">
       <UiIcon name="location" :size="16" />{{ point ? '重新定位' : '定位门店' }}

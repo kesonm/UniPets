@@ -58,6 +58,7 @@ async function signIn(event: Event) {
               class="login-nickname-input"
               name="nickname"
               type="nickname"
+              :always-embed="true"
               maxlength="40"
               placeholder="使用微信昵称或自行输入"
               aria-label="昵称"
@@ -104,7 +105,7 @@ async function signIn(event: Event) {
   border-top: 1px solid #efe6cf;
 }
 .login-nickname-field .login-field-label { flex: none; }
-.login-nickname-input { flex: 1; min-width: 0; padding: 7px 0; border: 0; background: transparent; }
+.login-nickname-input { flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; }
 .login-button { width: 100%; margin-top: 14px; border-radius: 12px; }
 .privacy-guide { display: flex; width: 100%; margin-top: 5px; font-size: 12px; }
 </style>

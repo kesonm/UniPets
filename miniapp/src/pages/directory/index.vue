@@ -163,6 +163,7 @@ function copyLink() {
       <template v-else>
         <view class="card program-search">
           <input
+            :always-embed="true"
             v-model="q"
             maxlength="60"
             :placeholder="section === 'shop' ? '搜索商品或商家' : '搜索名称、机构或地点'"
@@ -215,7 +216,7 @@ function copyLink() {
         <PetPicker v-if="needsPet" v-model="petId" :pets="pets" />
         <template v-if="item">
           <text class="label">备注（选填）</text>
-          <input v-model="note" maxlength="500" />
+          <input v-model="note" :always-embed="true" maxlength="500" />
         </template>
         <view class="actions">
           <button

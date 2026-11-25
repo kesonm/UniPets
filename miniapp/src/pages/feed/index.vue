@@ -180,6 +180,7 @@ const owned = computed(() => mode.value === 'private' ? Boolean(current.value &&
     <view v-if="mode === 'all'" class="card">
       <view class="row">
         <input
+          :always-embed="true"
           v-model="query"
           class="grow"
           maxlength="60"
@@ -223,7 +224,7 @@ const owned = computed(() => mode.value === 'private' ? Boolean(current.value &&
         <ChoiceField v-model="petType" :options="otherPetTypes" />
       </template>
       <text class="label">标题</text>
-      <input v-model="title" maxlength="100" />
+      <input v-model="title" :always-embed="true" maxlength="100" />
       <text class="label">正文</text>
       <textarea v-model="body" maxlength="3000" />
       <text class="label">主题</text>
@@ -263,7 +264,7 @@ const owned = computed(() => mode.value === 'private' ? Boolean(current.value &&
       <view v-if="!example && mode !== 'private'" class="card">
         <text class="heading">评论</text>
         <template v-if="user">
-          <input v-model="reply" maxlength="500" placeholder="写条评论" />
+          <input v-model="reply" :always-embed="true" maxlength="500" placeholder="写条评论" />
           <view class="actions">
             <button class="small primary" :disabled="busy || !reply.trim()" @tap="comment">发送</button>
           </view>
