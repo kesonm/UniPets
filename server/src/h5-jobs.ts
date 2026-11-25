@@ -6,7 +6,7 @@ import { servicePhone } from '../../shared/h5-discovery.mjs'
 import { employmentTypes, jobCategories, type EmploymentType, type JobCategory, type JobStatus, type StoreJob } from '../../shared/h5-jobs.mjs'
 import { requireAuth } from './auth.js'
 import { db, rows } from './db.js'
-import { serviceCityInput } from './districts.js'
+import { districtById, districtInput, serviceCityInput } from './districts.js'
 import { HttpError } from './errors.js'
 
 export const h5JobsRouter = Router()
@@ -21,6 +21,8 @@ const listInput = z.object({
   city: serviceCityInput.optional(),
   category: categoryInput.optional(),
   type: typeInput.optional(),
+  district: districtInput.optional(),
+  q: z.string().trim().max(60).default(''),
 }).strict()
 const jobInput = z.object({
   title: z.string().trim().min(1,'请填写岗位名称').max(80),
@@ -46,8 +48,15 @@ h5JobsRouter.get(route, async (req,res) => {
       values.push(value)
     }
   }
+  if (filter.q) {
+    conditions.push("LOCATE(?,CONCAT_WS(' ',j.title,s.name,j.description))>0")
+    values.push(filter.q)
+  }
+  const nearbyCity = filter.city ? undefined : districtById(filter.district)?.serviceCityCode
+  const cityOrder = nearbyCity ? '(s.city_code=?) DESC,' : ''
+  if (nearbyCity) values.push(nearbyCity)
   const items = await rows<StoreJob>(`SELECT ${storeJobFields} FROM ${storeJobsFrom}
-    WHERE ${conditions.join(' AND ')} ORDER BY j.published_at DESC,j.id DESC LIMIT ? OFFSET ?`,
+    WHERE ${conditions.join(' AND ')} ORDER BY ${cityOrder}j.published_at DESC,j.id DESC LIMIT ? OFFSET ?`,
   [...values,pageSize+1,(filter.page-1)*pageSize])
   res.json({items:items.slice(0,pageSize),hasMore:items.length>pageSize})
 })

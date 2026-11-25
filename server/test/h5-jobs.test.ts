@@ -77,12 +77,18 @@ test('only approved openings at active stores appear in the job directory', {tim
     assert.equal((await admin('/jobs/'+id,'PATCH',{status:'rejected'})).status,409)
 
     const second = await request('/h5/jobs/mine/'+secondStore,'POST',
-      {...form,category:'care',employmentType:'part-time'},owner.cookie)
+      {...form,title:'测试宠物护理员 '+suffix,category:'care',employmentType:'part-time'},owner.cookie)
     assert.equal(second.status,201)
     assert.equal((await admin('/jobs/'+second.data.id,'PATCH',{status:'published'})).status,200)
     const ids = async (filter = '') => (await request('/h5/jobs'+filter)).data.items.map((job: {id:string}) => job.id) as string[]
     const latest = await ids()
     assert.ok(latest.indexOf(second.data.id) >= 0 && latest.indexOf(second.data.id) < latest.indexOf(id))
+    const recommended = await ids('?district=cn-360113')
+    assert.ok(recommended.includes(id) && recommended.indexOf(id) < recommended.indexOf(second.data.id))
+    const search = await ids('?district=cn-360113&q='+encodeURIComponent(form.title))
+    assert.deepEqual(search,[id])
+    const storesByName = await ids('?q='+encodeURIComponent('测试招聘门店 '+suffix))
+    assert.deepEqual(storesByName,[second.data.id,id])
     const filtered = await ids('?city=360100&category=grooming&type=full-time')
     assert.ok(filtered.includes(id))
     assert.ok(!filtered.includes(second.data.id))
