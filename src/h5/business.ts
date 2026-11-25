@@ -50,6 +50,7 @@ export interface Listing {
   closesAt: string|null
   priceCents: number|null
   stock: number|null
+  hasCover?: boolean|number
   externalUrl: string|null
 }
 

@@ -4,7 +4,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { businessModules, isBusinessModule, type Listing } from '../../../../src/h5/business'
 import type { H5Event, H5EventRegistration, H5TrainingCourse } from '../../../../src/h5/types'
 import type { Pet } from '../../../../src/lib/types'
-import { api, user, go, toast } from '../../lib/client'
+import { api, user, go, productCover, toast } from '../../lib/client'
 import { listPets } from '../../lib/pets'
 import { addProduct, money } from '../../lib/cart'
 import { searchListings } from '../../lib/directory'
@@ -203,15 +203,17 @@ function copyLink() {
       <view class="card">
         <text class="title">{{ event?.title || item?.title }}</text>
         <text class="sub">{{ event?.organizer || item?.provider }}</text>
+        <image v-if="item?.kind==='product' && item.hasCover" class="product-detail-cover" :src="productCover(item.id)" mode="aspectFill" />
         <text v-if="event" class="line">
           {{ event.city }} · {{ event.venue }} · {{ date(event.startsAt) }}
         </text>
         <text v-if="item?.venue" class="line">{{ item.venue }}</text>
         <text class="body">{{ event?.rules || item?.description }}</text>
         <text v-if="item?.priceCents" class="heading">{{ money(item.priceCents) }}</text>
+        <text v-if="item?.kind==='product' && item.stock===0" class="sub">暂无库存</text>
         <button v-if="item?.externalUrl" class="small" @tap="copyLink">复制官方链接</button>
       </view>
-      <LoginCard v-if="!user && (event || participate || item?.kind === 'product')" />
+      <LoginCard v-if="!user && (event || participate || (item?.kind === 'product' && item.stock))" />
       <view v-if="user && (event || participate)" class="card">
         <PetPicker v-if="needsPet" v-model="petId" :pets="pets" />
         <template v-if="item">
@@ -237,7 +239,7 @@ function copyLink() {
         <text v-for="r in registrations" :key="r.petId" class="line">{{ r.petName }} 已报名</text>
       </view>
       <view v-if="user && item?.kind === 'product'" class="actions">
-        <button class="primary" :disabled="busy || !item.stock" @tap="add">加入购物车</button>
+        <button v-if="item.stock" class="primary" :disabled="busy" @tap="add">加入购物车</button>
         <button @tap="go('orders')">查看购物车</button>
       </view>
     </template>
@@ -247,4 +249,5 @@ function copyLink() {
 .program-search { display: flex; align-items: center; gap: 8px; }
 .program-search input { flex: 1; min-width: 0; }
 .program-search button { flex: none; min-height: 34px; }
+.product-detail-cover { display: block; width: 100%; height: min(83vw,360px); margin: 10px 0; border-radius: 12px; background: var(--canvas); }
 </style>

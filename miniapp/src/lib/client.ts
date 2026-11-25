@@ -34,6 +34,9 @@ export function publicImage(path: string) {
 export function servicePostImage(id: string, position = 1) {
   return publicImage(`/h5/catalog/service-posts/${id}/images/${position}`)
 }
+export function productCover(id: string) {
+  return publicImage('/h5/catalog/'+id+'/cover')
+}
 export function message(error: unknown) {
   return error instanceof Error ? error.message : '操作失败，请重试'
 }

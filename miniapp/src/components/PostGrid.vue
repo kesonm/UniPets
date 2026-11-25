@@ -6,7 +6,7 @@ import { postPetTypeLabels, serviceCategories } from '../../../shared/h5-discove
 import { jobCategories } from '../../../shared/h5-jobs.mjs'
 import { defaultRecommendationLabels, type RecommendationLabels } from '../../../shared/h5-recommendation-labels.mjs'
 import { money } from '../lib/cart'
-import { go, publicImage, servicePostImage } from '../lib/client'
+import { go, productCover, publicImage, servicePostImage } from '../lib/client'
 import UiIcon from './UiIcon.vue'
 
 const props = withDefaults(defineProps<{ posts?: readonly H5Post[]; recommendations?: readonly Recommendation[]; labels?: RecommendationLabels; showBreed?: boolean; liked?: string[]; showArea?: boolean; showPetType?: boolean; reactions?: boolean }>(), {
@@ -34,7 +34,8 @@ function recommendationTile(item: OtherRecommendation) {
         detail:post.categoryLabel || serviceCategories.find(category => category.id === post.category)?.label || '其他服务'}
     }
     case 'product':
-      return {image:'', name:item.post.provider, amount:money(item.post.priceCents), detail:''}
+      return {image:item.post.hasCover ? productCover(item.post.id) : '', name:item.post.provider, amount:money(item.post.priceCents),
+        detail:item.post.stock === 0 ? '暂无库存' : ''}
     case 'job':
       return {image:item.post.imageCount ? publicImage('/h5/jobs/'+item.post.id+'/images/1') : '',
         name:item.post.storeName, amount:item.post.salary, detail:jobCategories[item.post.category]}

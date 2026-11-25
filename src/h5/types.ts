@@ -81,7 +81,7 @@ export interface PersonalContentItem {
 }
 
 export type Recommendation = { kind: 'post'; post: H5Post } | { kind: 'service'; post: ServicePost }
-  | { kind: 'product'; post: {id:string; title:string; provider:string; priceCents:number} }
+  | { kind: 'product'; post: {id:string; title:string; provider:string; priceCents:number; stock?:number; hasCover?:boolean|number} }
   | { kind: 'job'; post: StoreJob } | { kind: 'story'; post: StorySummary }
 
 export interface H5Social {

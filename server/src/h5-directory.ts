@@ -3,7 +3,7 @@ import { Router, type Request, type Response } from 'express'
 import type { RowDataPacket } from 'mysql2/promise'
 import { z } from 'zod'
 import { requireAuth } from './auth.js'
-import { catalogArea, catalogKinds, catalogModules, catalogProvider, catalogStore, catalogVenue, catalogVisible, h5Area } from './catalog.js'
+import { catalogArea, catalogKinds, catalogModules, catalogProductHasCover, catalogProvider, catalogStore, catalogVenue, catalogVisible, h5Area } from './catalog.js'
 import { rows, transaction } from './db.js'
 import { districtAreaIds, districtById, knownDistrictInput } from './districts.js'
 import { HttpError } from './errors.js'
@@ -30,13 +30,15 @@ interface CatalogItem {
   closesAt: Date|null
   priceCents: number|null
   stock: number|null
+  hasCover: number
   externalUrl: string|null
 }
 const fields = `i.id,i.module,i.category,i.kind,i.title,${catalogProvider} AS provider,i.description,
   ${catalogArea} AS area,${catalogVenue} AS venue,i.starts_at AS startsAt,i.closes_at AS closesAt,
   store.district_code AS storeDistrictCode,store.city_code AS cityCode,
   CAST(store.latitude AS DOUBLE) AS latitude,CAST(store.longitude AS DOUBLE) AS longitude,
-  i.price_cents AS priceCents,i.stock,i.external_url AS externalUrl`
+  i.price_cents AS priceCents,i.stock,i.external_url AS externalUrl,
+  IF(i.kind='product',${catalogProductHasCover},FALSE) AS hasCover`
 const from = `FROM h5_catalog_items i ${catalogStore}`
 
 function publicListing({storeDistrictCode, latitude, longitude, ...item}: CatalogItem) {
@@ -74,6 +76,13 @@ h5DirectoryRouter.get('/catalog/:id', async (req, res) => {
     `SELECT ${fields} ${from} WHERE i.id=? AND ${catalogVisible}`, [uuid.parse(req.params.id)])
   if (!listing) throw new HttpError(404, '项目未发布或已下架')
   res.json({listing:publicListing(listing)})
+})
+
+h5DirectoryRouter.get('/catalog/:id/cover', async (req,res) => {
+  const [cover] = await rows<{image:Buffer}>(`SELECT cover.image ${from}
+    JOIN h5_product_covers cover ON cover.item_id=i.id WHERE i.id=? AND i.kind='product' AND ${catalogVisible}`, [uuid.parse(req.params.id)])
+  if (!cover) throw new HttpError(404,'商品图片不存在')
+  res.type('webp').send(cover.image)
 })
 
 export const engagementSelect = `SELECT r.id, r.item_id AS itemId, r.pet_id AS petId,

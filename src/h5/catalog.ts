@@ -22,6 +22,7 @@ export interface Product {
   example: boolean
   platform?: boolean
   stock?: number
+  hasCover?: boolean|number
   purchaseUrl?: string
   merchantUrl?: string
 }
@@ -54,7 +55,7 @@ export function productFromListing(item: Listing): Product|undefined {
   return {id:item.id,name:item.title,merchant:item.provider || '云上空间',area:item.area ?? '',
     district:item.district,cityCode:item.cityCode,coordinates:item.coordinates,
     category:category && category!=='all' ? category : 'culture',illustration:0,description:item.description,
-    variants:[{name:'标准规格',cents:item.priceCents}],example:false,platform:true,stock:item.stock}
+    variants:[{name:'标准规格',cents:item.priceCents}],example:false,platform:true,stock:item.stock,hasCover:item.hasCover}
 }
 export const productFor = (id: string, published: readonly Product[] = []) => published.find(item=>item.id===id) ?? products.find(item=>item.id===id)
 export const amount = (cents: number) => (cents/100).toFixed(2).replace(/\.00$/,'')

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { serviceCategories, type PostPetType } from '../../shared/h5-discovery.mjs'
 import type { StoreJob } from '../../shared/h5-jobs.mjs'
-import { catalogProvider, catalogStore, catalogVisible } from './catalog.js'
+import { catalogProductHasCover, catalogProvider, catalogStore, catalogVisible } from './catalog.js'
 import { rows } from './db.js'
 import { districtById } from './districts.js'
 import { publicStoreJobScope, storeJobFields, storeJobsFrom } from './h5-jobs.js'
@@ -18,7 +18,7 @@ export interface PublicPost {
   createdAt: Date
 }
 
-type Product = {id:string;title:string;provider:string;description:string;priceCents:number;updatedAt:Date}
+type Product = {id:string;title:string;provider:string;description:string;priceCents:number;stock:number;hasCover:number;updatedAt:Date}
 type Job = Omit<StoreJob,'publishedAt'> & {publishedAt:Date}
 type Story = Awaited<ReturnType<typeof publicStories>>[number]
 type Candidate = { kind: 'post'; post: PublicPost } | { kind: 'service'; post: ServiceRecord }
@@ -97,10 +97,10 @@ function rankFor(seed: string, pets: PetSignal[], requests: Text[]) {
 export async function additionalRecommendationPosts(district?: string): Promise<Candidate[]> {
   const city = districtById(district)?.serviceCityCode ?? null
   const [products,jobs,stories] = await Promise.all([
-    rows<Product>(`SELECT i.id,i.title,${catalogProvider} AS provider,i.description,i.price_cents AS priceCents,
-      i.updated_at AS updatedAt FROM h5_catalog_items i ${catalogStore}
-      WHERE ${catalogVisible} AND i.kind='product' AND i.price_cents>0 AND i.stock>0
-      ORDER BY i.updated_at DESC,i.id DESC LIMIT 60`),
+    rows<Product>(`SELECT i.id,i.title,${catalogProvider} AS provider,i.description,i.price_cents AS priceCents,i.stock,
+      ${catalogProductHasCover} AS hasCover,i.updated_at AS updatedAt FROM h5_catalog_items i ${catalogStore}
+      WHERE ${catalogVisible} AND i.kind='product' AND i.price_cents>0
+      ORDER BY (i.stock>0) DESC,i.updated_at DESC,i.id DESC LIMIT 60`),
     rows<Job>(`SELECT ${storeJobFields} FROM ${storeJobsFrom} WHERE ${publicStoreJobScope}
       ORDER BY COALESCE(s.city_code=?,FALSE) DESC,j.published_at DESC,j.id DESC LIMIT 60`, [city]),
     publicStories(),

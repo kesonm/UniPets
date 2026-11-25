@@ -73,5 +73,6 @@ export const catalogProvider = 'COALESCE(store.name,i.provider)'
 export const catalogArea = 'COALESCE(i.area,store.area)'
 export const catalogVenue = 'COALESCE(i.venue,store.address)'
 export const catalogVisible = 'i.published=TRUE AND (store.id IS NULL OR store.enabled=TRUE)'
+export const catalogProductHasCover = `EXISTS(SELECT 1 FROM h5_product_covers cover WHERE cover.item_id=i.id)`
 export const servicePostScope = "i.module='services' AND i.kind NOT IN ('product','group')"
 export const servicePostVisible = `${servicePostScope} AND i.published=TRUE AND store.enabled=TRUE`

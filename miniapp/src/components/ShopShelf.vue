@@ -2,25 +2,22 @@
 import { computed, ref, watch } from 'vue'
 import { areaDistance } from '../../../shared/h5-areas.mjs'
 import { areaLabel, type Listing } from '../../../src/h5/business'
-import { amount, categories, products, productFromListing, type Product } from '../../../src/h5/catalog'
+import { amount, categories, productFromListing, type Product } from '../../../src/h5/catalog'
 import { changeBrowseLocation, openMapPicker, saveBrowseLocation, selectedLocation, selectedLocationLabel } from '../lib/location'
-import { go } from '../lib/client'
+import { go, productCover } from '../lib/client'
 import UiIcon from './UiIcon.vue'
 
 const props = withDefaults(defineProps<{ listings: Listing[]; query?: string; filter?: boolean }>(), { query: '' })
 const category = ref('all')
 const nearby = ref(false)
 const order = ref('recommended')
-const detail = ref<Product>()
-const variant = ref(0)
 const listings = computed(() => {
   const published = props.listings.flatMap(item => {
     const product = productFromListing(item)
     return product ? [product] : []
   })
   const query = props.query.trim().toLowerCase()
-  const available = published.length ? published : products
-  const filtered = available.filter(product => {
+  const filtered = published.filter(product => {
     const name = categories.find(item => item.id === product.category)?.label || ''
     return (category.value === 'all' || product.category === category.value) &&
       (!nearby.value || sameCity(product)) &&
@@ -42,13 +39,7 @@ function distance(product: Product) {
   return from && to ? areaDistance(from, to) : Infinity
 }
 function show(product: Product) {
-  if (product.platform) {
-    const item = props.listings.find(item => item.id === product.id)
-    if (item) go('directory', { module: item.module, id: item.id })
-  } else {
-    variant.value = 0
-    detail.value = product
-  }
+  go('directory', { module: 'shop', id: product.id })
 }
 function toggleNearby() {
   if (nearby.value) nearby.value = false
@@ -87,11 +78,11 @@ watch(selectedLocation, location => {
   <view v-if="listings.length" class="product-grid">
     <view v-for="product in listings" :key="product.id" class="product-card">
       <button class="product-open" :aria-label="'查看' + product.name" @tap="show(product)">
-        <view v-if="product.platform" class="product-art product-art-platform"><UiIcon name="entry-shop" :size="30" /></view>
-        <image v-else class="product-art" :src="'/static/products/' + product.id + '.webp'" mode="aspectFill" />
+        <image v-if="product.hasCover" class="product-art" :src="productCover(product.id)" mode="aspectFill" lazy-load />
+        <view v-else class="product-art product-art-platform"><UiIcon name="entry-shop" :size="30" /></view>
         <text class="product-title">{{ product.name }}</text>
         <text class="product-merchant">{{ product.merchant }}</text>
-        <text class="product-area">{{ areaLabel(product.area, product.district) || (product.platform && !product.stock ? '已售罄' : '') }}</text>
+        <text class="product-area">{{ areaLabel(product.area, product.district) || (product.stock === 0 ? '暂无库存' : '') }}</text>
       </button>
       <view class="product-foot">
         <text>¥<text class="product-price">{{ amount(product.variants[0].cents) }}</text></text>
@@ -103,21 +94,6 @@ watch(selectedLocation, location => {
     <UiIcon name="empty-cart" :size="24" />
     <text>{{ query ? '没有匹配的商品' : '当前范围暂无商品' }}</text>
     <button v-if="nearby && !query" class="text-button" @tap="nearby = false">查看全部商品</button>
-  </view>
-  <view v-if="detail" class="modal-scrim" @tap="detail = undefined">
-    <view class="modal-panel" role="dialog" :aria-label="detail.name" @tap.stop>
-      <view class="spread">
-        <text class="heading">{{ detail.name }}</text>
-        <button class="text-button" @tap="detail = undefined">关闭</button>
-      </view>
-      <image class="example-product" :src="'/static/products/' + detail.id + '.webp'" mode="aspectFill" />
-      <text class="product-price">¥{{ amount(detail.variants[variant].cents) }}</text>
-      <text class="body">{{ detail.description }}</text>
-      <view class="chips">
-        <button v-for="(item, i) in detail.variants" :key="item.name" :class="['chip', { active: i === variant }]" @tap="variant = i">{{ item.name }}</button>
-      </view>
-      <text class="sub">示例商品，暂未接入库存、配送和购买页。</text>
-    </view>
   </view>
 </template>
 
@@ -135,5 +111,4 @@ watch(selectedLocation, location => {
 .product-foot { display: flex; justify-content: space-between; align-items: center; padding: 5px 8px 8px; color: #b34323; }
 .product-price { color: #b34323; font-size: 20px; font-weight: 800; }
 .product-plus { width: 32px; border-radius: 50%; background: #fff2bf; }
-.example-product { display: block; width: 100%; max-width: 200px; height: 175px; margin: 6px auto; border-radius: 12px; }
 </style>

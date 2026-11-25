@@ -298,6 +298,16 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
       await db.execute(`INSERT INTO h5_catalog_items (id,store_id,module,kind,category,title,description,price_cents,stock,published)
         VALUES (?,?,'shop','product','food',?,'猫咪用品',2900,?,?)`,[id,ba,'推荐商品 '+suffix,stock,published])
     }
+    const productCover = await sharp(Buffer.from(cover.split(',')[1],'base64')).webp().toBuffer()
+    for (const id of [soldOut,unpublished]) await db.execute('INSERT INTO h5_product_covers (item_id,image) VALUES (?,?)',[id,productCover])
+    const coverUrl = base+'/h5/catalog/'+soldOut+'/cover'
+    const catalogPhoto = await fetch(coverUrl)
+    assert.equal(catalogPhoto.status,200)
+    assert.equal(catalogPhoto.headers.get('content-type'),'image/webp')
+    assert.deepEqual(Buffer.from(await catalogPhoto.arrayBuffer()),productCover)
+    assert.equal((await fetch(base+'/h5/catalog/'+unpublished+'/cover')).status,404)
+    const available = await request('/h5/catalog?kind=product&q='+suffix)
+    assert.deepEqual(available.data.listings.find((item:{id:string}) => item.id === soldOut)?.hasCover,1)
     const jobForm = {title:'推荐职位 '+suffix,category:'grooming',employmentType:'full-time',salary:'面议',description:'宠物门店日常洗护'}
     const jobPath = '/h5/jobs/mine/'+ba
     const job = await request(jobPath,'POST',jobForm,owner.token)
@@ -314,9 +324,11 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     assert.equal(kinds.get(cat),'post')
     assert.equal(kinds.get(board),'service')
     assert.equal(kinds.get(product),'product')
+    assert.equal(kinds.get(soldOut),'product')
+    assert.equal(mix.data.items.find((item:{post:{id:string}})=>item.post.id===soldOut)?.post.hasCover,1)
     assert.equal(kinds.get(job.data.id),'job')
     assert.equal(kinds.get(story.data.id),'story')
-    assert.ok([soldOut,unpublished, pending.data.id,demo.data.id,draftStory.data.id].every(id=>!kinds.has(id)))
+    assert.ok([unpublished,pending.data.id,demo.data.id,draftStory.data.id].every(id=>!kinds.has(id)))
     assert.ok((await request(recommend)).data.items.every((item:{kind:string})=>['post','service'].includes(item.kind)))
     for (const content of ['/h5/posts/'+cat,'/h5/stories/'+story.data.id]) {
       for (const kind of ['like','favorite']) {
@@ -347,7 +359,8 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
 
     assert.equal((await request('/admin/stores/'+ba,'PATCH',{enabled:false},manager.token)).status,200)
     const remainingIds = ranked(await request(allKinds))
-    assert.ok([product,job.data.id,board,cat].every(id=>!remainingIds.includes(id)))
+    assert.ok([product,soldOut,job.data.id,board,cat].every(id=>!remainingIds.includes(id)))
+    assert.equal((await fetch(coverUrl)).status,404)
     assert.equal((await fetch(photoPath)).status,404)
     assert.equal((await request(servicePath,'POST',forbiddenPost,owner.token)).status,403)
     assert.deepEqual(await counts(dogOwner.token),{published:1,likes:1,favorites:1})
