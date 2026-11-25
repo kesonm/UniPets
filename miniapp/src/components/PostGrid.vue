@@ -4,7 +4,8 @@ import type { StoreJob } from '../../../shared/h5-jobs.mjs'
 import type { H5Post, Recommendation, ServicePost } from '../../../src/h5/types'
 import { areaLabel } from '../../../src/h5/business'
 import { postPetTypeLabels, serviceCategories } from '../../../shared/h5-discovery.mjs'
-import { publicImage } from '../lib/client'
+import { money } from '../lib/cart'
+import { publicImage, servicePostImage } from '../lib/client'
 import UiIcon from './UiIcon.vue'
 import JobCard from './JobCard.vue'
 
@@ -45,7 +46,10 @@ function when(value: string) {
       <JobCard v-if="entry.kind==='job'" :job="entry.job" compact />
       <view v-else-if="entry.kind==='service'" class="post">
         <button class="post-open" :aria-label="'查看服务 ' + entry.post.title" @tap="emit('viewService', entry.post)">
-          <view class="post-cover service-cover"><UiIcon name="entry-services" :size="30" /></view>
+          <view class="post-cover service-cover">
+            <image v-if="entry.post.imageCount" :src="servicePostImage(entry.id)" mode="aspectFill" lazy-load />
+            <UiIcon v-else name="entry-services" :size="30" />
+          </view>
           <text class="post-title">{{ entry.post.title }}</text>
         </button>
         <view class="post-footer">
@@ -53,6 +57,7 @@ function when(value: string) {
             <UiIcon name="location" :size="11" />
             <text>{{ entry.post.provider }}</text>
           </view>
+          <text v-if="entry.post.priceCents" class="service-tile-price">{{ money(entry.post.priceCents) }}</text>
         </view>
         <text class="post-type">{{ serviceLabel(entry.post) }}</text>
       </view>
@@ -119,6 +124,7 @@ function when(value: string) {
 }
 .post-cover > image { position: absolute; inset: 0; width: 100%; height: 100%; }
 .service-cover { background: #e5f3f2; }
+.service-tile-price { flex: none; margin-left: 4px; color: var(--gold-ink); font-weight: 700; }
 .post-example {
   position: absolute;
   left: 7px;

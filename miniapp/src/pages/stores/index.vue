@@ -5,9 +5,11 @@ import { parseStoreBindingCode, type ServiceCategory } from '../../../../shared/
 import type { BoundStore, MerchantStoreProfile } from '../../../../src/h5/types'
 import { api, go, toast, user } from '../../lib/client'
 import { pageLoad, submitAction } from '../../lib/page'
+import { postPhotoLimitMb, readPhoto } from '../../lib/photo'
 import ChoiceField from '../../components/ChoiceField.vue'
 import LoadState from '../../components/LoadState.vue'
 import LoginCard from '../../components/LoginCard.vue'
+import PostPhotoPicker from '../../components/PostPhotoPicker.vue'
 import StoreDetailsForm from '../../components/StoreDetailsForm.vue'
 import UiIcon from '../../components/UiIcon.vue'
 
@@ -20,6 +22,8 @@ const category = ref('')
 const title = ref('')
 const description = ref('')
 const price = ref('')
+const photos = ref<string[]>([])
+const choosingPhoto = ref(false)
 const code = ref('')
 const verifiedCode = ref('')
 const editingStore = ref<BoundStore>()
@@ -47,6 +51,7 @@ const {loading,error,refresh} = pageLoad(async () => {
   title.value = ''
   description.value = ''
   price.value = ''
+  photos.value = []
   code.value = ''
   closeStoreForm()
 })
@@ -104,15 +109,20 @@ function scanStore() {
 }
 
 function publish() {
+  if (choosingPhoto.value) return
   return run(async () => {
+    const owner = user.value?.id
     const amount = price.value.trim()
     if (amount && (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0 || Number(amount) > 100000)) {
       throw new Error('请填写正确的服务价格')
     }
+    const images = await Promise.all(photos.value.map(path => readPhoto(path, postPhotoLimitMb)))
+    if (!owner || user.value?.id !== owner) return
     const {id} = await api<{id:string}>('/h5/catalog/service-posts','POST',{
       storeId:storeId.value,category:category.value,title:title.value,description:description.value,
       priceCents:amount ? Math.round(Number(amount)*100) : null,
-    })
+      images,
+    },35000)
     toast('服务帖已发布')
     uni.redirectTo({url:'/pages/services/index?id='+id})
   })
@@ -181,9 +191,10 @@ function publish() {
           <textarea id="service-publish-description" v-model="description" maxlength="5000" placeholder="填写服务内容" />
           <text class="label">价格（元，选填）</text>
           <input v-model="price" :always-embed="true" type="digit" maxlength="9" placeholder="填写价格" />
+          <PostPhotoPicker v-model="photos" v-model:choosing="choosingPhoto" label="服务配图" :disabled="busy || loading" />
           <text v-if="actionError" class="error">{{ actionError }}</text>
           <view class="actions">
-            <button id="publish-service-post" class="primary" :disabled="busy || loading || !category || !title.trim() || !description.trim()" @tap="publish">发布服务帖</button>
+            <button id="publish-service-post" class="primary" :disabled="busy || loading || choosingPhoto || !category || !title.trim() || !description.trim()" @tap="publish">发布服务帖</button>
           </view>
         </view>
       </template>

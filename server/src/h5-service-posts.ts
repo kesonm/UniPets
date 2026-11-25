@@ -11,6 +11,7 @@ import { coordinatesInput, districtInput, districtsInServiceRegion, serviceRegio
 import { HttpError } from './errors.js'
 import { serviceRecommendation } from './h5-recommendations.js'
 import { hasStoreContact, type StoreContact } from './h5-store-binding.js'
+import { postImagePosition, postImagesInput, readPostImage } from './post-images.js'
 import { checkServiceCategory, getServiceCategories, serviceCategoryColumn, serviceCategoryId, serviceCategoryJoin, serviceCategoryLabel } from './service-categories.js'
 
 export const h5ServicePostsRouter = Router()
@@ -24,6 +25,7 @@ const district = `COALESCE(store.district_code, CASE store.area
 const fields = `i.id,i.title,i.description,${serviceCategoryColumn} AS category,${serviceCategoryLabel} AS categoryLabel,
   store.name AS provider,${catalogVenue} AS venue,store.phone,${district} AS district,
   i.price_cents AS priceCents,i.updated_at AS updatedAt,
+  (SELECT COUNT(*) FROM h5_service_post_images image WHERE image.item_id=i.id) AS imageCount,
   (SELECT COUNT(*) FROM h5_service_likes l WHERE l.item_id=i.id) AS likes,
   (SELECT COUNT(*) FROM h5_service_comments c WHERE c.item_id=i.id) AS commentCount,
   EXISTS(SELECT 1 FROM h5_service_likes l WHERE l.item_id=i.id AND l.user_id=?) AS liked`
@@ -39,6 +41,7 @@ export interface ServiceRecord {
   phone: string
   district: string | null
   priceCents: number | null
+  imageCount: number
   updatedAt: Date
   likes: number
   commentCount: number
@@ -126,6 +129,7 @@ h5ServicePostsRouter.post(route, requireAuth, async (req,res) => {
     title:z.string().trim().min(1,'请填写服务名称').max(120),
     description:z.string().trim().min(1,'请填写服务详情').max(5000),
     priceCents:z.number().int().min(1).max(10_000_000).nullable().default(null),
+    images:postImagesInput,
   }).strict().parse(req.body)
   await checkServiceCategory(item.category)
   const id = await transaction(async conn => {
@@ -134,16 +138,29 @@ h5ServicePostsRouter.post(route, requireAuth, async (req,res) => {
       WHERE id=? AND owner_user_id=? AND enabled=TRUE FOR SHARE`, [item.storeId,req.user.id])
     if (!store) throw new HttpError(403,'请选择自己绑定且营业中的门店')
     if (!hasStoreContact(store)) throw new HttpError(400,'请在「我的门店」补齐地区和联系电话')
-    return createCatalogItem({
+    const images = await Promise.all(item.images.map(readPostImage))
+    const itemId = await createCatalogItem({
       ...item, module:'services', kind:'article', provider:store.name, publisherId:req.user.id,
       area:null, venue:null, startsAt:null, closesAt:null, stock:null, externalUrl:null, published:true,
     }, conn)
+    for (const [index,image] of images.entries()) {
+      await conn.execute('INSERT INTO h5_service_post_images (item_id,position,image) VALUES (?,?,?)',[itemId,index+1,image])
+    }
+    return itemId
   })
   res.status(201).json({id})
 })
 h5ServicePostsRouter.post(route + '/search', optionalAuth, async (req, res) => {
   const filter = filters.extend({ location: coordinatesInput.optional() }).strict().parse(req.body)
   res.json(await readServicePosts(filter, req.user?.id))
+})
+
+h5ServicePostsRouter.get(route + '/:id/images/:position', async (req,res) => {
+  const [photo] = await rows<{image:Buffer}>(`SELECT photo.image ${from}
+    JOIN h5_service_post_images photo ON photo.item_id=i.id WHERE i.id=? AND photo.position=? AND ${visible}`,
+  [uuid.parse(req.params.id),postImagePosition.parse(req.params.position)])
+  if (!photo) throw new HttpError(404,'服务帖图片不存在')
+  res.type('webp').send(photo.image)
 })
 
 h5ServicePostsRouter.get(route + '/:id', optionalAuth, async (req, res) => {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { randomBytes } from 'node:crypto'
 import { once } from 'node:events'
 import test from 'node:test'
+import sharp from 'sharp'
 import { districtAt } from '../../shared/h5-districts.mjs'
 import { storeBindingQrPrefix } from '../../shared/h5-discovery.mjs'
 import { createApp } from '../src/app.js'
@@ -54,9 +55,9 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     assert.equal(result.status,200)
     return result.data.codes as {slot:number;code:string;qrCode:string}[]
   }
-  async function addService(merchant: string, storeId: string, category: string, title: string) {
+  async function addService(merchant: string, storeId: string, category: string, title: string, images?: string[]) {
     const result = await request(servicePath,'POST',{
-      category, title:title+' '+suffix, description:title+'的项目详情', storeId,
+      category, title:title+' '+suffix, description:title+'的项目详情', storeId, images,
     },merchant)
     assert.equal(result.status,201)
     services.push(result.data.id)
@@ -173,8 +174,20 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     const editPath = '/h5/catalog/stores/mine/'+guangzhou
     assert.equal((await request(editPath,'PUT',revisedStore,dogOwner.token)).status,404)
     assert.equal((await request(editPath,'PUT',revisedStore,owner.token)).status,200)
-    const wash = await addService(owner.token,ba,'grooming','洗护')
+    const cover = 'data:image/png;base64,'+(await sharp({create:{width:28,height:20,channels:3,background:'#aee2de'}}).png().toBuffer()).toString('base64')
+    assert.equal((await request(servicePath,'POST',{...forbiddenPost,images:[cover]},dogOwner.token)).status,403)
+    assert.equal((await request(servicePath,'POST',{...forbiddenPost,images:[cover,'data:image/jpeg;base64,AAAA']},owner.token)).status,400)
+    assert.equal((await request(servicePath,'POST',{...forbiddenPost,images:[cover,cover,cover,cover]},owner.token)).status,400)
+    const wash = await addService(owner.token,ba,'grooming','洗护',[cover,cover,cover])
     const board = await addService(owner.token,ba,'boarding','宠物寄养')
+    const photoPath = base+servicePath+'/'+wash+'/images/1'
+    const photo = await fetch(photoPath)
+    assert.equal(photo.status,200)
+    assert.equal(photo.headers.get('content-type'),'image/webp')
+    assert.equal((await sharp(Buffer.from(await photo.arrayBuffer())).metadata()).width,28)
+    assert.equal((await fetch(base+servicePath+'/'+board+'/images/1')).status,404)
+    assert.equal((await request(servicePath+'/'+wash)).data.post.imageCount,3)
+    assert.equal((await request(servicePath+'/'+board)).data.post.imageCount,0)
     const home = await addService(owner.token,ns,'home-service','大型犬上门喂养')
     const nails = await addService(owner.token,guangzhou,custom.data.id,'猫咪剪甲')
     const catalog = await request('/h5/catalog?module=services&q='+suffix+'&district='+district)
@@ -303,6 +316,7 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     assert.equal((await request(personal+'/'+cat,'GET',undefined,dogOwner.token)).status,404)
 
     assert.equal((await request('/admin/stores/'+ba,'PATCH',{enabled:false},manager.token)).status,200)
+    assert.equal((await fetch(photoPath)).status,404)
     assert.equal((await request(servicePath,'POST',forbiddenPost,owner.token)).status,403)
     assert.deepEqual(await counts(dogOwner.token),{published:1,likes:1,favorites:1})
     assert.equal((await request(servicePath+'/'+board)).status,404)

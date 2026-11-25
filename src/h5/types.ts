@@ -42,6 +42,7 @@ export interface ServicePost {
   phone: string
   district: string | null
   priceCents: number | null
+  imageCount?: number
   updatedAt: string
   likes: number
   commentCount: number

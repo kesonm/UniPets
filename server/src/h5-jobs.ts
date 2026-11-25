@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
 import type { ResultSetHeader } from 'mysql2/promise'
-import sharp from 'sharp'
 import { z } from 'zod'
 import { servicePhone } from '../../shared/h5-discovery.mjs'
 import { employmentTypes, jobCategories, type EmploymentType, type JobCategory, type JobStatus, type StoreJob } from '../../shared/h5-jobs.mjs'
@@ -9,6 +8,7 @@ import { requireAuth } from './auth.js'
 import { db, rows, transaction } from './db.js'
 import { districtById, districtInput, serviceCityInput } from './districts.js'
 import { HttpError } from './errors.js'
+import { postImagePosition, postImagesInput, readPostImage } from './post-images.js'
 
 export const h5JobsRouter = Router()
 const route = '/jobs'
@@ -17,8 +17,6 @@ const categoryInput = z.custom<JobCategory>(value => typeof value === 'string' &
 const typeInput = z.custom<EmploymentType>(value => typeof value === 'string' && Object.hasOwn(employmentTypes,value), '请选择用工类型')
 const page = z.coerce.number().int().min(1).max(100000).default(1)
 const pageSize = 18
-const imageLimit = 2 * 1024 * 1024
-const imagePosition = z.coerce.number().int().min(1).max(3)
 const listInput = z.object({
   page,
   city: serviceCityInput.optional(),
@@ -33,7 +31,7 @@ const jobInput = z.object({
   employmentType: typeInput,
   salary: z.string().trim().min(1,'请填写薪资').max(40),
   description: z.string().trim().min(1,'请填写岗位职责和要求').max(2000),
-  images: z.array(z.string().max(4 * Math.ceil(imageLimit / 3) + 24)).max(3).default([]),
+  images: postImagesInput,
   internalDemo: z.boolean().default(false),
 }).strict()
 
@@ -45,24 +43,9 @@ export const storeJobFields = `j.id,j.store_id AS storeId,j.title,j.category,j.e
 const visible = "j.status='published' AND j.internal_demo=FALSE AND s.enabled=TRUE AND s.owner_user_id IS NOT NULL"
 const imagesFrom = `${storeJobsFrom} JOIN h5_store_job_images ji ON ji.job_id=j.id`
 
-async function jobPhoto(value: string) {
-  const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value)
-  if (!match) throw new HttpError(400,'请选择 JPG、PNG 或 WebP 图片')
-  const bytes = Buffer.from(match[2], 'base64')
-  if (bytes.length > imageLimit) throw new HttpError(413,'每张图片须在 2 MB 以内')
-  try {
-    const input = sharp(bytes,{limitInputPixels:25_000_000})
-    const metadata = await input.metadata()
-    if (metadata.format !== match[1] || (metadata.pages ?? 1) > 1) throw new Error('format')
-    return await input.rotate().resize({width:1200,height:1200,fit:'inside',withoutEnlargement:true}).webp({quality:82}).toBuffer()
-  } catch {
-    throw new HttpError(400,'无法读取招聘图片')
-  }
-}
-
 h5JobsRouter.get(route+'/:id/images/:position', async (req,res) => {
   const [photo] = await rows<{image:Buffer}>(`SELECT ji.image FROM ${imagesFrom}
-    WHERE j.id=? AND ji.position=? AND ${visible}`, [uuid.parse(req.params.id),imagePosition.parse(req.params.position)])
+    WHERE j.id=? AND ji.position=? AND ${visible}`, [uuid.parse(req.params.id),postImagePosition.parse(req.params.position)])
   if (!photo) throw new HttpError(404,'招聘图片不存在')
   res.type('webp').send(photo.image)
 })
@@ -101,14 +84,14 @@ const merchant = route+'/mine/:storeId'
 h5JobsRouter.get(merchant+'/:id/images/:position', requireAuth, async (req,res) => {
   const [photo] = await rows<{image:Buffer}>(`SELECT ji.image FROM ${imagesFrom}
     WHERE j.id=? AND ji.position=? AND j.store_id=? AND s.owner_user_id=?`,
-  [uuid.parse(req.params.id),imagePosition.parse(req.params.position),uuid.parse(req.params.storeId),req.user.id])
+  [uuid.parse(req.params.id),postImagePosition.parse(req.params.position),uuid.parse(req.params.storeId),req.user.id])
   if (!photo) throw new HttpError(404,'招聘图片不存在')
   res.type('webp').send(photo.image)
 })
 
 export async function getStoreJobImage(jobId: unknown, position: unknown) {
   const [photo] = await rows<{image:Buffer}>('SELECT image FROM h5_store_job_images WHERE job_id=? AND position=?',
-    [uuid.parse(jobId),imagePosition.parse(position)])
+    [uuid.parse(jobId),postImagePosition.parse(position)])
   if (!photo) throw new HttpError(404,'招聘图片不存在')
   return photo.image
 }
@@ -139,7 +122,7 @@ h5JobsRouter.post(merchant, requireAuth, async (req,res) => {
     throw new HttpError(409,'请先完善门店所在城市、详细地址和联系电话')
   }
   const id = randomUUID()
-  const images = await Promise.all(job.images.map(jobPhoto))
+  const images = await Promise.all(job.images.map(readPostImage))
   await transaction(async conn => {
     const [created] = await conn.execute<ResultSetHeader>(`INSERT INTO h5_store_jobs
       (id,store_id,title,category,employment_type,salary,description,internal_demo)

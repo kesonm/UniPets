@@ -1,3 +1,5 @@
+export const postPhotoLimitMb = 2
+
 export async function choosePhoto(sourceType: ('album'|'camera')[] = ['album', 'camera']): Promise<string | null> {
   const chosen = await choosePhotoPath(sourceType)
   return chosen ? readPhoto(chosen) : null
