@@ -27,17 +27,38 @@ function preview(current: string) {
 </script>
 
 <template>
-  <view class="card service-card">
+  <view v-if="!detail" class="browse-card service-list-card">
+    <button class="service-open" :aria-label="'查看' + post.title" @tap="emit('open')">
+      <image v-if="images.length" class="browse-card-cover" :src="images[0]" mode="aspectFill" lazy-load />
+      <view v-else class="browse-card-cover"><UiIcon name="entry-services" :size="32" /></view>
+      <view class="browse-card-copy">
+        <text class="browse-card-title">{{ post.title }}</text>
+        <text class="browse-card-meta">{{ [post.provider, categoryName].filter(Boolean).join(' · ') }}</text>
+        <view class="service-list-price">
+          <text v-if="post.priceCents !== null" class="service-price">{{ money(post.priceCents) }}</text>
+          <text v-if="distance" class="browse-card-meta">{{ distance }}</text>
+        </view>
+      </view>
+    </button>
+    <view class="service-list-actions">
+      <button class="text-button" :aria-label="'点赞 ' + post.likes" :aria-pressed="Boolean(post.liked)" @tap="emit('like')">
+        <UiIcon :name="post.liked ? 'star-active' : 'star'" :size="14" />{{ post.likes }}
+      </button>
+      <button class="text-button" :aria-label="'评论 ' + post.commentCount" @tap="emit('comment')">
+        <UiIcon name="post-author" :size="13" />{{ post.commentCount }}
+      </button>
+    </view>
+  </view>
+  <view v-else class="card service-card">
     <view class="spread service-meta">
       <text class="service-category">{{ categoryName }}</text>
       <text class="sub">{{ post.provider }}</text>
     </view>
     <text class="heading service-title">{{ post.title }}</text>
-    <view v-if="detail && images.length" class="service-gallery" :class="{ single:images.length===1 }">
+    <view v-if="images.length" class="service-gallery" :class="{ single:images.length===1 }">
       <image v-for="(url,index) in images" :key="url" :src="url" mode="aspectFill" :aria-label="'查看第 '+(index+1)+' 张服务配图'" @tap="preview(url)" />
     </view>
-    <image v-else-if="images.length" class="service-cover" :src="images[0]" mode="aspectFill" lazy-load @tap="emit('open')" />
-    <text :class="['body', { excerpt: !detail }]">{{ post.description }}</text>
+    <text class="body">{{ post.description }}</text>
     <view v-if="post.venue || post.priceCents || distance" class="spread service-location">
       <view v-if="post.venue" class="service-address">
         <UiIcon name="location" :size="12" /><text>{{ post.venue }}</text>
@@ -54,12 +75,16 @@ function preview(current: string) {
           <UiIcon name="post-author" :size="14" />评论 {{ post.commentCount }}
         </button>
       </view>
-      <button v-if="!detail" class="small" @tap="emit('open')">查看详情</button>
     </view>
   </view>
 </template>
 
 <style scoped>
+.service-list-card { display: flex; flex-direction: column; }
+.service-open { display: block; width: 100%; padding: 0; border: 0; border-radius: 0; text-align: left; }
+.service-list-price { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 7px; }
+.service-list-actions { display: flex; gap: 6px; margin: auto 8px 0; border-top: 1px solid var(--border); }
+.service-list-actions .text-button { flex: 1; min-width: 0; min-height: 32px; padding: 0 2px; font-size: 11px; }
 .service-card { overflow: hidden; }
 .service-meta { justify-content: flex-start; gap: 7px; }
 .service-category {
@@ -72,14 +97,12 @@ function preview(current: string) {
   font-weight: 700;
 }
 .service-title { margin: 9px 0 0; }
-.service-cover,.service-gallery { margin-top: 9px; }
-.service-cover,.service-gallery image { display: block; width: 100%; border-radius: 9px; background: var(--canvas); }
-.service-cover { height: 140px; }
+.service-gallery { margin-top: 9px; }
+.service-gallery image { display: block; width: 100%; border-radius: 9px; background: var(--canvas); }
 .service-gallery { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
 .service-gallery image { height: 100px; }
 .service-gallery.single { grid-template-columns: 1fr; }
 .service-gallery.single image { height: min(72vw, 320px); }
-.excerpt { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .service-location { margin-top: 9px; gap: 8px; flex-wrap: wrap; }
 .service-address { display: flex; align-items: baseline; gap: 5px; flex: 1; min-width: 0; font-size: 12px; color: var(--muted); }
 .service-price { color: #674c0c; font-size: 15px; font-weight: 800; }

@@ -5,7 +5,8 @@ const props = defineProps<{
   modelValue: string
   options: { id: string; label: string }[]
   placeholder?: string
-  appearance?: 'text'
+  appearance?: 'text' | 'filter'
+  disabled?: boolean
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const selected = computed(() => props.options.findIndex((o) => o.id === props.modelValue))
@@ -16,8 +17,8 @@ function change(e: { detail: { value: string | number } }) {
 }
 </script>
 <template>
-  <picker :range="options" range-key="label" :value="Math.max(0, selected)" @change="change">
-    <view v-if="appearance === 'text'" class="choice-text" hover-class="choice-text-pressed">
+  <picker :range="options" range-key="label" :value="Math.max(0, selected)" :disabled="disabled" @change="change">
+    <view v-if="appearance" :class="appearance === 'filter' ? 'browse-filter-label' : 'choice-text'" hover-class="choice-text-pressed">
       <text>{{ label }}</text>
       <UiIcon name="down" :size="12" />
     </view>

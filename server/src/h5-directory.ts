@@ -31,6 +31,7 @@ interface CatalogItem {
   priceCents: number|null
   stock: number|null
   hasCover: number
+  salesCount?: number
   externalUrl: string|null
 }
 const fields = `i.id,i.module,i.category,i.kind,i.title,${catalogProvider} AS provider,i.description,
@@ -40,6 +41,9 @@ const fields = `i.id,i.module,i.category,i.kind,i.title,${catalogProvider} AS pr
   i.price_cents AS priceCents,i.stock,i.external_url AS externalUrl,
   IF(i.kind='product',${catalogProductHasCover},FALSE) AS hasCover`
 const from = `FROM h5_catalog_items i ${catalogStore}`
+const salesCount = `CAST((SELECT COALESCE(SUM(line.quantity),0)
+  FROM h5_order_items line JOIN h5_orders sale ON sale.id=line.order_id
+  WHERE line.item_id=i.id AND sale.status='completed') AS DOUBLE) AS salesCount`
 
 function publicListing({storeDistrictCode, latitude, longitude, ...item}: CatalogItem) {
   let externalUrl: string|null = null
@@ -55,19 +59,24 @@ function publicListing({storeDistrictCode, latitude, longitude, ...item}: Catalo
 
 h5DirectoryRouter.get('/catalog', async (req, res) => {
   const filter = z.object({module:catalogModules.optional(), area:h5Area.optional(), district:knownDistrictInput.optional(),
-    kind:catalogKinds.optional(),
+    kind:catalogKinds.optional(), local:z.literal('1').optional(),
+    category:z.string().trim().max(48).default(''),
     q:z.string().trim().max(60).default('')}).parse(req.query)
   const preferredAreas = filter.district ? districtAreaIds([filter.district]) : [filter.area ?? null]
   const preferredField = filter.district ? `COALESCE(store.district_code,${catalogArea})` : catalogArea
-  const listings = await rows<CatalogItem>(`SELECT ${fields} ${from} WHERE ${catalogVisible}
+  const preferred = `COALESCE(${preferredField} IN (${preferredAreas.map(() => '?').join(',')}), FALSE)`
+  const localAreas = filter.local && filter.district ? preferredAreas : []
+  const listings = await rows<CatalogItem>(`SELECT ${fields}${filter.kind === 'product' ? ', '+salesCount : ''} ${from} WHERE ${catalogVisible}
     AND (? IS NULL OR i.module=?)
     AND (? IS NULL OR i.kind=?)
+    AND (?='' OR i.category=?)
     AND (?='' OR LOCATE(?, CONCAT_WS(' ',i.title,${catalogProvider},i.description,${catalogVenue}))>0)
-    ORDER BY COALESCE(${preferredField} IN (${preferredAreas.map(() => '?').join(',')}), FALSE) DESC,
+    ${localAreas.length ? 'AND '+preferred : ''}
+    ORDER BY ${preferred} DESC,
       (i.starts_at IS NOT NULL AND i.starts_at < UTC_TIMESTAMP(3)),
       i.starts_at,i.title,i.id LIMIT 200`,
   [filter.module ?? null, filter.module ?? null, filter.kind ?? null, filter.kind ?? null,
-    filter.q, filter.q, ...preferredAreas])
+    filter.category, filter.category, filter.q, filter.q, ...localAreas, ...preferredAreas])
   res.json({listings:listings.map(publicListing)})
 })
 

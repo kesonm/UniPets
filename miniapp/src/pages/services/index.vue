@@ -5,16 +5,22 @@ import { servicePhone, sortsByDistance, type ServiceCategory, type ServiceSort }
 import { serviceRegions } from '../../../../shared/h5-service-regions.mjs'
 import type { H5Comment, ServicePost } from '../../../../src/h5/types'
 import { api, go, message, toast, user } from '../../lib/client'
-import { changeBrowseLocation, openMapPicker, saveBrowseLocation, selectedLocation, selectedLocationLabel } from '../../lib/location'
+import { openMapPicker, saveBrowseLocation, selectedLocation } from '../../lib/location'
 import { pageLoad, submitAction } from '../../lib/page'
+import { useMenuLayout } from '../../lib/tab-page'
+import BrowseLocation from '../../components/BrowseLocation.vue'
+import BrowseToolbar from '../../components/BrowseToolbar.vue'
+import ChoiceField from '../../components/ChoiceField.vue'
+import UiIcon from '../../components/UiIcon.vue'
 import LoadState from '../../components/LoadState.vue'
 import LoginCard from '../../components/LoginCard.vue'
 import LoginDialog from '../../components/LoginDialog.vue'
 import ServicePostCard from '../../components/ServicePostCard.vue'
 
+const layout = useMenuLayout()
 const endpoint = '/h5/catalog/service-posts'
 const categories = ref<ServiceCategory[]>([])
-const categoryOptions = computed(() => [{id:'',label:'全部'}, ...categories.value])
+const categoryOptions = computed(() => [{id:'',label:'全部服务'}, ...categories.value])
 const categoryError = ref('')
 const sortOptions: {id:ServiceSort;label:string}[] = [
   {id:'recommended',label:'推荐'},
@@ -37,8 +43,6 @@ const region = computed(() => {
 const id = ref('')
 const category = ref('')
 const sort = ref<ServiceSort>('recommended')
-const categoryIndex = computed(() => Math.max(0, categoryOptions.value.findIndex(item => item.id === category.value)))
-const sortIndex = computed(() => sortOptions.findIndex(item => item.id === sort.value))
 const input = ref('')
 const query = ref('')
 const posts = ref<ServicePost[]>([])
@@ -112,22 +116,21 @@ function search() {
   query.value = input.value.trim()
   void refresh()
 }
-type PickerChange = {detail:{value:number|string}}
-function chooseCategory(event: PickerChange) {
-  const option = categoryOptions.value[Number(event.detail.value)]
-  if (!option || option.id === category.value) return
-  category.value = option.id
+function chooseCategory(value: string) {
+  if (value === category.value) return
+  category.value = value
   void refresh()
 }
 
-function chooseSort(event: PickerChange) {
-  const option = sortOptions[Number(event.detail.value)]
+function chooseSort(value: string) {
+  const option = sortOptions.find(item => item.id === value)
   if (!option || option.id === sort.value) return
   if (sortsByDistance(option.id) && !selectedLocation.value) {
     openMapPicker(location => {
       if (!location) return
       saveBrowseLocation(location)
       sort.value = option.id
+      void refresh()
     })
     return
   }
@@ -203,44 +206,33 @@ function comment() {
 </script>
 
 <template>
-  <view class="screen service-screen">
+  <view class="screen menu-screen" :style="layout">
     <template v-if="!id">
-      <view class="card service-search">
-        <input v-model="input" :always-embed="true" maxlength="60" placeholder="搜索服务或商家" confirm-type="search" @confirm="search" />
-        <button class="small primary" @tap="search">搜索</button>
-      </view>
-      <view class="card service-filters" aria-label="服务筛选">
-        <picker id="service-category-filter" mode="selector" :range="categoryOptions" range-key="label" :value="categoryIndex"
-          :disabled="!categories.length" @change="chooseCategory">
-          <view class="service-filter">
-            <text class="service-filter-label">分类</text>
-            <view class="service-filter-selection"><text>{{ categoryOptions[categoryIndex].label }}</text><text class="service-filter-arrow" aria-hidden="true" /></view>
-          </view>
-        </picker>
-        <picker id="service-sort-filter" mode="selector" :range="sortOptions" range-key="label" :value="sortIndex" @change="chooseSort">
-          <view class="service-filter">
-            <text class="service-filter-label">排序</text>
-            <view class="service-filter-selection"><text>{{ sortOptions[sortIndex].label }}</text><text class="service-filter-arrow" aria-hidden="true" /></view>
-          </view>
-        </picker>
+      <BrowseToolbar v-model="input" placeholder="搜索服务或商家" @search="search" />
+      <view class="browse-filters" aria-label="服务筛选">
+        <ChoiceField id="service-category-filter" :model-value="category" :options="categoryOptions"
+          :disabled="!categories.length" appearance="filter" @update:model-value="chooseCategory" />
+        <ChoiceField id="service-sort-filter" :model-value="sort" :options="sortOptions"
+          appearance="filter" @update:model-value="chooseSort" />
         <picker id="service-region-filter" mode="multiSelector" :range="regionColumns" range-key="label" :value="regionDraft"
-          @columnchange="changeRegionColumn" @change="chooseRegion" @cancel="regionDraft = [...regionIds]">
-          <view class="service-filter">
-            <text class="service-filter-label">地区</text>
-            <view class="service-filter-selection"><text>{{ region.label }}</text><text class="service-filter-arrow" aria-hidden="true" /></view>
-          </view>
+          aria-label="按地区筛选" @columnchange="changeRegionColumn" @change="chooseRegion" @cancel="regionDraft = [...regionIds]">
+          <view class="browse-filter-label"><text>{{ region.label }}</text><UiIcon name="down" :size="12" /></view>
         </picker>
+        <BrowseLocation v-if="sortsByDistance(sort)" @change="refresh" />
       </view>
-      <button v-if="sortsByDistance(sort)" class="text-button" @tap="changeBrowseLocation">距离起点 · {{ selectedLocationLabel }}</button>
       <button v-if="categoryError" class="text-button service-filter-retry" @tap="loadCategories">分类读取失败，点此重试</button>
       <LoadState :error="error" :loading="loading" @retry="refresh" />
       <template v-if="!error">
-        <ServicePostCard v-for="item in posts" :key="item.id" :post="item" @open="open(item)" @like="like(item)" @comment="open(item,true)" />
+        <view v-if="posts.length" class="browse-grid">
+          <ServicePostCard v-for="item in posts" :key="item.id" :post="item"
+            @open="open(item)" @like="like(item)" @comment="open(item,true)" />
+        </view>
         <view v-if="!loading && !posts.length" class="card empty-card">暂无符合条件的服务帖</view>
         <button v-if="hasMore" class="more-services" :disabled="loading || paging" @tap="more">加载更多</button>
       </template>
     </template>
     <template v-else>
+      <BrowseToolbar title="服务详情" />
       <LoadState :error="error" :loading="loading" @retry="refresh" />
       <template v-if="post && !error">
         <ServicePostCard :post="post" detail @like="like(post)" @comment="viewComments" />
@@ -270,18 +262,8 @@ function comment() {
 </template>
 
 <style scoped>
-.service-screen { padding-top: 10px; }
-.service-search { display: flex; align-items: center; gap: 8px; padding: 8px; }
-.service-search input { flex: 1; min-width: 0; background: #fff; }
-.service-search button { flex: none; }
-.service-filters { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); padding: 5px 0; }
-.service-filters > picker + picker { border-left: 1px solid var(--border); }
-.service-filter { display: grid; gap: 4px; padding: 6px 11px; }
-.service-filter-label { color: var(--muted); font-size: 11px; }
-.service-filter-selection { display: flex; align-items: center; justify-content: space-between; gap: 5px; min-width: 0; font-size: 13px; font-weight: 700; }
-.service-filter-selection > text:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.service-filter-arrow { flex: none; width: 5px; height: 5px; border: solid #896b27; border-width: 0 1px 1px 0; transform: translateY(-1px) rotate(45deg); }
 .service-filter-retry { margin-bottom: 9px; }
 .service-contact button,.more-services { width: 100%; }
+.more-services { margin-top: 10px; }
 .service-reply { height: 67px; margin: 8px 0; }
 </style>

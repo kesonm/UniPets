@@ -3,11 +3,21 @@ import { computed, ref, watch } from 'vue'
 import { areaDistance } from '../../../shared/h5-areas.mjs'
 import { areaLabel, type Listing } from '../../../src/h5/business'
 import { amount, categories, productFromListing, type Product } from '../../../src/h5/catalog'
-import { changeBrowseLocation, openMapPicker, saveBrowseLocation, selectedLocation, selectedLocationLabel } from '../lib/location'
+import { openMapPicker, saveBrowseLocation, selectedLocation } from '../lib/location'
 import { go, productCover } from '../lib/client'
+import BrowseLocation from './BrowseLocation.vue'
+import LoadState from './LoadState.vue'
+import ChoiceField from './ChoiceField.vue'
 import UiIcon from './UiIcon.vue'
 
-const props = withDefaults(defineProps<{ listings: Listing[]; query?: string; filter?: boolean }>(), { query: '' })
+const props = withDefaults(defineProps<{ listings: Listing[]; query?: string; filter?: boolean; loading?: boolean; error?: string }>(), { query: '' })
+const emit = defineEmits<{ 'location-change': []; retry: [] }>()
+const sortOptions = [
+  {id:'recommended',label:'推荐'}, {id:'sales',label:'按销量'},
+  {id:'price-asc',label:'按价格 ↑'}, {id:'price-desc',label:'按价格 ↓'},
+  {id:'distance-asc',label:'按距离 ↑'}, {id:'distance-desc',label:'按距离 ↓'},
+]
+const categoryOptions = categories.map(item => ({...item,label:item.id === 'all' ? '全部商品' : item.label}))
 const category = ref('all')
 const nearby = ref(false)
 const order = ref('recommended')
@@ -23,8 +33,23 @@ const listings = computed(() => {
       (!nearby.value || sameCity(product)) &&
       (!query || [product.name, product.merchant, name].join(' ').toLowerCase().includes(query))
   })
-  if (order.value === 'lowest') filtered.sort((a, b) => a.variants[0].cents - b.variants[0].cents)
-  if (order.value === 'nearest') filtered.sort((a, b) => distance(a) - distance(b))
+  if (order.value === 'sales') filtered.sort((a,b) => (b.salesCount ?? 0) - (a.salesCount ?? 0))
+  if (order.value.startsWith('price-')) {
+    const direction = order.value === 'price-asc' ? 1 : -1
+    filtered.sort((a,b) => direction * (a.variants[0].cents - b.variants[0].cents))
+  }
+  if (order.value.startsWith('distance-')) {
+    const direction = order.value === 'distance-asc' ? 1 : -1
+    const distances = new Map(filtered.map(product => [product.id, distance(product)]))
+    filtered.sort((a,b) => {
+      const first = distances.get(a.id) ?? Infinity
+      const second = distances.get(b.id) ?? Infinity
+      if (first === second) return 0
+      if (first === Infinity) return 1
+      if (second === Infinity) return -1
+      return direction * (first - second)
+    })
+  }
   return filtered
 })
 function sameCity(product: Product) {
@@ -41,41 +66,36 @@ function distance(product: Product) {
 function show(product: Product) {
   go('directory', { module: 'shop', id: product.id })
 }
-function toggleNearby() {
-  if (nearby.value) nearby.value = false
-  else withShopLocation(() => { nearby.value = true })
-}
-function withShopLocation(action: () => void) {
-  if (selectedLocation.value) action()
-  else openMapPicker(location => {
+function chooseOrder(value: string) {
+  if (!value.startsWith('distance-') || selectedLocation.value) {
+    order.value = value
+    return
+  }
+  void openMapPicker(location => {
     if (!location) return
     saveBrowseLocation(location)
-    action()
+    order.value = value
+    emit('location-change')
   })
 }
 watch(selectedLocation, location => {
   if (location) return
   nearby.value = false
-  if (order.value === 'nearest') order.value = 'recommended'
+  if (order.value.startsWith('distance-')) order.value = 'recommended'
 })
 </script>
 
 <template>
-  <view v-if="filter" class="card market-filters">
-    <view class="spread">
-      <button class="text-button" @tap="changeBrowseLocation"><UiIcon name="location" />{{ selectedLocationLabel }}</button>
-      <button :class="['chip', { active: nearby }]" :aria-pressed="nearby" @tap="toggleNearby">仅看同城</button>
-    </view>
-    <view class="chips">
-      <button v-for="item in categories" :key="item.id" :class="['chip', { active: category === item.id }]" @tap="category = item.id">{{ item.label }}</button>
-    </view>
-    <view class="chips">
-      <button :class="['chip', { active: order === 'recommended' }]" @tap="order = 'recommended'">综合推荐</button>
-      <button :class="['chip', { active: order === 'lowest' }]" @tap="order = 'lowest'">价格最低</button>
-      <button :class="['chip', { active: order === 'nearest' }]" @tap="withShopLocation(() => { order = 'nearest' })">距离最近</button>
-    </view>
+  <view v-if="filter" class="browse-filters market-filters">
+    <ChoiceField id="shop-sort-filter" :model-value="order" :options="sortOptions" appearance="filter" @update:model-value="chooseOrder" />
+    <ChoiceField v-model="category" :options="categoryOptions" appearance="filter" />
+    <BrowseLocation v-model:nearby="nearby" @change="emit('location-change')" />
+    <button class="text-button market-cart" @tap="go('orders')">
+      <UiIcon name="nav-cart" :size="14" />购物车
+    </button>
   </view>
-  <view v-if="listings.length" class="product-grid">
+  <LoadState v-if="loading || error" :loading="!!loading" :error="error || ''" @retry="emit('retry')" />
+  <view v-else-if="listings.length" class="product-grid" :class="{ 'market-grid': filter }">
     <view v-for="product in listings" :key="product.id" class="product-card">
       <button class="product-open" :aria-label="'查看' + product.name" @tap="show(product)">
         <image v-if="product.hasCover" class="product-art" :src="productCover(product.id)" mode="aspectFill" lazy-load />
@@ -91,18 +111,20 @@ watch(selectedLocation, location => {
     </view>
   </view>
   <view v-else class="card empty-card">
-    <UiIcon name="empty-cart" :size="24" />
+    <UiIcon v-if="!filter" name="empty-cart" :size="24" />
     <text>{{ query ? '没有匹配的商品' : '当前范围暂无商品' }}</text>
     <button v-if="nearby && !query" class="text-button" @tap="nearby = false">查看全部商品</button>
   </view>
 </template>
 
 <style scoped>
-.market-filters { padding: 9px 11px 5px; }
+.market-filters { gap: 7px; }
+.market-cart { flex: none; margin-left: auto; padding: 0 2px; white-space: nowrap; font-size: 12px; }
 .product-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .product-card { min-width: 0; overflow: hidden; border: 1px solid #ebe8e1; border-radius: 13px; background: #fff; }
 .product-open { display: block; width: 100%; padding: 0; border: 0; border-radius: 0; text-align: left; color: #262422; }
 .product-art { display: block; width: 100%; aspect-ratio: 1; height: auto; background: #faf0d7; }
+.market-grid .product-art { aspect-ratio: 1.28; }
 .product-art-platform { display: flex; align-items: center; justify-content: center; aspect-ratio: 1.45; }
 .product-title, .product-merchant, .product-area { display: block; padding: 1px 9px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .product-title { padding-top: 8px; font-size: 14px; }

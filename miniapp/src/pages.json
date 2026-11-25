@@ -91,12 +91,14 @@
     {
       "path": "pages/directory/index",
       "style": {
+        "navigationStyle": "custom",
         "navigationBarTitleText": "服务与好物"
       }
     },
     {
       "path": "pages/services/index",
       "style": {
+        "navigationStyle": "custom",
         "navigationBarTitleText": "宠物周边服务",
         "navigationBarBackgroundColor": "#f5f4f1"
       }
@@ -104,6 +106,7 @@
     {
       "path": "pages/jobs/index",
       "style": {
+        "navigationStyle": "custom",
         "navigationBarTitleText": "宠物人才就业",
         "navigationBarBackgroundColor": "#f5f4f1"
       }

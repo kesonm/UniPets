@@ -7,7 +7,7 @@ import JobCard from './JobCard.vue'
 
 const props = defineProps<{
   active: boolean
-  filters: { city?:string; category?:string; type?:string }
+  filters: { city?:string; category?:string; type?:string; q?:string }
 }>()
 const filterQuery = computed(() => Object.entries(props.filters).filter((entry): entry is [string,string] => Boolean(entry[1]))
   .map(([key,value]) => '&'+key+'='+encodeURIComponent(value)).join(''))
@@ -61,9 +61,11 @@ onUnmounted(() => { revision++ })
   <view class="job-list">
     <LoadState v-if="error || (loading && !jobs.length)" :loading="loading" :error="error" @retry="load()" />
     <template v-else>
-      <JobCard v-for="job in jobs" :key="job.id" :job="job" />
-      <view v-if="!jobs.length" class="card empty-card">
-        {{ props.filters.city || props.filters.category || props.filters.type ? '没有匹配的招聘岗位' : '暂无招聘岗位' }}
+      <view v-if="jobs.length" class="browse-grid">
+        <JobCard v-for="job in jobs" :key="job.id" :job="job" />
+      </view>
+      <view v-else class="card empty-card">
+        {{ props.filters.city || props.filters.category || props.filters.type || props.filters.q ? '没有匹配的招聘岗位' : '暂无招聘岗位' }}
       </view>
       <button v-if="hasMore" class="small jobs-more" :disabled="loading" :loading="loading" @tap="load(true)">加载更多岗位</button>
     </template>
@@ -71,5 +73,5 @@ onUnmounted(() => { revision++ })
 </template>
 
 <style scoped>
-.jobs-more { width: 100%; }
+.jobs-more { width: 100%; margin-top: 10px; }
 </style>

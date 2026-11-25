@@ -9,13 +9,17 @@ import { listPets } from '../../lib/pets'
 import { addProduct, money } from '../../lib/cart'
 import { searchListings } from '../../lib/directory'
 import { pageLoad, submitAction } from '../../lib/page'
-import { changeBrowseLocation, selectedLocation, selectedLocationLabel } from '../../lib/location'
+import { selectedLocation } from '../../lib/location'
+import { useMenuLayout } from '../../lib/tab-page'
+import BrowseLocation from '../../components/BrowseLocation.vue'
+import BrowseToolbar from '../../components/BrowseToolbar.vue'
+import ChoiceField from '../../components/ChoiceField.vue'
 import DirectoryListing from '../../components/DirectoryListing.vue'
 import LoginCard from '../../components/LoginCard.vue'
 import LoadState from '../../components/LoadState.vue'
 import PetPicker from '../../components/PetPicker.vue'
 import ShopShelf from '../../components/ShopShelf.vue'
-import UiIcon from '../../components/UiIcon.vue'
+const layout = useMenuLayout()
 const names: Record<string, string> = {
   events: '宠物赛事',
   training: '宠物培训与考证',
@@ -27,7 +31,7 @@ const eventStatus = { open: '报名中', closed: '报名结束', upcoming: '即�
 const section = ref('services'),
   id = ref(''),
   q = ref(''),
-  shopQuery = ref(''),
+  query = ref(''),
   note = ref(''),
   items = ref<Listing[]>([]),
   item = ref<Listing>()
@@ -39,8 +43,10 @@ const pets = ref<Pet[]>([]),
   petId = ref('')
 const category = ref('')
 const forwarding = ref(false)
-const categories = computed(() => isBusinessModule(section.value) ? businessModules[section.value].categories : [])
-const displayed = computed(() => category.value ? items.value.filter(item => item.category === category.value) : items.value)
+const browse = computed(() => !id.value && !['events','training'].includes(section.value))
+const categories = computed(() => isBusinessModule(section.value)
+  ? [{id:'',label:'全部类型'}, ...businessModules[section.value].categories] : [])
+let listRequest = 0
 const needsPet = computed(
   () => !!event.value || (item.value?.kind !== 'group' && item.value?.module !== 'charity'),
 )
@@ -62,13 +68,11 @@ onLoad((o) => {
       url: '/pages/immortality/index',
       fail() {
         forwarding.value = false
-        uni.setNavigationBarTitle({ title: names[section.value] })
         void refresh()
       },
     })
     return
   }
-  uni.setNavigationBarTitle({ title: names[section.value] })
 })
 async function load() {
   if (forwarding.value) return
@@ -91,11 +95,14 @@ async function load() {
     }
     item.value = result.listing
   }
-  else if (section.value === 'shop') {
+  else {
+    const current = ++listRequest
     const district = selectedLocation.value?.district.id
-    items.value = (await api<{ listings: Listing[] }>('/h5/catalog?kind=product' + (district ? '&district=' + encodeURIComponent(district) : ''))).listings
+    const listings = section.value === 'shop'
+      ? (await api<{ listings: Listing[] }>('/h5/catalog?kind=product' + (district ? '&district=' + encodeURIComponent(district) : ''))).listings
+      : await searchListings(section.value, query.value, district, {category: category.value})
+    if (current === listRequest) items.value = listings
   }
-  else items.value = await searchListings(section.value, q.value, selectedLocation.value?.district.id)
   if (user.value && id.value && needsPet.value) {
     pets.value = await listPets()
     if (!pets.value.some((p) => p.id === petId.value)) petId.value = pets.value[0]?.id || ''
@@ -110,9 +117,15 @@ const { run, busy, error: actionError } = submitAction()
 function open(key: string) {
   go('directory', { module: section.value, id: key })
 }
+function chooseCategory(value: string) {
+  if (value === category.value) return
+  category.value = value
+  void refresh()
+}
+
 function search() {
-  if (section.value === 'shop') shopQuery.value = q.value.trim()
-  else void refresh()
+  query.value = q.value.trim()
+  if (section.value !== 'shop') void refresh()
 }
 function join() {
   return run(async () => {
@@ -139,8 +152,15 @@ function copyLink() {
 }
 </script>
 <template>
-  <view v-if="!forwarding" class="screen">
-    <LoadState :loading="loading" :error="error" @retry="refresh" />
+  <view v-if="!forwarding" class="screen menu-screen" :style="layout">
+    <BrowseToolbar v-if="browse" v-model="q"
+      :placeholder="section === 'shop' ? '搜索商品或商家' : '搜索名称、机构或地点'" @search="search" />
+    <BrowseToolbar v-else :title="names[section]" />
+    <view v-if="browse && categories.length" class="browse-filters">
+      <ChoiceField :model-value="category" :options="categories" appearance="filter" @update:model-value="chooseCategory" />
+      <BrowseLocation @change="refresh" />
+    </view>
+    <LoadState v-if="section !== 'shop' || id" :loading="loading" :error="error" @retry="refresh" />
     <text v-if="actionError" class="error">{{ actionError }}</text>
     <template v-if="!id">
       <template v-if="section === 'events'">
@@ -160,42 +180,12 @@ function copyLink() {
           <text class="sub">{{ c.credential }}　{{ c.issuer }}</text>
         </view>
       </template>
-      <template v-else>
-        <view class="card program-search">
-          <input
-            :always-embed="true"
-            v-model="q"
-            maxlength="60"
-            :placeholder="section === 'shop' ? '搜索商品或商家' : '搜索名称、机构或地点'"
-            confirm-type="search"
-            @confirm="search"
-          />
-          <button class="small primary" @tap="search">搜索</button>
-          <button v-if="section === 'shop'" class="text-button" @tap="go('orders')">
-            <UiIcon name="nav-cart" :size="14" />购物车
-          </button>
-        </view>
-        <view v-if="section === 'shop'" v-show="!loading && !error">
-          <ShopShelf :listings="items" :query="shopQuery" filter />
-        </view>
-        <template v-else>
-          <view v-if="categories.length" class="card">
-            <view class="spread">
-              <button class="text-button" @tap="changeBrowseLocation"><UiIcon name="location" />{{ selectedLocationLabel }}</button>
-            </view>
-            <view class="chips">
-              <button :class="['chip', { active: !category }]" @tap="category = ''">全部</button>
-              <button
-                v-for="option in categories" :key="option.id"
-                :class="['chip', { active: category === option.id }]"
-                @tap="category = option.id"
-              >{{ option.label }}</button>
-            </view>
-          </view>
-          <DirectoryListing v-for="item in displayed" :key="item.id" :listing="item" />
-        </template>
-      </template>
-      <view v-if="section !== 'shop' && !loading && !error && !displayed.length && !events.length && !courses.length" class="card empty-card">
+      <ShopShelf v-else-if="section === 'shop'" :listings="items" :query="query" filter
+        :loading="loading" :error="error" @location-change="refresh" @retry="refresh" />
+      <view v-else-if="!loading && !error && items.length" class="browse-grid">
+        <DirectoryListing v-for="entry in items" :key="entry.id" :listing="entry" />
+      </view>
+      <view v-if="section !== 'shop' && !loading && !error && !items.length && !events.length && !courses.length" class="card empty-card">
         当前分类暂无已发布的项目
       </view>
     </template>
@@ -246,8 +236,5 @@ function copyLink() {
   </view>
 </template>
 <style scoped>
-.program-search { display: flex; align-items: center; gap: 8px; }
-.program-search input { flex: 1; min-width: 0; }
-.program-search button { flex: none; min-height: 34px; }
 .product-detail-cover { display: block; width: 100%; height: min(83vw,360px); margin: 10px 0; border-radius: 12px; background: var(--canvas); }
 </style>

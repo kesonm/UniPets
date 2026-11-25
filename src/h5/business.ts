@@ -5,7 +5,7 @@ import { serviceCategories } from '../../shared/h5-discovery.mjs'
 
 export const businessModules = {
   immortality: {title:'宠物数字永生', categories:[
-    {id:'care',label:'临终关怀'}, {id:'farewell',label:'告别仪式'}, {id:'ecology',label:'生态纪念'}, {id:'keepsake',label:'纪念品定制'},
+    {id:'care',label:'临终关怀'}, {id:'farewell',label:'告别仪式'}, {id:'ashes-storage',label:'骨灰存放'}, {id:'temple-blessing',label:'寺庙祈福'},
   ]},
   services: {title:'宠物周边服务', categories:[...serviceCategories, {id:'self-service',label:'自助洗护烘干'}]},
   charity: {title:'宠物公益慈善', categories:[
@@ -51,6 +51,7 @@ export interface Listing {
   priceCents: number|null
   stock: number|null
   hasCover?: boolean|number
+  salesCount?: number
   externalUrl: string|null
 }
 

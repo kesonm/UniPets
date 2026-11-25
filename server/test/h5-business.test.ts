@@ -35,13 +35,14 @@ test('H5 business pages keep purchases and pet records private and persist parti
   }
   async function listing(module:string,kind:string,category:string,title:string,{
     published=true,stock=null as number|null,price=null as number|null,start=null as Date|null,link=null as string|null,
+    area='shenzhen-nanshan',
   }={}) {
     const id=randomUUID()
     listings.push(id)
     await db.execute(`INSERT INTO h5_catalog_items
       (id,module,kind,category,title,provider,description,area,published,stock,price_cents,starts_at,external_url)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [id,module,kind,category,title+' '+suffix,'测试机构','隔离测试','shenzhen-nanshan',published,stock,price,start,link])
+    [id,module,kind,category,title+' '+suffix,'测试机构','隔离测试',area,published,stock,price,start,link])
     return id
   }
   async function stock(id:string) {
@@ -98,6 +99,14 @@ test('H5 business pages keep purchases and pet records private and persist parti
 
     const goods=await listing('shop','product','food','宠粮',{stock:3,price:1500})
     const memorialGoods=await listing('immortality','product','keepsake','纪念品',{stock:2,price:990})
+    const localAshes=await listing('immortality','article','ashes-storage','骨灰存放')
+    const remoteAshes=await listing('immortality','article','ashes-storage','骨灰存放',{area:'shanghai-xuhui'})
+    const temple=await listing('immortality','article','temple-blessing','寺庙祈福')
+    const memorialCatalog='/h5/catalog?module=immortality&q='+suffix
+    assert.deepEqual(new Set((await request(memorialCatalog+'&category=ashes-storage')).data.listings.map((item:{id:string})=>item.id)),
+      new Set([localAshes,remoteAshes]))
+    assert.deepEqual(new Set((await request(memorialCatalog+'&local=1&district=6571327')).data.listings.map((item:{id:string})=>item.id)),
+      new Set([localAshes,temple,memorialGoods]))
     const checkout={requestKey:randomUUID(),items:[
       {itemId:goods,quantity:2,unitCents:1500},{itemId:memorialGoods,quantity:1,unitCents:990},
     ]}
@@ -111,6 +120,8 @@ test('H5 business pages keep purchases and pet records private and persist parti
     assert.deepEqual(retry.data.order,order)
     assert.equal(order.totalCents,3990)
     assert.equal(order.status,'submitted')
+    const productCatalog='/h5/catalog?kind=product&q='+suffix
+    assert.equal((await request(productCatalog)).data.listings.find((item:{id:string})=>item.id===goods).salesCount,0)
     assert.equal(await stock(goods),1)
     assert.equal((await request('/h5/orders','GET',undefined,other.cookie)).data.orders.length,0)
     assert.equal((await request('/h5/orders/'+order.id+'/support','PUT',{message:'来自其他账号'},other.cookie)).status,404)
@@ -119,6 +130,14 @@ test('H5 business pages keep purchases and pet records private and persist parti
     for(let count=0;count<2;count++) assert.equal((await request('/h5/orders/'+order.id+'/cancel','POST',{},owner.cookie)).status,200)
     assert.equal(await stock(goods),3)
     assert.equal(await stock(memorialGoods),2)
+    const bought=await request('/h5/orders','POST',{...checkout,requestKey:randomUUID()},owner.cookie)
+    assert.equal(bought.status,200)
+    const settlement='/h5/operations/orders/'+bought.data.order.id
+    assert.equal((await request(settlement,'PATCH',{action:'confirm'},other.cookie)).status,200)
+    assert.equal((await request(settlement,'PATCH',{action:'complete'},other.cookie)).status,200)
+    const sold=(await request(productCatalog)).data.listings
+    assert.equal(sold.find((item:{id:string})=>item.id===goods).salesCount,2)
+    assert.equal(sold.find((item:{id:string})=>item.id===memorialGoods).salesCount,1)
 
     const archive='/h5/pet-records/'+owner.petId
     assert.equal((await request(archive,'GET',undefined,other.cookie)).status,404)

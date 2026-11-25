@@ -205,3 +205,55 @@ button.chip.active {
   background: var(--paper);
   box-shadow: 0 8px 28px #35231724;
 }
+
+.browse-filters {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 7px;
+}
+.browse-filters > picker { min-width: 0; }
+.browse-filter-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 3px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 650;
+}
+.browse-filter-label > text, .browse-card-title, .browse-card-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browse-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.browse-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--paper);
+}
+.browse-card-cover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1.28;
+  background: #faf0d7;
+}
+.browse-card-title, .browse-card-meta { display: block; }
+.browse-card-title { color: var(--ink); font-size: 14px; font-weight: 700; }
+.browse-card-meta { color: var(--muted); font-size: 11px; }
+.browse-card-copy { display: grid; gap: 4px; padding: 8px 9px; }

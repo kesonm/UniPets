@@ -4,13 +4,16 @@ import { onHide, onLoad, onShow } from '@dcloudio/uni-app'
 import { servicePhone } from '../../../../shared/h5-discovery.mjs'
 import { employmentTypes, jobCategories, jobCityLabel, type StoreJob } from '../../../../shared/h5-jobs.mjs'
 import { serviceRegions } from '../../../../shared/h5-service-regions.mjs'
+import BrowseToolbar from '../../components/BrowseToolbar.vue'
 import ChoiceField from '../../components/ChoiceField.vue'
 import JobList from '../../components/JobList.vue'
 import LoadState from '../../components/LoadState.vue'
 import UiIcon from '../../components/UiIcon.vue'
 import { api, publicImage } from '../../lib/client'
 import { pageLoad } from '../../lib/page'
+import { useMenuLayout } from '../../lib/tab-page'
 
+const layout = useMenuLayout()
 const endpoint = '/h5/jobs'
 const provinces = [{id:'',label:'全国',cities:[]}, ...serviceRegions]
 const categoryOptions = [{id:'',label:'全部岗位'}, ...Object.entries(jobCategories).map(([id,label]) => ({id,label}))]
@@ -24,14 +27,15 @@ const category = ref('')
 const type = ref('')
 const id = ref('')
 const active = ref(false)
-const filters = computed(() => ({city:city.value.id,category:category.value,type:type.value}))
+const input = ref('')
+const query = ref('')
+const filters = computed(() => ({city:city.value.id, category:category.value, type:type.value, q:query.value}))
 const job = ref<StoreJob>()
 const images = computed(() => Array.from({length:job.value?.imageCount || 0}, (_,index) =>
   publicImage(`/h5/jobs/${id.value}/images/${index+1}`)))
 
 onLoad(options => {
   id.value = options?.id || ''
-  if (id.value) uni.setNavigationBarTitle({title:'岗位详情'})
 })
 onShow(() => { active.value = true })
 onHide(() => { active.value = false })
@@ -67,14 +71,16 @@ function previewImage(current: string) {
 </script>
 
 <template>
-  <view class="screen jobs-screen">
-    <view v-if="!id" class="card job-filters">
+  <view class="screen menu-screen" :style="layout">
+    <BrowseToolbar v-if="!id" v-model="input" placeholder="搜索岗位或门店" @search="query = input.trim()" />
+    <BrowseToolbar v-else title="岗位详情" />
+    <view v-if="!id" class="browse-filters">
       <picker mode="multiSelector" :range="cityColumns" range-key="label" :value="cityDraft" aria-label="按城市筛选"
         @columnchange="updateCityColumn" @change="selectCity" @cancel="resetCityDraft">
-        <view class="field job-city-choice">{{ city.label }} ﹀</view>
+        <view class="browse-filter-label"><text>{{ city.label }}</text><UiIcon name="down" :size="12" /></view>
       </picker>
-      <ChoiceField v-model="category" :options="categoryOptions" />
-      <ChoiceField v-model="type" :options="typeOptions" />
+      <ChoiceField v-model="category" :options="categoryOptions" appearance="filter" />
+      <ChoiceField v-model="type" :options="typeOptions" appearance="filter" />
     </view>
     <JobList v-if="!id" :active="active" :filters="filters" />
     <LoadState v-else-if="loading || error" :loading="loading" :error="error" @retry="refresh" />
@@ -106,9 +112,6 @@ function previewImage(current: string) {
 </template>
 
 <style scoped>
-.jobs-screen { padding-top: 10px; }
-.job-filters { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; padding: 8px; }
-.job-city-choice { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .job-card-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 3px 12px; }
 .job-title { min-width: 0; overflow-wrap: anywhere; }
 .job-salary { color: var(--gold-ink); font-weight: 750; font-size: 14px; overflow-wrap: anywhere; }
