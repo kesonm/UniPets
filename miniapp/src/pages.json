@@ -61,7 +61,8 @@
       "path": "pages/store-jobs/index",
       "style": {
         "navigationBarTitleText": "门店招聘",
-        "navigationBarBackgroundColor": "#f5f4f1"
+        "navigationBarBackgroundColor": "#ffffff",
+        "backgroundColor": "#ffffff"
       }
     },
     {

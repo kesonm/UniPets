@@ -3,7 +3,7 @@ import { onUnmounted } from 'vue'
 import { message, toast, user } from '../lib/client'
 import { choosePhotoPath, postPhotoLimitMb } from '../lib/photo'
 
-const props = defineProps<{ label: string; disabled?: boolean }>()
+const props = defineProps<{ label: string; disabled?: boolean; appearance?: 'plain' }>()
 const photos = defineModel<string[]>({ required: true })
 const choosing = defineModel<boolean>('choosing', { required: true })
 let mounted = true
@@ -40,7 +40,8 @@ function remove(index: number) {
         <image :src="path" mode="aspectFill" @tap="preview(path)" />
         <button class="chip post-photo-remove" :disabled="disabled || choosing" :aria-label="'移除第 '+(index+1)+' 张'" @tap="remove(index)">×</button>
       </view>
-      <button v-if="photos.length < 3" class="small post-photo-add" :disabled="disabled || choosing" @tap="addPhoto">＋ 添加图片</button>
+      <button v-if="photos.length < 3" :class="appearance === 'plain' ? 'text-button post-photo-add-plain' : 'small post-photo-add'"
+        :disabled="disabled || choosing" @tap="addPhoto">＋ 添加图片</button>
     </view>
   </view>
 </template>
@@ -51,4 +52,5 @@ function remove(index: number) {
 .post-photo image { display: block; width: 100%; height: 100%; border-radius: 8px; }
 .post-photo-remove { position: absolute; top: 4px; right: 4px; padding: 0; width: 26px; height: 26px; }
 .post-photo-add { min-height: 80px; border-style: dashed; border-radius: 8px; }
+button.post-photo-add-plain { min-height: 40px; padding: 0 8px 0 0; }
 </style>
