@@ -134,7 +134,7 @@ function publish() {
             </view>
             <view>
               <text class="heading">绑定门店</text>
-              <text class="sub">验证绑定码后，填写门店资料并选点</text>
+              <text class="sub">验证绑定码后，填写门店资料并定位</text>
             </view>
           </view>
           <button id="scan-store-binding" class="primary store-scan-button" :disabled="busy || scanning" @tap="scanStore">

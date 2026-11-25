@@ -30,6 +30,23 @@ export async function enableLocation(explanation: string) {
   }))
 }
 
+export async function chooseNativeLocation(initial: ServiceCoordinates | null | undefined, isActive: () => boolean) {
+  const choose = () => new Promise<UniNamespace.ChooseLocationSuccess | undefined>((resolve, reject) => uni.chooseLocation({
+    ...initial,
+    success: resolve,
+    fail: ({ errMsg }) => {
+      if (/cancel/i.test(errMsg)) resolve(undefined)
+      else reject(new Error(errMsg || '暂时无法打开微信地图'))
+    },
+  }))
+  try {
+    return await choose()
+  } catch (cause) {
+    if (!isActive() || !await enableLocation('允许定位后可使用微信地图选择位置。')) throw cause
+    if (isActive()) return choose()
+  }
+}
+
 export async function locateDistrict(interactive = true): Promise<void> {
   if (locatingDistrict.value) return
   locatingDistrict.value = true
