@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { areaDistance, h5Areas } from '../../../shared/h5-areas.mjs'
+import { computed, ref, watch } from 'vue'
+import { areaDistance } from '../../../shared/h5-areas.mjs'
 import { areaLabel, type Listing } from '../../../src/h5/business'
 import { amount, categories, products, productFromListing, type Product } from '../../../src/h5/catalog'
-import { selectedArea } from '../lib/area'
+import { changeBrowseLocation, openMapPicker, saveBrowseLocation, selectedLocation, selectedLocationLabel } from '../lib/location'
 import { go } from '../lib/client'
 import UiIcon from './UiIcon.vue'
 
 const props = withDefaults(defineProps<{ listings: Listing[]; query?: string; filter?: boolean }>(), { query: '' })
-const emit = defineEmits<{ area: [] }>()
 const category = ref('all')
 const nearby = ref(false)
 const order = ref('recommended')
@@ -24,16 +23,22 @@ const listings = computed(() => {
   const filtered = available.filter(product => {
     const name = categories.find(item => item.id === product.category)?.label || ''
     return (category.value === 'all' || product.category === category.value) &&
-      (!nearby.value || product.area === selectedArea.value) &&
+      (!nearby.value || sameCity(product)) &&
       (!query || [product.name, product.merchant, name].join(' ').toLowerCase().includes(query))
   })
   if (order.value === 'lowest') filtered.sort((a, b) => a.variants[0].cents - b.variants[0].cents)
-  if (order.value === 'nearest') filtered.sort((a, b) => distance(a.area) - distance(b.area))
+  if (order.value === 'nearest') filtered.sort((a, b) => distance(a) - distance(b))
   return filtered
 })
-function distance(area: string) {
-  const from = h5Areas.find(item => item.id === selectedArea.value)
-  const to = h5Areas.find(item => item.id === area)
+function sameCity(product: Product) {
+  const district = selectedLocation.value?.district
+  if (!district) return false
+  const city = product.cityCode ?? product.district?.serviceCityCode
+  return product.district?.id === district.id || Boolean(city && city === district.serviceCityCode)
+}
+function distance(product: Product) {
+  const from = selectedLocation.value?.coordinates
+  const to = product.coordinates
   return from && to ? areaDistance(from, to) : Infinity
 }
 function show(product: Product) {
@@ -46,16 +51,29 @@ function show(product: Product) {
   }
 }
 function toggleNearby() {
-  nearby.value = !nearby.value
-  if (nearby.value && !selectedArea.value) emit('area')
+  if (nearby.value) nearby.value = false
+  else withShopLocation(() => { nearby.value = true })
 }
+function withShopLocation(action: () => void) {
+  if (selectedLocation.value) action()
+  else openMapPicker(location => {
+    if (!location) return
+    saveBrowseLocation(location)
+    action()
+  })
+}
+watch(selectedLocation, location => {
+  if (location) return
+  nearby.value = false
+  if (order.value === 'nearest') order.value = 'recommended'
+})
 </script>
 
 <template>
   <view v-if="filter" class="card market-filters">
     <view class="spread">
-      <button class="text-button" @tap="emit('area')"><UiIcon name="location" />{{ areaLabel(selectedArea) || '选择商圈' }}</button>
-      <button :class="['chip', { active: nearby }]" :aria-pressed="nearby" @tap="toggleNearby">同城优先</button>
+      <button class="text-button" @tap="changeBrowseLocation"><UiIcon name="location" />{{ selectedLocationLabel }}</button>
+      <button :class="['chip', { active: nearby }]" :aria-pressed="nearby" @tap="toggleNearby">仅看同城</button>
     </view>
     <view class="chips">
       <button v-for="item in categories" :key="item.id" :class="['chip', { active: category === item.id }]" @tap="category = item.id">{{ item.label }}</button>
@@ -63,7 +81,7 @@ function toggleNearby() {
     <view class="chips">
       <button :class="['chip', { active: order === 'recommended' }]" @tap="order = 'recommended'">综合推荐</button>
       <button :class="['chip', { active: order === 'lowest' }]" @tap="order = 'lowest'">价格最低</button>
-      <button :class="['chip', { active: order === 'nearest' }]" @tap="order = 'nearest'">离我最近</button>
+      <button :class="['chip', { active: order === 'nearest' }]" @tap="withShopLocation(() => { order = 'nearest' })">距离最近</button>
     </view>
   </view>
   <view v-if="listings.length" class="product-grid">
@@ -73,7 +91,7 @@ function toggleNearby() {
         <image v-else class="product-art" :src="'/static/products/' + product.id + '.webp'" mode="aspectFill" />
         <text class="product-title">{{ product.name }}</text>
         <text class="product-merchant">{{ product.merchant }}</text>
-        <text class="product-area">{{ areaLabel(product.area) || (product.platform && !product.stock ? '已售罄' : '') }}</text>
+        <text class="product-area">{{ areaLabel(product.area, product.district) || (product.platform && !product.stock ? '已售罄' : '') }}</text>
       </button>
       <view class="product-foot">
         <text>¥<text class="product-price">{{ amount(product.variants[0].cents) }}</text></text>
@@ -83,8 +101,8 @@ function toggleNearby() {
   </view>
   <view v-else class="card empty-card">
     <UiIcon name="empty-cart" :size="24" />
-    <text>{{ query ? '没有匹配的商品' : nearby && !selectedArea ? '先选择商圈' : '当前范围暂无商品' }}</text>
-    <button v-if="nearby && !query" class="text-button" @tap="nearby = false">查看全部商圈</button>
+    <text>{{ query ? '没有匹配的商品' : '当前范围暂无商品' }}</text>
+    <button v-if="nearby && !query" class="text-button" @tap="nearby = false">查看全部商品</button>
   </view>
   <view v-if="detail" class="modal-scrim" @tap="detail = undefined">
     <view class="modal-panel" role="dialog" :aria-label="detail.name" @tap.stop>

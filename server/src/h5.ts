@@ -23,7 +23,7 @@ import { h5ServicePostsRouter, servicePosts } from './h5-service-posts.js'
 import { h5StoreBindingRouter } from './h5-store-binding.js'
 import { h5MyContentRouter } from './h5-my-content.js'
 import { recommendedPosts, type PublicPost } from './h5-recommendations.js'
-import { districtInput, districtRouter } from './districts.js'
+import { districtAreaIds, districtInput, districtRouter, knownDistrictInput, withDistrict } from './districts.js'
 
 export const h5Router = Router()
 h5Router.use('/operations',h5OperationsRouter)
@@ -31,6 +31,7 @@ h5Router.use(districtRouter,h5ServicePostsRouter,h5StoreBindingRouter,h5MyConten
   h5ProgramsRouter,h5DirectoryRouter,h5OrdersRouter,h5PetRecordsRouter,h5StoriesRouter,h5SocialPagesRouter)
 const uuid = z.string().uuid()
 const area = z.string().refine(id => h5Areas.some(item => item.id === id), '请选择已有商圈')
+const postArea = z.union([area, knownDistrictInput])
 const species = z.enum(['cat','dog','other'])
 const topics = z.enum(['daily','travel','rescue','help'])
 const petTypeInput = z.enum(postPetTypes)
@@ -146,10 +147,11 @@ const postSelect = `SELECT post.id,post.title,post.body,post.area,post.topic,pos
   (post.hidden_at IS NOT NULL) AS hidden,
   (SELECT COUNT(*) FROM h5_reactions r WHERE r.post_id=post.id AND r.kind='like') AS likes
   FROM h5_posts post JOIN pets p ON p.id=post.pet_id JOIN users u ON u.id=post.user_id`
+type PostWithArea = PublicPost & {area: string | null}
 
 h5Router.get('/posts', async (req, res) => {
   const query = z.object({sort:z.enum(['recommended','latest','hot','near']).default('recommended'),
-    area:area.optional(), q:z.string().trim().max(60).default(''), species:species.optional(),
+    area:area.optional(), district:knownDistrictInput.optional(), q:z.string().trim().max(60).default(''), species:species.optional(),
     petType:petTypeInput.optional(), breed:z.string().trim().max(80).default(''),
     topic:topics.optional(),page:z.coerce.number().int().min(1).max(200).default(1)}).parse(req.query)
   const current = h5Areas.find(item => item.id === query.area)
@@ -164,12 +166,16 @@ h5Router.get('/posts', async (req, res) => {
       order.push(query.species)
     }
     rank += `(likes / (1 + GREATEST(0,TIMESTAMPDIFF(DAY,post.created_at,UTC_TIMESTAMP(3))))) DESC,`
+  } else if (query.sort === 'near' && query.district) {
+    const preferred = districtAreaIds([query.district])
+    rank = `COALESCE(post.area IN (${preferred.map(() => '?').join(',')}), FALSE) DESC,`
+    order.push(...preferred)
   } else if (query.sort === 'near' && current) {
     const nearby = [...h5Areas].sort((a,b) => areaDistance(current,a) - areaDistance(current,b))
     rank = `COALESCE(NULLIF(FIELD(post.area,${nearby.map(() => '?').join(',')}),0),?) ASC,`
     order.push(...nearby.map(item => item.id),nearby.length+1)
   }
-  const records = await rows(`${postSelect}
+  const records = await rows<PostWithArea>(`${postSelect}
     WHERE post.hidden_at IS NULL AND (? IS NULL OR post.topic=?)
       AND (? IS NULL OR ${postPetType}=?)
       AND (?='' OR p.breed=?)
@@ -178,7 +184,7 @@ h5Router.get('/posts', async (req, res) => {
     ORDER BY ${rank} post.created_at DESC,post.id DESC LIMIT ? OFFSET ?`,
   [query.topic??null,query.topic??null,query.petType??null,query.petType??null,query.breed,query.breed,
     query.q,query.q,...order,pageSize+1,(query.page-1)*pageSize])
-  res.json({ posts:records.slice(0,pageSize), hasMore:records.length>pageSize })
+  res.json({ posts:records.slice(0,pageSize).map(withDistrict), hasMore:records.length>pageSize })
 })
 
 h5Router.get('/posts/breeds', async (req, res) => {
@@ -195,16 +201,16 @@ h5Router.get('/posts/recommendations', optionalAuth, async (req, res) => {
   }).parse(req.query)
   const owner = req.user?.id
   const [posts, services] = await Promise.all([
-    rows<PublicPost>(`${postSelect} WHERE post.hidden_at IS NULL ORDER BY post.created_at DESC,post.id DESC LIMIT 60`),
+    rows<PostWithArea>(`${postSelect} WHERE post.hidden_at IS NULL ORDER BY post.created_at DESC,post.id DESC LIMIT 60`),
     servicePosts({ district: query.district, q: '', limit: 60, offset: 0 }, owner),
   ])
-  res.json({ items: await recommendedPosts(posts, services, owner, query.seed) })
+  res.json({ items: await recommendedPosts(posts.map(withDistrict), services, owner, query.seed) })
 })
 
 h5Router.get('/posts/:id', async (req, res) => {
-  const [post] = await rows(`${postSelect} WHERE post.id=? AND post.hidden_at IS NULL`, [uuid.parse(req.params.id)])
+  const [post] = await rows<PostWithArea>(`${postSelect} WHERE post.id=? AND post.hidden_at IS NULL`, [uuid.parse(req.params.id)])
   if (!post) throw new HttpError(404, '动态不存在')
-  res.json({post})
+  res.json({post:withDistrict(post)})
 })
 
 h5Router.get('/posts/:id/image', async (req, res) => {
@@ -217,26 +223,27 @@ h5Router.get('/posts/:id/image', async (req, res) => {
 h5Router.use(requireAuth)
 
 h5Router.get('/posts/mine/:id', async (req,res) => {
-  const [post] = await rows(`${postSelect} WHERE post.id=? AND post.user_id=?`, [uuid.parse(req.params.id),req.user.id])
+  const [post] = await rows<PostWithArea>(`${postSelect} WHERE post.id=? AND post.user_id=?`, [uuid.parse(req.params.id),req.user.id])
   if (!post) throw new HttpError(404,'动态不存在')
-  res.json({post})
+  res.json({post:withDistrict(post)})
 })
 
 h5Router.get('/me', async (req, res) => {
   const owner = req.user.id
   const [published, favorites, reactions] = await Promise.all([
-    rows(`${postSelect} WHERE post.user_id=? ORDER BY post.created_at DESC,post.id DESC LIMIT 100`, [owner]),
-    rows(`${postSelect} JOIN h5_reactions saved ON saved.post_id=post.id AND saved.kind='favorite'
+    rows<PostWithArea>(`${postSelect} WHERE post.user_id=? ORDER BY post.created_at DESC,post.id DESC LIMIT 100`, [owner]),
+    rows<PostWithArea>(`${postSelect} JOIN h5_reactions saved ON saved.post_id=post.id AND saved.kind='favorite'
       WHERE saved.user_id=? AND post.hidden_at IS NULL ORDER BY saved.created_at DESC,post.id DESC LIMIT 100`, [owner]),
     rows<{id:string;kind:string}>(`SELECT r.post_id AS id,r.kind FROM h5_reactions r JOIN h5_posts post ON post.id=r.post_id
       WHERE r.user_id=? AND post.hidden_at IS NULL`, [owner]),
   ])
-  res.json({published,favorites,likedIds:reactions.filter(item=>item.kind==='like').map(item=>item.id),
+  res.json({published:published.map(withDistrict),favorites:favorites.map(withDistrict),
+    likedIds:reactions.filter(item=>item.kind==='like').map(item=>item.id),
     savedIds:reactions.filter(item=>item.kind==='favorite').map(item=>item.id)})
 })
 
 h5Router.post('/posts', async (req, res) => {
-  const input = z.object({petId:uuid, assetId:uuid.nullable().default(null), area:area.nullable().default(null),
+  const input = z.object({petId:uuid, assetId:uuid.nullable().default(null), area:postArea.nullable().default(null),
     petType:z.enum(['rabbit','other']).optional(),
     topic:topics.default('daily'),title:z.string().trim().min(1,'请填写标题').max(100), body:z.string().trim().max(3000).default('')}).parse(req.body)
   const owner = req.user.id
@@ -250,8 +257,8 @@ h5Router.post('/posts', async (req, res) => {
   await db.execute(`INSERT INTO h5_posts (id,user_id,pet_id,asset_id,title,body,area,topic,pet_type,created_at)
     VALUES (?,?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3))`,
   [id,owner,input.petId,input.assetId,input.title,input.body,input.area,input.topic,pet.species==='other' ? input.petType ?? null : null])
-  const [post] = await rows(`${postSelect} WHERE post.id=?`, [id])
-  res.status(201).json({post})
+  const [post] = await rows<PostWithArea>(`${postSelect} WHERE post.id=?`, [id])
+  res.status(201).json({post:withDistrict(post)})
 })
 
 h5Router.delete('/posts/:id', async (req, res) => {

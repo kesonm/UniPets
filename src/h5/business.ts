@@ -1,4 +1,6 @@
 import { h5Areas } from '../../shared/h5-areas.mjs'
+import type { ServiceCoordinates } from '../../shared/h5-discovery.mjs'
+import type { District } from '../../shared/h5-districts.mjs'
 import { serviceCategories } from '../../shared/h5-discovery.mjs'
 
 export const businessModules = {
@@ -40,6 +42,9 @@ export interface Listing {
   provider: string
   description: string
   area: string|null
+  district?: District|null
+  cityCode?: string|null
+  coordinates?: ServiceCoordinates|null
   venue: string|null
   startsAt: string|null
   closesAt: string|null
@@ -133,6 +138,8 @@ export const engagementNames: Record<Engagement['status'],string> = {requested:'
 export const orderNames: Record<H5Order['status'],string> = {submitted:'待确认',confirmed:'已确认',completed:'已完成',cancelled:'已取消'}
 export type AccountPanel = 'published'|'favorites'|'orders'|'appointments'|'learning'|'charity'|'assets'|'ip'|'creator'|'help'|'settings'
 export type RecordsPanel = Extract<AccountPanel,'orders'|'appointments'|'learning'|'charity'|'assets'|'ip'|'creator'>
-export const areaLabel = (id: string|null) => h5Areas.find(area => area.id === id)?.label ?? ''
+export const areaLabel = (id: string|null, district?: District|null) => district
+  ? [...new Set([district.city || district.province,district.name].filter(Boolean))].join(' · ')
+  : h5Areas.find(area => area.id === id)?.label ?? ''
 const dateTime = new Intl.DateTimeFormat('zh-CN',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Shanghai'})
 export const localDateTime = (value: string) => dateTime.format(new Date(value))

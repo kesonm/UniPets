@@ -1,6 +1,7 @@
 import type { Pet } from '../lib/types'
 import type { BusinessModule } from './business'
 import type { PostPetType, ServiceCoordinates } from '../../shared/h5-discovery.mjs'
+import type { District } from '../../shared/h5-districts.mjs'
 export type { District } from '../../shared/h5-districts.mjs'
 
 export type H5Tab = 'home'|'friends'|'cart'|'identity'|'me'|'shop'|'cloud'|'events'|'training'|'stories'|BusinessModule
@@ -22,6 +23,7 @@ export interface H5Post {
   author: string
   createdAt: string
   area: string|null
+  district?: District|null
   likes: number
   hasImage: boolean|number
   hidden?: boolean|number
@@ -94,6 +96,7 @@ export interface H5Match {
   gender:Pet['gender']
   ageMonths:number|null
   area:string
+  district?:District|null
   intent:'friends'|'dating'|'both'
   introduction:string
 }

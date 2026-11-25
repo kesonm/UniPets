@@ -17,7 +17,7 @@ const kindNames = {
 <template>
   <button class="card directory-listing" @tap="go('directory', { module: listing.module, id: listing.id })">
     <text class="heading">{{ listing.title }}</text>
-    <text class="sub">{{ [kindNames[listing.kind], listing.provider, areaLabel(listing.area)].filter(Boolean).join(' · ') }}</text>
+    <text class="sub">{{ [kindNames[listing.kind], listing.provider, areaLabel(listing.area, listing.district)].filter(Boolean).join(' · ') }}</text>
     <text v-if="listing.priceCents" class="body">{{ money(listing.priceCents) }}</text>
   </button>
 </template>

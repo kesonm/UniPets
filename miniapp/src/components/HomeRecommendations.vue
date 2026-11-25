@@ -3,7 +3,7 @@ import { ref, watch } from 'vue'
 import { postPetTypeLabels, serviceCategories } from '../../../shared/h5-discovery.mjs'
 import type { Recommendation } from '../../../src/h5/types'
 import { api, go, message, publicImage, user } from '../lib/client'
-import { district } from '../lib/district'
+import { browseDistrict } from '../lib/location'
 import { recommendationSeed } from '../lib/home'
 import UiIcon from './UiIcon.vue'
 
@@ -13,7 +13,7 @@ const loading = ref(false)
 const error = ref('')
 const retry = ref(0)
 
-watch([() => props.active, () => user.value?.id, () => district.value?.id, retry], async ([active, , area], _, onCleanup) => {
+watch([() => props.active, () => user.value?.id, () => browseDistrict.value?.id, retry], async ([active, , area], _, onCleanup) => {
   if (!active) return
   let current = true
   onCleanup(() => { current = false })

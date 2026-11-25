@@ -63,7 +63,6 @@ function save() {
     <template v-else>
       <LoadState :error="error" :loading="loading" @retry="refresh" />
       <view v-if="ready" class="card">
-        <text class="heading">{{ id ? '编辑资料' : '添加宠物' }}</text>
         <text class="label">宠物名字 *</text>
         <input v-model="form.name" maxlength="40" placeholder="它叫什么名字？" />
         <text class="label">种类 *</text>

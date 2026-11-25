@@ -1,4 +1,5 @@
 import type { Listing } from './business'
+import { h5Areas } from '../../shared/h5-areas.mjs'
 
 export const categories = [
   {id:'all',label:'全部'}, {id:'food',label:'宠粮零食'}, {id:'care',label:'药品护理'}, {id:'toys',label:'玩具用品'},
@@ -11,6 +12,9 @@ export interface Product {
   name: string
   merchant: string
   area: string
+  district?: Listing['district']
+  cityCode?: Listing['cityCode']
+  coordinates?: Listing['coordinates']
   category: Exclude<CatalogCategory,'all'>
   illustration: number
   description: string
@@ -22,7 +26,7 @@ export interface Product {
   merchantUrl?: string
 }
 
-export const products: Product[] = [
+const exampleProducts: Product[] = [
   { id:'cat-food',name:'全价成猫鸡肉粮',merchant:'云宠街角宠物店',area:'shenzhen-nanshan',category:'food',illustration:0,
     description:'鸡肉口味的日常主粮，提供试吃装和常规装。',variants:[{name:'500 g',cents:2990},{name:'1.5 kg',cents:6990}],example:true },
   { id:'pet-care',name:'宠物日常护理营养粉',merchant:'毛孩子护理站',area:'shenzhen-nanshan',category:'care',illustration:1,
@@ -36,12 +40,19 @@ export const products: Product[] = [
   { id:'felt-ball',name:'彩色羊毛毡追逐球',merchant:'爪子玩具铺',area:'guangzhou-tianhe',category:'toys',illustration:5,
     description:'轻盈的彩色玩具球，适合一起玩抛球游戏。',variants:[{name:'三只装',cents:1690}],example:true },
 ]
+export const products = exampleProducts.map(product => {
+  const place = h5Areas.find(area => area.id === product.area)
+  if (!place) return product
+  const {cityCode,latitude,longitude} = place
+  return {...product,cityCode,coordinates:{latitude,longitude}}
+})
 
 export function productFromListing(item: Listing): Product|undefined {
   if (item.kind!=='product' || item.priceCents===null || item.stock===null) return
   const category = item.module==='immortality' ? 'memorial' : item.module==='services' ? 'package' :
     item.module==='medical' ? 'care' : categories.find(group=>group.id!=='all'&&group.id===item.category)?.id
   return {id:item.id,name:item.title,merchant:item.provider || '云上空间',area:item.area ?? '',
+    district:item.district,cityCode:item.cityCode,coordinates:item.coordinates,
     category:category && category!=='all' ? category : 'culture',illustration:0,description:item.description,
     variants:[{name:'标准规格',cents:item.priceCents}],example:false,platform:true,stock:item.stock}
 }

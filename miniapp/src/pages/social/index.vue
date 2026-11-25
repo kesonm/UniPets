@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import type { Pet } from '../../../../src/lib/types'
 import type { H5Comment, H5Creator, H5Match, H5FriendRequest } from '../../../../src/h5/types'
-import { h5Areas } from '../../../../shared/h5-areas.mjs'
+import { areaLabel } from '../../../../src/h5/business'
 import { api, user, go, toast, speciesNames } from '../../lib/client'
 import { listPets } from '../../lib/pets'
 import { pageLoad, submitAction } from '../../lib/page'
@@ -11,6 +11,7 @@ import LoadState from '../../components/LoadState.vue'
 import LoginCard from '../../components/LoginCard.vue'
 import PetPicker from '../../components/PetPicker.vue'
 import ChoiceField from '../../components/ChoiceField.vue'
+import { changeBrowseLocation, openMapPicker, selectedLocation, selectedLocationLabel, type MapLocation } from '../../lib/location'
 const group = ref(''),
   creatorId = ref(''),
   tab = ref('匹配'),
@@ -20,13 +21,11 @@ const pets = ref<Pet[]>([]),
   matches = ref<H5Match[]>([]),
   mine = ref<H5Match[]>([]),
   invites = ref<H5FriendRequest[]>([])
-const areas = [...h5Areas],
-  area = ref(areas[0].id),
+const area = ref(''),
+  location = ref<MapLocation>(),
   intent = ref('friends'),
-  intro = ref(''),
-  filter = ref('')
-const filterAreas = [{ id: '', label: '全部地区' }, ...areas],
-  intents = [
+  intro = ref('')
+const intents = [
     { id: 'friends', label: '交朋友' },
     { id: 'dating', label: '寻伴' },
     { id: 'both', label: '都可以' },
@@ -38,16 +37,27 @@ const messages = ref<H5Comment[]>([]),
   posts = ref<{ id: string; title: string }[]>([])
 const profile = computed(() => mine.value.find((m) => m.petId === petId.value))
 const available = computed(() => matches.value.filter((m) => !pets.value.some((p) => p.id === m.petId)))
+const profileLocationLabel = computed(() => areaLabel(area.value, location.value?.district ?? profile.value?.district))
+let initializedPetId: string | undefined
 onLoad((o) => {
   group.value = o?.group || ''
+  if (group.value) uni.setNavigationBarTitle({ title: '社群聊天' })
   creatorId.value = o?.creator || ''
   if (o?.panel && tabs.includes(o.panel)) tab.value = o.panel
-  if (o?.area && areas.some((item) => item.id === o.area)) filter.value = o.area
 })
 function fill() {
-  area.value = profile.value?.area || areas[0].id
+  initializedPetId = petId.value
+  area.value = profile.value?.area || ''
+  location.value = undefined
   intent.value = profile.value?.intent || 'friends'
   intro.value = profile.value?.introduction || ''
+}
+function chooseProfileLocation() {
+  openMapPicker(selected => {
+    if (!selected) return
+    location.value = selected
+    area.value = selected.district.id
+  }, location.value ?? selectedLocation.value)
 }
 async function load() {
   if (group.value) {
@@ -69,16 +79,18 @@ async function load() {
     creators.value = (await api<{ creators: H5Creator[] }>('/h5/creators')).creators
     return
   }
-  if (tab.value === '匹配')
+  if (tab.value === '匹配') {
+    const district = selectedLocation.value?.district.id
     matches.value = (
-      await api<{ matches: H5Match[] }>('/h5/matches' + (filter.value ? '?area=' + filter.value : ''))
+      await api<{ matches: H5Match[] }>('/h5/matches' + (district ? '?district=' + encodeURIComponent(district) : ''))
     ).matches
+  }
   if (!user.value) return
   pets.value = await listPets()
   if (!pets.value.some((p) => p.id === petId.value)) petId.value = pets.value[0]?.id || ''
   if (tab.value === '我的名片') {
     mine.value = (await api<{ matches: H5Match[] }>('/h5/my-matches')).matches
-    fill()
+    if (initializedPetId !== petId.value) fill()
   }
   if (tab.value === '邀请')
     invites.value = (await api<{ requests: H5FriendRequest[] }>('/h5/friend-requests')).requests
@@ -87,12 +99,14 @@ const { loading, error, refresh } = pageLoad(load, () => {
   pets.value = []
   petId.value = ''
   mine.value = []
+  initializedPetId = undefined
   invites.value = []
   messages.value = []
   chat.value = ''
 })
 const { run, busy, error: actionError } = submitAction()
 function change(t: string) {
+  if (t !== tab.value) initializedPetId = undefined
   tab.value = t
   void refresh()
 }
@@ -109,6 +123,7 @@ function answer(id: string, status: string) {
   })
 }
 function save(remove = false) {
+  if (!remove && !area.value) return
   return run(async () => {
     if (remove) await api('/h5/my-matches/' + petId.value, 'DELETE')
     else
@@ -117,6 +132,7 @@ function save(remove = false) {
         intent: intent.value,
         introduction: intro.value,
       })
+    initializedPetId = undefined
     await load()
     toast(remove ? '名片已撤下' : '名片已保存')
   })
@@ -136,10 +152,6 @@ function send() {
     <template v-if="group">
       <LoginCard v-if="!user" />
       <view v-else class="card">
-        <view class="spread">
-          <text class="heading">社群聊天</text>
-          <button class="small" @tap="refresh">刷新</button>
-        </view>
         <text v-if="!messages.length && !loading && !error" class="empty">暂无消息</text>
         <view v-for="m in messages" :key="m.id" class="line">
           <text class="sub">{{ m.author }}</text>
@@ -149,6 +161,7 @@ function send() {
         <input v-model="chat" maxlength="500" />
         <view class="actions">
           <button class="primary" :disabled="busy || !chat.trim()" @tap="send">发送</button>
+          <button @tap="refresh">刷新</button>
         </view>
       </view>
     </template>
@@ -177,11 +190,11 @@ function send() {
         </view>
         <template v-if="tab === '匹配'">
           <view class="card">
-            <ChoiceField v-model="filter" :options="filterAreas" @update:model-value="refresh" />
+            <button class="text-button" @tap="changeBrowseLocation">{{ selectedLocationLabel }}</button>
           </view>
           <view v-for="m in available" :key="m.petId" class="card">
             <text class="heading">{{ m.petName }}</text>
-            <text class="sub">{{ speciesNames[m.species] }}　{{ m.breed }}</text>
+            <text class="sub">{{ [speciesNames[m.species], m.breed, areaLabel(m.area, m.district)].filter(Boolean).join(' · ') }}</text>
             <text class="body">{{ m.introduction }}</text>
             <button v-if="user" class="small primary" :disabled="busy || !petId" @tap="join(m.petId)">
               发送宠友邀请
@@ -191,14 +204,14 @@ function send() {
         </template>
         <view v-if="tab === '我的名片' && user && petId" class="card">
           <text class="heading">公开匹配名片</text>
-          <text class="label">地区</text>
-          <ChoiceField v-model="area" :options="areas" />
+          <text class="label">公开地区</text>
+          <button class="field" @tap="chooseProfileLocation">{{ profileLocationLabel || '地图选位置' }}</button>
           <text class="label">意向</text>
           <ChoiceField v-model="intent" :options="intents" />
           <text class="label">介绍</text>
           <textarea v-model="intro" maxlength="300" />
           <view class="actions">
-            <button class="primary" :disabled="busy" @tap="save()">保存并公开</button>
+            <button class="primary" :disabled="busy || !area" @tap="save()">保存并公开</button>
             <button v-if="profile" :disabled="busy" @tap="save(true)">撤下名片</button>
           </view>
         </view>

@@ -3,7 +3,6 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import type { H5Post, H5Social } from '../../../src/h5/types'
 import { postPetTypeLabels, postPetTypes } from '../../../shared/h5-discovery.mjs'
 import { api, go, message, toast, user } from '../lib/client'
-import { selectedArea } from '../lib/area'
 import ChoiceField from './ChoiceField.vue'
 import PostGrid from './PostGrid.vue'
 import UiIcon from './UiIcon.vue'
@@ -100,7 +99,7 @@ function view(post: H5Post) {
   go('feed', { id: post.id })
 }
 function publish() {
-  go('feed', { mode: 'write', area: selectedArea.value })
+  go('feed', { mode: 'write' })
 }
 const reacting = new Set<string>()
 async function like(post: H5Post) {

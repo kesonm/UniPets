@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { ownedPet } from './assets.js'
 import { requireAuth } from './auth.js'
 import { db, rows, transaction } from './db.js'
+import { districtAreaIds, districtById, districtsInServiceRegion, knownDistrictInput, withDistrict } from './districts.js'
 import { HttpError } from './errors.js'
 import { h5Area } from './h5-directory.js'
 
@@ -50,32 +51,38 @@ h5SocialPagesRouter.delete('/posts/:id/comments/:commentId', requireAuth, async 
 const ageSql = 'GREATEST(0,TIMESTAMPDIFF(MONTH,p.birthday,UTC_DATE()))'
 const matchFields = `SELECT m.pet_id AS petId,p.name AS petName,p.species,p.breed,p.gender,
   ${ageSql} AS ageMonths,m.area,m.intent,m.introduction`
+type PublicMatch = RowDataPacket & {area: string}
 h5SocialPagesRouter.get('/matches', async (req,res) => {
-  const filters = z.object({area:h5Area.optional(),intent:intent.optional(),species:z.enum(['cat','dog','other']).optional(),
+  const filters = z.object({area:h5Area.optional(),district:knownDistrictInput.optional(),intent:intent.optional(),species:z.enum(['cat','dog','other']).optional(),
     breed:z.string().trim().max(60).default(''), gender:z.enum(['female','male']).optional(),
     stage:z.enum(['juvenile','adult','senior']).optional()}).parse(req.query)
   const condition: string[] = []
   const values: string[] = []
-  if (filters.area) {condition.push('m.area=?');values.push(filters.area)}
+  if (filters.district) {
+    const city = districtById(filters.district)?.serviceCityCode
+    const ids = districtAreaIds(city ? districtsInServiceRegion(city) : [filters.district])
+    condition.push(`m.area IN (${ids.map(() => '?').join(',')})`)
+    values.push(...ids)
+  } else if (filters.area) {condition.push('m.area=?');values.push(filters.area)}
   if (filters.intent) {condition.push("(m.intent=? OR m.intent='both')");values.push(filters.intent)}
   if (filters.species) {condition.push('p.species=?');values.push(filters.species)}
   if (filters.breed) {condition.push('LOCATE(?,p.breed)>0');values.push(filters.breed)}
   if (filters.gender) {condition.push('p.gender=?');values.push(filters.gender)}
   const ages = {juvenile:`${ageSql}<12`,adult:`${ageSql} BETWEEN 12 AND 83`,senior:`${ageSql}>=84`}
   if (filters.stage) condition.push(ages[filters.stage])
-  const matches = await rows(`${matchFields} FROM h5_match_profiles m JOIN pets p ON p.id=m.pet_id
+  const matches = await rows<PublicMatch>(`${matchFields} FROM h5_match_profiles m JOIN pets p ON p.id=m.pet_id
     ${condition.length ? 'WHERE '+condition.join(' AND ') : ''} ORDER BY m.updated_at DESC,m.pet_id LIMIT 60`, values)
-  res.json({matches})
+  res.json({matches:matches.map(withDistrict)})
 })
 
 h5SocialPagesRouter.get('/my-matches', requireAuth, async (req,res) => {
-  const matches = await rows(`${matchFields} FROM h5_match_profiles m JOIN pets p ON p.id=m.pet_id WHERE p.user_id=?`, [req.user.id])
-  res.json({matches})
+  const matches = await rows<PublicMatch>(`${matchFields} FROM h5_match_profiles m JOIN pets p ON p.id=m.pet_id WHERE p.user_id=?`, [req.user.id])
+  res.json({matches:matches.map(withDistrict)})
 })
 
 h5SocialPagesRouter.put('/my-matches/:petId', requireAuth, async (req,res) => {
   const petId = uuid.parse(req.params.petId)
-  const data = z.object({area:h5Area,intent,introduction:z.string().trim().max(300).default('')}).strict().parse(req.body)
+  const data = z.object({area:z.union([h5Area,knownDistrictInput]),intent,introduction:z.string().trim().max(300).default('')}).strict().parse(req.body)
   await ownedPet(req.user.id,petId)
   const fields = [data.area,data.intent,data.introduction]
   await db.execute(`INSERT INTO h5_match_profiles (pet_id,area,intent,introduction) VALUES (?,?,?,?)

@@ -5,7 +5,7 @@ import test from 'node:test'
 import { districtAt } from '../../shared/h5-districts.mjs'
 import { storeBindingQrPrefix } from '../../shared/h5-discovery.mjs'
 import { createApp } from '../src/app.js'
-import { db } from '../src/db.js'
+import { db, rows } from '../src/db.js'
 import { renderQrCode } from '../src/identity-codes.js'
 import { wgs84ToMapPoint } from '../src/map-coordinates.js'
 
@@ -62,10 +62,10 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     services.push(result.data.id)
     return result.data.id as string
   }
-  async function addPost(token: string, species: string, breed: string, title: string, topic = 'daily', petType?: string) {
+  async function addPost(token: string, species: string, breed: string, title: string, topic = 'daily', petType?: string, area?: string) {
     const pet = await request('/pets','POST',{name:'测试宠物',species,breed},token)
     assert.equal(pet.status,201)
-    const result = await request('/h5/posts','POST',{petId:pet.data.pet.id,title:title+' '+suffix,topic,petType},token)
+    const result = await request('/h5/posts','POST',{petId:pet.data.pet.id,title:title+' '+suffix,topic,petType,area},token)
     assert.equal(result.status,201)
     return result.data.post.id as string
   }
@@ -75,6 +75,13 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     assert.equal(tile.status,200)
     assert.equal(districtAt(22.55,113.882,tile.data.boundaries)?.name,'宝安区')
     assert.equal(districtAt(22.533,113.93,tile.data.boundaries)?.name,'南山区')
+    const point = {latitude:22.55,longitude:113.882}
+    const location = await request('/h5/catalog/map-location','POST',wgs84ToMapPoint(point))
+    assert.equal(location.status,200)
+    assert.equal(location.data.district.name,'宝安区')
+    assert.equal(location.data.district.serviceCityCode,'440300')
+    assert.ok(Math.abs(location.data.coordinates.longitude-point.longitude)<0.00001)
+    const district = location.data.district.id as string
 
     const owner = await signup('owner')
     const dogOwner = await signup('dog')
@@ -170,6 +177,10 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     const board = await addService(owner.token,ba,'boarding','宠物寄养')
     const home = await addService(owner.token,ns,'home-service','大型犬上门喂养')
     const nails = await addService(owner.token,guangzhou,custom.data.id,'猫咪剪甲')
+    const catalog = await request('/h5/catalog?module=services&q='+suffix+'&district='+district)
+    assert.equal(catalog.status,200)
+    assert.deepEqual(new Set(catalog.data.listings.slice(0,2).map((item:{id:string}) => item.id)),new Set([wash,board]))
+    assert.equal(catalog.data.listings[0].district.id,district)
     function serviceIds(result: Awaited<ReturnType<typeof request>>) {
       assert.equal(result.status,200,result.data.error)
       return result.data.posts.map((post:{id:string}) => post.id)
@@ -216,12 +227,26 @@ test('nearby merchant posts, community filters and personalized home feed', { ti
     const unliked = await request(servicePath+'/'+board+'/like','PUT',{active:false},dogOwner.token)
     assert.deepEqual(unliked.data,{active:false,likes:0})
 
-    const cat = await addPost(owner.token,'cat','英短','求助周末寄养','help')
-    const dog = await addPost(dogOwner.token,'dog','拉布拉多','周末散步')
+    const cat = await addPost(owner.token,'cat','英短','求助周末寄养','help',undefined,district)
+    const dog = await addPost(dogOwner.token,'dog','拉布拉多','周末散步','daily',undefined,'shenzhen-nanshan')
     const rabbit = await addPost(owner.token,'other','荷兰垂耳兔','兔子换草','daily','rabbit')
     for (const [position, id] of [cat,dog,rabbit].entries()) {
       await db.execute('UPDATE h5_posts SET created_at=UTC_TIMESTAMP(3)-INTERVAL ? MINUTE WHERE id=?',[3-position,id])
     }
+    const nearPosts = await request('/h5/posts?sort=near&district='+district+'&q='+suffix)
+    assert.equal(nearPosts.data.posts[0].id,cat)
+    assert.equal(nearPosts.data.posts[0].district.name,'宝安区')
+    const profiles = await rows<{id:string;petId:string}>('SELECT id,pet_id AS petId FROM h5_posts WHERE id IN (?,?)',[cat,dog])
+    for (const profile of profiles) {
+      const isCat = profile.id === cat
+      const result = await request('/h5/my-matches/'+profile.petId,'PUT',{
+        area:isCat ? district : 'shenzhen-nanshan',intent:'friends',
+      },isCat ? owner.token : dogOwner.token)
+      assert.equal(result.status,200)
+    }
+    const cityMatches = await request('/h5/matches?district='+district)
+    assert.equal(cityMatches.status,200)
+    for (const {petId} of profiles) assert.ok(cityMatches.data.matches.some((match:{petId:string}) => match.petId===petId))
     const posts = '/h5/posts?sort=latest&q=' + suffix
     const ids = (result: Awaited<ReturnType<typeof request>>) => result.data.posts.map((post: {id:string}) => post.id)
     assert.deepEqual(ids(await request(posts)),[rabbit,dog,cat])

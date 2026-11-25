@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import { servicePhone, sortsByDistance, type ServiceCategory, type ServiceCoordinates, type ServiceSort } from '../../../../shared/h5-discovery.mjs'
+import { servicePhone, sortsByDistance, type ServiceCategory, type ServiceSort } from '../../../../shared/h5-discovery.mjs'
 import { serviceRegions } from '../../../../shared/h5-service-regions.mjs'
 import type { H5Comment, ServicePost } from '../../../../src/h5/types'
 import { api, go, message, toast, user } from '../../lib/client'
-import { deviceCoordinates, enableLocation } from '../../lib/district'
+import { changeBrowseLocation, openMapPicker, saveBrowseLocation, selectedLocation, selectedLocationLabel } from '../../lib/location'
 import { pageLoad, submitAction } from '../../lib/page'
 import LoadState from '../../components/LoadState.vue'
 import LoginCard from '../../components/LoginCard.vue'
@@ -39,8 +39,6 @@ const category = ref('')
 const sort = ref<ServiceSort>('recommended')
 const categoryIndex = computed(() => Math.max(0, categoryOptions.value.findIndex(item => item.id === category.value)))
 const sortIndex = computed(() => sortOptions.findIndex(item => item.id === sort.value))
-const location = ref<ServiceCoordinates>()
-const locating = ref(false)
 const input = ref('')
 const query = ref('')
 const posts = ref<ServicePost[]>([])
@@ -74,6 +72,8 @@ async function loadCategories() {
 
 async function loadList(page: number) {
   const current = ++version
+  const position = selectedLocation.value?.coordinates
+  if (!position && sortsByDistance(sort.value)) sort.value = 'recommended'
   const filters = {
     page, sort:sort.value, q:query.value,
     ...(category.value ? {category:category.value} : {}),
@@ -81,8 +81,10 @@ async function loadList(page: number) {
   }
   type Result = {posts:ServicePost[];hasMore:boolean}
   const params = Object.entries(filters).map(([key,value]) => key+'='+encodeURIComponent(value)).join('&')
-  const result = sortsByDistance(sort.value)
-    ? await api<Result>(endpoint+'/search','POST',{...filters,location:location.value})
+  const result = position && sortsByDistance(sort.value)
+    ? await api<Result>(endpoint+'/search','POST',{...filters,location:{
+        latitude:Number(position.latitude.toFixed(3)),longitude:Number(position.longitude.toFixed(3)),
+      }})
     : await api<Result>(endpoint+'?'+params)
   if (current !== version) return
   const seen = new Set(posts.value.map(item => item.id))
@@ -118,32 +120,16 @@ function chooseCategory(event: PickerChange) {
   void refresh()
 }
 
-async function coordinatesForSort() {
-  let position: ServiceCoordinates
-  try {
-    position = await deviceCoordinates()
-  } catch (cause) {
-    if (!await enableLocation('允许定位后可按距离排序。')) throw cause
-    position = await deviceCoordinates()
-  }
-  return {
-    latitude:Number(position.latitude.toFixed(3)),
-    longitude:Number(position.longitude.toFixed(3)),
-  }
-}
-async function chooseSort(event: PickerChange) {
+function chooseSort(event: PickerChange) {
   const option = sortOptions[Number(event.detail.value)]
-  if (!option || option.id === sort.value || locating.value) return
-  if (sortsByDistance(option.id) && !location.value) {
-    locating.value = true
-    try {
-      location.value = await coordinatesForSort()
-    } catch {
-      toast('请允许定位后再按距离排序')
-      return
-    } finally {
-      locating.value = false
-    }
+  if (!option || option.id === sort.value) return
+  if (sortsByDistance(option.id) && !selectedLocation.value) {
+    openMapPicker(location => {
+      if (!location) return
+      saveBrowseLocation(location)
+      sort.value = option.id
+    })
+    return
   }
   sort.value = option.id
   void refresh()
@@ -231,11 +217,10 @@ function comment() {
             <view class="service-filter-selection"><text>{{ categoryOptions[categoryIndex].label }}</text><text class="service-filter-arrow" aria-hidden="true" /></view>
           </view>
         </picker>
-        <picker id="service-sort-filter" mode="selector" :range="sortOptions" range-key="label" :value="sortIndex"
-          :disabled="locating" @change="chooseSort">
+        <picker id="service-sort-filter" mode="selector" :range="sortOptions" range-key="label" :value="sortIndex" @change="chooseSort">
           <view class="service-filter">
             <text class="service-filter-label">排序</text>
-            <view class="service-filter-selection"><text>{{ locating ? '定位中…' : sortOptions[sortIndex].label }}</text><text class="service-filter-arrow" aria-hidden="true" /></view>
+            <view class="service-filter-selection"><text>{{ sortOptions[sortIndex].label }}</text><text class="service-filter-arrow" aria-hidden="true" /></view>
           </view>
         </picker>
         <picker id="service-region-filter" mode="multiSelector" :range="regionColumns" range-key="label" :value="regionDraft"
@@ -246,6 +231,7 @@ function comment() {
           </view>
         </picker>
       </view>
+      <button v-if="sortsByDistance(sort)" class="text-button" @tap="changeBrowseLocation">距离起点 · {{ selectedLocationLabel }}</button>
       <button v-if="categoryError" class="text-button service-filter-retry" @tap="loadCategories">分类读取失败，点此重试</button>
       <LoadState :error="error" :loading="loading" @retry="refresh" />
       <template v-if="!error">

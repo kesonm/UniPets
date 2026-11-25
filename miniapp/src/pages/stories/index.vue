@@ -33,6 +33,9 @@ const list = computed(() => (mode.value === 'all' ? stories.value : showFav.valu
 onLoad((o) => {
   id.value = o?.id || ''
   mode.value = o?.mode || (id.value ? 'read' : 'all')
+  if (mode.value === 'mine' || mode.value === 'write') {
+    uni.setNavigationBarTitle({ title: mode.value === 'mine' ? '我的故事' : '故事编辑' })
+  }
   showFav.value = o?.tab === 'favorites'
 })
 onShareAppMessage(() => ({
@@ -122,23 +125,21 @@ function open(s: StorySummary) {
     <text v-if="actionError" class="error">{{ actionError }}</text>
     <LoginCard v-if="(mode === 'write' || mode === 'mine') && !user" />
     <template v-if="mode === 'all' || (mode === 'mine' && user)">
-      <view class="card">
-        <view class="spread">
-          <text class="heading">{{ mode === 'mine' ? '我的故事' : '宠物故事' }}</text>
-          <button class="small primary" @tap="go('stories', { mode: 'write' })">写故事</button>
-        </view>
+      <view class="card row">
         <input
           v-if="mode === 'all'"
           v-model="q"
+          class="grow"
           maxlength="60"
           placeholder="搜索故事"
           confirm-type="search"
           @confirm="refresh"
         />
-        <view v-else class="chips">
+        <view v-else class="row grow">
           <button class="chip" @tap="showFav = false">作品与草稿</button>
           <button class="chip" @tap="showFav = true">收藏</button>
         </view>
+        <button class="small primary" @tap="go('stories', { mode: 'write' })">写故事</button>
       </view>
       <view v-for="s in list" :key="s.id" class="card" @tap="open(s)">
         <image
@@ -155,7 +156,6 @@ function open(s: StorySummary) {
       <text v-if="!list.length && !loading && !error" class="empty">暂无故事</text>
     </template>
     <view v-if="mode === 'write' && user" class="card">
-      <text class="heading">故事编辑</text>
       <PetPicker v-if="!id" v-model="petId" :pets="pets" />
       <text class="label">标题</text>
       <input v-model="title" maxlength="100" />

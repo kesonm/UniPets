@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { requireAuth } from './auth.js'
 import { catalogArea, catalogKinds, catalogModules, catalogProvider, catalogStore, catalogVenue, catalogVisible, h5Area } from './catalog.js'
 import { rows, transaction } from './db.js'
+import { districtAreaIds, districtById, knownDistrictInput } from './districts.js'
 import { HttpError } from './errors.js'
 
 export const h5DirectoryRouter = Router()
@@ -20,6 +21,10 @@ interface CatalogItem {
   provider: string
   description: string
   area: string|null
+  storeDistrictCode: string|null
+  cityCode: string|null
+  latitude: number|null
+  longitude: number|null
   venue: string|null
   startsAt: Date|null
   closesAt: Date|null
@@ -29,10 +34,12 @@ interface CatalogItem {
 }
 const fields = `i.id,i.module,i.category,i.kind,i.title,${catalogProvider} AS provider,i.description,
   ${catalogArea} AS area,${catalogVenue} AS venue,i.starts_at AS startsAt,i.closes_at AS closesAt,
+  store.district_code AS storeDistrictCode,store.city_code AS cityCode,
+  CAST(store.latitude AS DOUBLE) AS latitude,CAST(store.longitude AS DOUBLE) AS longitude,
   i.price_cents AS priceCents,i.stock,i.external_url AS externalUrl`
 const from = `FROM h5_catalog_items i ${catalogStore}`
 
-function publicListing(item: CatalogItem) {
+function publicListing({storeDistrictCode, latitude, longitude, ...item}: CatalogItem) {
   let externalUrl: string|null = null
   if (item.externalUrl) {
     try {
@@ -40,21 +47,25 @@ function publicListing(item: CatalogItem) {
       if (url.protocol === 'https:' && !url.username && !url.password) externalUrl = url.href
     } catch { /* Invalid catalog links are omitted. */ }
   }
-  return { ...item, externalUrl }
+  return { ...item, externalUrl, district:districtById(storeDistrictCode ?? item.area) ?? null,
+    coordinates:latitude === null || longitude === null ? null : {latitude, longitude} }
 }
 
 h5DirectoryRouter.get('/catalog', async (req, res) => {
-  const filter = z.object({module:catalogModules.optional(), area:h5Area.optional(),
+  const filter = z.object({module:catalogModules.optional(), area:h5Area.optional(), district:knownDistrictInput.optional(),
     kind:catalogKinds.optional(),
     q:z.string().trim().max(60).default('')}).parse(req.query)
+  const preferredAreas = filter.district ? districtAreaIds([filter.district]) : [filter.area ?? null]
+  const preferredField = filter.district ? `COALESCE(store.district_code,${catalogArea})` : catalogArea
   const listings = await rows<CatalogItem>(`SELECT ${fields} ${from} WHERE ${catalogVisible}
     AND (? IS NULL OR i.module=?)
     AND (? IS NULL OR i.kind=?)
     AND (?='' OR LOCATE(?, CONCAT_WS(' ',i.title,${catalogProvider},i.description,${catalogVenue}))>0)
-    ORDER BY COALESCE(${catalogArea}=?, FALSE) DESC, (i.starts_at IS NOT NULL AND i.starts_at < UTC_TIMESTAMP(3)),
+    ORDER BY COALESCE(${preferredField} IN (${preferredAreas.map(() => '?').join(',')}), FALSE) DESC,
+      (i.starts_at IS NOT NULL AND i.starts_at < UTC_TIMESTAMP(3)),
       i.starts_at,i.title,i.id LIMIT 200`,
   [filter.module ?? null, filter.module ?? null, filter.kind ?? null, filter.kind ?? null,
-    filter.q, filter.q, filter.area ?? null])
+    filter.q, filter.q, ...preferredAreas])
   res.json({listings:listings.map(publicListing)})
 })
 

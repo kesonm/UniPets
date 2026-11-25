@@ -77,7 +77,6 @@ function change(id: string, action: 'cancel' | 'check-in') {
         <button class="text-button" @tap="go('social', { creator: creator.id })">查看达人主页</button>
       </view>
       <view v-else-if="panel === 'creator' && !loading && !error" class="card empty-card">你的账号尚未开通达人主页</view>
-      <text v-if="recordsPanel" class="heading">{{ titles[panel] }}</text>
       <view v-if="recordsPanel && !loading && !error && !displayed.length" class="card empty-card">暂无相关记录</view>
       <view v-for="i in displayed" :key="i.id" class="card">
         <text class="sub">{{ statusName[i.status] }} · {{ i.provider }}</text>

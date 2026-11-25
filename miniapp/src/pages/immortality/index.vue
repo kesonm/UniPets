@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { areaLabel, businessModules, type Listing } from '../../../../src/h5/business'
-import { selectedArea } from '../../lib/area'
+import { businessModules, type Listing } from '../../../../src/h5/business'
+import { changeBrowseLocation, selectedLocation, selectedLocationLabel } from '../../lib/location'
 import { go } from '../../lib/client'
 import { searchListings } from '../../lib/directory'
 import { pageLoad } from '../../lib/page'
 import { useMenuLayout } from '../../lib/tab-page'
-import AreaPicker from '../../components/AreaPicker.vue'
 import DirectoryListing from '../../components/DirectoryListing.vue'
 import LoadState from '../../components/LoadState.vue'
 import UiIcon from '../../components/UiIcon.vue'
@@ -16,13 +15,12 @@ const categories = [{ id: '', label: '全部' }, ...businessModules.immortality.
 const input = ref('')
 const query = ref('')
 const category = ref('')
-const areaPicker = ref(false)
 const items = ref<Listing[]>([])
 const displayed = computed(() => category.value ? items.value.filter(item => item.category === category.value) : items.value)
 let request = 0
 const { error, loading, refresh } = pageLoad(async () => {
   const current = ++request
-  const listings = await searchListings('immortality', query.value, selectedArea.value)
+  const listings = await searchListings('immortality', query.value, selectedLocation.value?.district.id)
   if (current === request) items.value = listings
 })
 
@@ -57,9 +55,9 @@ function back() {
     </view>
 
     <view class="card immortality-filters">
-      <button class="text-button immortality-area" @tap="areaPicker = true">
+      <button class="text-button immortality-area" @tap="changeBrowseLocation">
         <UiIcon name="location" :size="15" />
-        {{ areaLabel(selectedArea) || '选择商圈' }}
+        {{ selectedLocationLabel }}
         <UiIcon name="down" :size="10" />
       </button>
       <view class="immortality-categories" aria-label="项目分类">
@@ -81,7 +79,6 @@ function back() {
         {{ query ? '没有匹配的项目' : '当前分类暂无已发布的项目' }}
       </view>
     </template>
-    <AreaPicker v-if="areaPicker" @close="areaPicker = false; refresh()" />
   </view>
 </template>
 

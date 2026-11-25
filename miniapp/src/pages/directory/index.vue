@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { areaLabel, businessModules, isBusinessModule, type Listing } from '../../../../src/h5/business'
+import { businessModules, isBusinessModule, type Listing } from '../../../../src/h5/business'
 import type { H5Event, H5EventRegistration, H5TrainingCourse } from '../../../../src/h5/types'
 import type { Pet } from '../../../../src/lib/types'
 import { api, user, go, toast } from '../../lib/client'
@@ -9,8 +9,7 @@ import { listPets } from '../../lib/pets'
 import { addProduct, money } from '../../lib/cart'
 import { searchListings } from '../../lib/directory'
 import { pageLoad, submitAction } from '../../lib/page'
-import { selectedArea } from '../../lib/area'
-import AreaPicker from '../../components/AreaPicker.vue'
+import { changeBrowseLocation, selectedLocation, selectedLocationLabel } from '../../lib/location'
 import DirectoryListing from '../../components/DirectoryListing.vue'
 import LoginCard from '../../components/LoginCard.vue'
 import LoadState from '../../components/LoadState.vue'
@@ -39,7 +38,6 @@ const events = ref<H5Event[]>([]),
 const pets = ref<Pet[]>([]),
   petId = ref('')
 const category = ref('')
-const areaPicker = ref(false)
 const forwarding = ref(false)
 const categories = computed(() => isBusinessModule(section.value) ? businessModules[section.value].categories : [])
 const displayed = computed(() => category.value ? items.value.filter(item => item.category === category.value) : items.value)
@@ -93,9 +91,11 @@ async function load() {
     }
     item.value = result.listing
   }
-  else if (section.value === 'shop')
-    items.value = (await api<{ listings: Listing[] }>('/h5/catalog?kind=product')).listings
-  else items.value = await searchListings(section.value, q.value, selectedArea.value)
+  else if (section.value === 'shop') {
+    const district = selectedLocation.value?.district.id
+    items.value = (await api<{ listings: Listing[] }>('/h5/catalog?kind=product' + (district ? '&district=' + encodeURIComponent(district) : ''))).listings
+  }
+  else items.value = await searchListings(section.value, q.value, selectedLocation.value?.district.id)
   if (user.value && id.value && needsPet.value) {
     pets.value = await listPets()
     if (!pets.value.some((p) => p.id === petId.value)) petId.value = pets.value[0]?.id || ''
@@ -143,12 +143,6 @@ function copyLink() {
     <LoadState :loading="loading" :error="error" @retry="refresh" />
     <text v-if="actionError" class="error">{{ actionError }}</text>
     <template v-if="!id">
-      <view class="program-heading">
-        <text class="title">{{ names[section] }}</text>
-        <view v-if="section === 'shop'" class="actions">
-          <button class="text-button" @tap="go('orders')"><UiIcon name="nav-cart" />购物车</button>
-        </view>
-      </view>
       <template v-if="section === 'events'">
         <view v-for="e in events" :key="e.id" class="card" @tap="open(e.id)">
           <text class="heading">{{ e.title }}</text>
@@ -171,17 +165,22 @@ function copyLink() {
           <input
             v-model="q"
             maxlength="60"
-            placeholder="搜索名称、机构或地点"
+            :placeholder="section === 'shop' ? '搜索商品或商家' : '搜索名称、机构或地点'"
             confirm-type="search"
             @confirm="search"
           />
           <button class="small primary" @tap="search">搜索</button>
+          <button v-if="section === 'shop'" class="text-button" @tap="go('orders')">
+            <UiIcon name="nav-cart" :size="14" />购物车
+          </button>
         </view>
-        <ShopShelf v-if="section === 'shop' && !loading && !error" :listings="items" :query="shopQuery" filter @area="areaPicker = true" />
-        <template v-else-if="section !== 'shop'">
+        <view v-if="section === 'shop'" v-show="!loading && !error">
+          <ShopShelf :listings="items" :query="shopQuery" filter />
+        </view>
+        <template v-else>
           <view v-if="categories.length" class="card">
             <view class="spread">
-              <button class="text-button" @tap="areaPicker = true"><UiIcon name="location" />{{ areaLabel(selectedArea) || '选择商圈' }}</button>
+              <button class="text-button" @tap="changeBrowseLocation"><UiIcon name="location" />{{ selectedLocationLabel }}</button>
             </view>
             <view class="chips">
               <button :class="['chip', { active: !category }]" @tap="category = ''">全部</button>
@@ -241,12 +240,9 @@ function copyLink() {
         <button @tap="go('orders')">查看购物车</button>
       </view>
     </template>
-    <AreaPicker v-if="areaPicker" @close="areaPicker = false; refresh()" />
   </view>
 </template>
 <style scoped>
-.program-heading { display: flex; justify-content: space-between; align-items: center; gap: 9px; padding: 4px 0 13px; }
-.program-heading .actions { margin: 0; flex: none; }
 .program-search { display: flex; align-items: center; gap: 8px; }
 .program-search input { flex: 1; min-width: 0; }
 .program-search button { flex: none; min-height: 34px; }

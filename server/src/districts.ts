@@ -2,8 +2,9 @@ import { readFileSync } from 'node:fs'
 import { gunzipSync } from 'node:zlib'
 import { Router } from 'express'
 import { z } from 'zod'
-import { districtAt, type District, type DistrictBoundary } from '../../shared/h5-districts.mjs'
+import { districtAt, legacyDistricts, type District, type DistrictBoundary } from '../../shared/h5-districts.mjs'
 import { serviceRegions } from '../../shared/h5-service-regions.mjs'
+import { mapPointToWgs84 } from './map-coordinates.js'
 
 export const districtInput = z.string().regex(/^[a-zA-Z0-9-]{1,32}$/)
 export const coordinatesInput = z.object({
@@ -19,6 +20,7 @@ const legacyCityNames: Record<string, string> = {
   南通县: '南通市', 莱芜市: '济南市', 巢湖市: '合肥市', 吐鲁番地区: '吐鲁番市', 儋县: '儋州市',
 }
 let dataset: DistrictBoundary[] | undefined
+let districtIndex: Map<string, District> | undefined
 
 function boundaries() {
   if (!dataset) {
@@ -42,10 +44,35 @@ export function districtForPoint(latitude: number, longitude: number) {
   return district && {...district,serviceCityCode:serviceCity(district)}
 }
 
+export function districtById(area: string | null | undefined) {
+  if (!area) return undefined
+  districtIndex ??= new Map(boundaries().map(({id,name,city,province}) => [
+    id, {id,name,city,province,serviceCityCode:serviceCity({id,name,city,province})},
+  ]))
+  const id = Object.hasOwn(legacyDistricts, area) ? legacyDistricts[area] : area
+  return districtIndex.get(id)
+}
+
+export const knownDistrictInput = districtInput.refine(id => districtById(id)?.id === id, '请在地图选择有效区县')
+
+export function districtAreaIds(ids: readonly string[]) {
+  const districts = new Set(ids)
+  return [...districts, ...Object.keys(legacyDistricts).filter(area => districts.has(legacyDistricts[area]))]
+}
+
+export function withDistrict<T extends {area: string | null}>(item: T) {
+  return {...item, district: districtById(item.area) ?? null}
+}
+
 export function districtsInServiceRegion(code: string) {
   return boundaries().filter(district => provinceCodes.has(code)
     ? provinces.get(district.province ?? '')?.id === code : serviceCity(district) === code).map(district => district.id)
 }
+
+districtRouter.post('/catalog/map-location', (req, res) => {
+  const coordinates = mapPointToWgs84(coordinatesInput.parse(req.body))
+  res.json({coordinates,district:districtForPoint(coordinates.latitude,coordinates.longitude) ?? null})
+})
 
 districtRouter.get('/catalog/district-boundaries', (req, res) => {
   const { x, y } = z.object({

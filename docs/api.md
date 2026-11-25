@@ -74,6 +74,7 @@
 | 方法 | 路径 | 用途 |
 |---|---|---|
 | GET | /h5/catalog/district-boundaries | 按整度网格 `x`、`y` 获取区县边界，端上识别当前区县 |
+| POST | /h5/catalog/map-location | 将地图选点的 GCJ-02 经纬度转换为 WGS84，返回坐标和所属区县 |
 | GET | /h5/catalog/service-categories | 获取后台维护的服务分类编号和名称 |
 | GET | /h5/catalog/service-posts | 按 `region`（省市代码）、`category`、`q`、`page` 筛选服务帖，兼容旧版 `district` |
 | POST | /h5/catalog/service-posts/search | 查询同一列表，按距离排序时在 JSON 里提交 `location`（`latitude` 和 `longitude`） |

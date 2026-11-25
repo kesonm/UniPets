@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { onHide, onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import type { H5Creator, H5Match } from '../../../../src/h5/types'
 import { areaLabel, type Engagement, type Listing } from '../../../../src/h5/business'
-import { selectedArea } from '../../lib/area'
+import { changeBrowseLocation, selectedLocation, selectedLocationLabel } from '../../lib/location'
 import { api, go, speciesNames, user } from '../../lib/client'
 import { pageLoad } from '../../lib/page'
 import { showFriendsFeed } from '../../lib/home'
 import { useTabPage } from '../../lib/tab-page'
-import AreaPicker from '../../components/AreaPicker.vue'
 import FeedSection from '../../components/FeedSection.vue'
 import LoadState from '../../components/LoadState.vue'
 import LoginCard from '../../components/LoginCard.vue'
@@ -23,22 +22,20 @@ type Progress = { posts: number; comments: number; groups: number }
 const section = ref<Section>('feed')
 const tabLayout = useTabPage('pages/friends/index')
 const active = ref(false)
-const areaPicker = ref(false)
 const matches = ref<H5Match[]>([])
 const creators = ref<H5Creator[]>([])
 const groups = ref<Listing[]>([])
 const joined = ref<string[]>([])
 const progress = ref<Progress>()
 const feedReload = ref(0)
-const areaName = computed(() => areaLabel(selectedArea.value) || '筛选商圈')
 let revision = 0
 
 const { loading, error, refresh } = pageLoad(async () => {
   const version = ++revision
   const current = section.value
-  const area = selectedArea.value ? '?area=' + selectedArea.value : ''
+  const district = selectedLocation.value?.district.id
   if (current === 'matches') {
-    const result = await api<{ matches: H5Match[] }>('/h5/matches' + area)
+    const result = await api<{ matches: H5Match[] }>('/h5/matches' + (district ? '?district=' + encodeURIComponent(district) : ''))
     if (revision === version) matches.value = result.matches
   } else if (current === 'creators') {
     const result = await api<{ creators: H5Creator[] }>('/h5/creators')
@@ -64,7 +61,7 @@ onShow(() => {
   }
   active.value = true
 })
-onHide(() => { active.value = false; areaPicker.value = false; endRefresh() })
+onHide(() => { active.value = false; endRefresh() })
 onPullDownRefresh(() => {
   if (section.value === 'feed') feedReload.value++
   else void refresh().finally(endRefresh)
@@ -78,7 +75,7 @@ function select(next: Section) {
   void refresh()
 }
 function openMatches(panel: string) {
-  go('social', { panel, area: selectedArea.value })
+  go('social', { panel })
 }
 function openGroup(id: string) {
   if (joined.value.includes(id)) go('social', { group: id })
@@ -103,12 +100,12 @@ function openGroup(id: string) {
       <LoadState :loading="loading" :error="error" @retry="refresh" />
       <template v-if="section === 'matches'">
         <view class="spread match-toolbar">
-          <button class="text-button" @tap="areaPicker = true"><UiIcon name="entry-travel" />{{ areaName }}</button>
+          <button class="text-button" @tap="changeBrowseLocation"><UiIcon name="entry-travel" />{{ selectedLocationLabel }}</button>
           <button class="small primary" @tap="openMatches('我的名片')">管理交友档案</button>
         </view>
         <view v-for="pet in matches" :key="pet.petId" class="card">
           <text class="heading">{{ pet.petName }}</text>
-          <text class="sub">{{ pet.breed || speciesNames[pet.species] }} · {{ areaLabel(pet.area) }}</text>
+          <text class="sub">{{ [pet.breed || speciesNames[pet.species], areaLabel(pet.area, pet.district)].filter(Boolean).join(' · ') }}</text>
           <text v-if="pet.introduction" class="body">{{ pet.introduction }}</text>
           <button class="text-button" @tap="openMatches('匹配')">发出邀请</button>
         </view>
@@ -155,7 +152,6 @@ function openGroup(id: string) {
         </view>
       </template>
     </template>
-    <AreaPicker v-if="areaPicker" @close="areaPicker = false; refresh()" />
   </view>
 </template>
 

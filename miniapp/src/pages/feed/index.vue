@@ -2,13 +2,14 @@
 import { ref, computed, watch } from 'vue'
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import type { H5Post, H5Comment, H5Social } from '../../../../src/h5/types'
+import { areaLabel } from '../../../../src/h5/business'
 import { examplePosts, feedSorting } from '../../../../src/h5/home'
 import type { Pet, Asset } from '../../../../src/lib/types'
-import { h5Areas } from '../../../../shared/h5-areas.mjs'
 import { api, user, go, publicImage, confirm, toast } from '../../lib/client'
 import { listPets } from '../../lib/pets'
 import { pageLoad, submitAction } from '../../lib/page'
 import { homeImage } from '../../lib/home'
+import { changeBrowseLocation, openMapPicker, selectedLocation, selectedLocationLabel, type MapLocation } from '../../lib/location'
 import LoadState from '../../components/LoadState.vue'
 import LoginCard from '../../components/LoginCard.vue'
 import PetPicker from '../../components/PetPicker.vue'
@@ -18,12 +19,11 @@ const mode = ref('all'),
   id = ref(''),
   query = ref(''),
   sort = ref('recommended'),
-  area = ref(''),
   page = ref(1),
   more = ref(false)
 const example = computed(() => examplePosts.find((post) => post.id === id.value))
-const areas = [{ id: '', label: '不限地区' }, ...h5Areas],
-  topic = ref('daily'),
+const postLocation = ref<MapLocation | null>(null)
+const topic = ref('daily'),
   petType = ref('other'),
   topics = [
     { id: 'daily', label: '日常' },
@@ -62,14 +62,15 @@ watch(petId, () => {
 onLoad((q) => {
   id.value = q?.id || ''
   mode.value = q?.mode || (id.value ? 'detail' : 'all')
+  if (mode.value === 'write') uni.setNavigationBarTitle({ title: '发动态' })
   if (q?.tab === 'favorites') mineTab.value = 'favorites'
-  if (q?.area && h5Areas.some((item) => item.id === q.area)) area.value = q.area
 })
 onShareAppMessage(() => ({
   title: current.value?.title || '宠云社区',
   path: '/pages/feed/index' + (id.value ? '?id=' + id.value : ''),
 }))
 async function fetchPage(n: number) {
+  const district = sort.value === 'near' ? selectedLocation.value?.district.id : undefined
   const result = await api<{ posts: H5Post[]; hasMore: boolean }>(
     '/h5/posts?sort=' +
       sort.value +
@@ -77,7 +78,7 @@ async function fetchPage(n: number) {
       n +
       '&q=' +
       encodeURIComponent(query.value) +
-      (area.value ? '&area=' + area.value : ''),
+      (district ? '&district=' + encodeURIComponent(district) : ''),
   )
   posts.value = n === 1 ? result.posts : posts.value.concat(result.posts)
   more.value = result.hasMore
@@ -126,6 +127,9 @@ function setSort(value: string) {
   sort.value = value
   void refresh()
 }
+function choosePostLocation() {
+  openMapPicker(location => { postLocation.value = location }, postLocation.value ?? selectedLocation.value, !!postLocation.value)
+}
 function publish() {
   return run(async () => {
     const r = await api<{ post: H5Post }>('/h5/posts', 'POST', {
@@ -133,7 +137,7 @@ function publish() {
       assetId: assetId.value || null,
       title: title.value,
       body: body.value,
-      area: area.value || null,
+      area: postLocation.value?.district.id ?? null,
       topic: topic.value,
       ...(selectedPet.value?.species === 'other' ? { petType: petType.value } : {}),
     })
@@ -174,31 +178,31 @@ const owned = computed(() => mode.value === 'private' ? Boolean(current.value &&
     <text v-if="actionError" class="error">{{ actionError }}</text>
     <LoginCard v-if="!user && (mode === 'write' || mode === 'mine' || mode === 'private')" />
     <view v-if="mode === 'all'" class="card">
+      <view class="row">
+        <input
+          v-model="query"
+          class="grow"
+          maxlength="60"
+          placeholder="搜索宠物、作者或动态"
+          confirm-type="search"
+          @confirm="refresh"
+        />
+        <button class="small" @tap="refresh">搜索</button>
+      </view>
       <view class="spread">
-        <text class="heading">社区动态</text>
+        <view class="chips">
+          <button
+            v-for="s in feedSorting"
+            :key="s.id"
+            :class="['chip', { active: sort === s.id }]"
+            @tap="setSort(s.id)"
+          >
+            {{ s.name }}
+          </button>
+        </view>
         <button class="small primary" @tap="go('feed', { mode: 'write' })">发动态</button>
       </view>
-      <input
-        v-model="query"
-        maxlength="60"
-        placeholder="搜索宠物、作者或动态"
-        confirm-type="search"
-        @confirm="refresh"
-      />
-      <view class="chips">
-        <button
-          v-for="s in feedSorting"
-          :key="s.id"
-          :class="['chip', { active: sort === s.id }]"
-          @tap="setSort(s.id)"
-        >
-          {{ s.name }}
-        </button>
-      </view>
-      <template v-if="sort === 'near'">
-        <ChoiceField v-model="area" :options="areas" @update:model-value="refresh" />
-      </template>
-      <button class="small" @tap="refresh">搜索</button>
+      <button v-if="sort === 'near'" class="text-button" @tap="changeBrowseLocation">{{ selectedLocationLabel }}</button>
     </view>
     <view v-if="mode === 'mine' && user" class="chips">
       <button :class="['chip', { active: mineTab === 'published' }]" @tap="mineTab = 'published'">我的发布</button>
@@ -213,7 +217,6 @@ const owned = computed(() => mode.value === 'private' ? Boolean(current.value &&
       </button>
     </template>
     <view v-if="mode === 'write' && user" class="card">
-      <text class="heading">发动态</text>
       <PetPicker v-model="petId" :pets="pets" />
       <template v-if="selectedPet?.species === 'other'">
         <text class="label">宠物类型</text>
@@ -225,8 +228,8 @@ const owned = computed(() => mode.value === 'private' ? Boolean(current.value &&
       <textarea v-model="body" maxlength="3000" />
       <text class="label">主题</text>
       <ChoiceField v-model="topic" :options="topics" />
-      <text class="label">地区</text>
-      <ChoiceField v-model="area" :options="areas" />
+      <text class="label">公开地区（选填）</text>
+      <button class="field" @tap="choosePostLocation">{{ areaLabel(null, postLocation?.district) || '地图选位置' }}</button>
       <text class="label">档案照片</text>
       <ChoiceField v-model="assetId" :options="photoOptions" />
       <view class="actions">
@@ -236,7 +239,7 @@ const owned = computed(() => mode.value === 'private' ? Boolean(current.value &&
     <template v-if="current && (mode === 'detail' || (mode === 'private' && user))">
       <view class="card">
         <text class="title">{{ current.title }}</text>
-        <text class="sub">{{ current.petName }} · {{ current.author }}</text>
+        <text class="sub">{{ [current.petName, current.author, areaLabel(current.area, current.district)].filter(Boolean).join(' · ') }}</text>
         <text v-if="current.hidden" class="sub">这条动态已隐藏</text>
         <image
           v-if="current.hasImage"

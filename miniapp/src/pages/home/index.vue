@@ -6,7 +6,8 @@ import type { ServicePost } from '../../../../src/h5/types'
 import { homeEntries, homeSearchKinds, homeSlides } from '../../../../src/h5/home'
 import { api, go, message } from '../../lib/client'
 import { homeImage, showFriendsFeed } from '../../lib/home'
-import { district, locateDistrict, locateIfAuthorized, locatingDistrict } from '../../lib/district'
+import { locateIfAuthorized, locatingDistrict } from '../../lib/district'
+import { browseDistrict, changeBrowseLocation, selectedLocation } from '../../lib/location'
 import { useTabPage } from '../../lib/tab-page'
 import FeedSection from '../../components/FeedSection.vue'
 import HomeRecommendations from '../../components/HomeRecommendations.vue'
@@ -34,7 +35,7 @@ onShow(() => {
   active.value = true
   if (checkedLocation) return
   checkedLocation = true
-  void locateIfAuthorized()
+  if (selectedLocation.value === undefined) void locateIfAuthorized()
 })
 onHide(() => { active.value = false })
 
@@ -54,7 +55,7 @@ function clearSearch() {
   query.value = ''
 }
 
-watch([query, kind, () => district.value?.id, retry], async ([term, target, area], _, onCleanup) => {
+watch([query, kind, () => browseDistrict.value?.id, retry], async ([term, target, area], _, onCleanup) => {
   let current = true
   onCleanup(() => { current = false })
   listings.value = []
@@ -73,7 +74,7 @@ watch([query, kind, () => district.value?.id, retry], async ([term, target, area
       const result = await api<{ posts: ServicePost[] }>('/h5/catalog/service-posts' + q + (area ? '&district=' + encodeURIComponent(area) : ''))
       if (current) services.value = result.posts
     } else {
-      const result = await api<{ listings: Listing[] }>('/h5/catalog?kind=product')
+      const result = await api<{ listings: Listing[] }>('/h5/catalog?kind=product' + (area ? '&district=' + encodeURIComponent(area) : ''))
       if (current) listings.value = result.listings
     }
   } catch (cause) {
@@ -88,9 +89,9 @@ watch([query, kind, () => district.value?.id, retry], async ([term, target, area
   <view class="market-home tab-screen" :style="tabLayout">
     <view class="market-top">
       <view class="tab-leading market-controls">
-        <button id="home-location" class="market-location" :aria-label="'当前位置 ' + (district?.name || '定位')" @tap="locateDistrict()">
+        <button id="home-location" class="market-location" :aria-label="'地图选位置 ' + (browseDistrict?.name || '')" @tap="changeBrowseLocation">
           <UiIcon name="location" :size="13" />
-          <text>{{ locatingDistrict ? '定位中' : district?.name || '定位' }}</text>
+          <text>{{ locatingDistrict ? '定位中' : browseDistrict?.name || '定位' }}</text>
         </button>
         <view class="market-search">
           <UiIcon name="search" :size="15" />

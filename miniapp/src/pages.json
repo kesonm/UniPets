@@ -95,9 +95,9 @@
       }
     },
     {
-      "path": "pages/area-map/index",
+      "path": "pages/location-map/index",
       "style": {
-        "navigationBarTitleText": "商圈地图",
+        "navigationBarTitleText": "选择位置",
         "navigationBarBackgroundColor": "#f5f4f1"
       }
     },

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { H5Post } from '../../../src/h5/types'
-import { h5Areas } from '../../../shared/h5-areas.mjs'
+import { areaLabel } from '../../../src/h5/business'
 import { postPetTypeLabels } from '../../../shared/h5-discovery.mjs'
 import { publicImage } from '../lib/client'
 import UiIcon from './UiIcon.vue'
@@ -10,9 +10,6 @@ withDefaults(defineProps<{ posts: readonly H5Post[]; liked?: string[]; showArea?
 })
 const emit = defineEmits<{ view: [post: H5Post]; like: [post: H5Post] }>()
 
-function areaLabel(id: string) {
-  return h5Areas.find(area => area.id === id)?.label || ''
-}
 function when(value: string) {
   const date = new Date(value)
   const elapsed = Date.now() - date.getTime()
@@ -56,7 +53,7 @@ function when(value: string) {
       <text v-if="showPetType" class="post-type">{{ postPetTypeLabels[post.petType || post.species] }}{{ post.breed ? ' · ' + post.breed : '' }}</text>
       <view v-if="showArea && post.area" class="post-area">
         <UiIcon name="post-location" :size="11" />
-        <text>{{ areaLabel(post.area) }}</text>
+        <text>{{ areaLabel(post.area, post.district) }}</text>
       </view>
     </view>
   </view>
