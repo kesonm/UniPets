@@ -13,6 +13,6 @@
     "permission": {
       "scope.userLocation": { "desc": "用于显示所在区县、计算门店距离和在地图上标记位置。" }
     },
-    "requiredPrivateInfos": ["getLocation"]
+    "requiredPrivateInfos": ["getLocation", "chooseLocation"]
   }
 }

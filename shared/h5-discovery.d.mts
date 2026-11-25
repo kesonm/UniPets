@@ -7,8 +7,6 @@ export const serviceSorts: readonly ['recommended', 'likes-desc', 'likes-asc', '
 export type ServiceSort = typeof serviceSorts[number]
 export function sortsByDistance(sort: ServiceSort): boolean
 export interface ServiceCoordinates { latitude: number; longitude: number }
-export interface MapPlace { name: string; address: string }
-export interface MapPlaceSuggestion extends MapPlace { id: string; point: ServiceCoordinates }
 export function servicePhone(value: string): string
 export const storeBindingQrPrefix: 'petcloud:store:'
 export function parseStoreBindingCode(input: string): string

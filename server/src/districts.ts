@@ -5,7 +5,6 @@ import { z } from 'zod'
 import { districtAt, legacyDistricts, type District, type DistrictBoundary } from '../../shared/h5-districts.mjs'
 import { serviceRegions } from '../../shared/h5-service-regions.mjs'
 import { mapPointToWgs84 } from './map-coordinates.js'
-import { resolveTencentPlace, searchTencentPlaces } from './tencent-places.js'
 
 export const districtInput = z.string().regex(/^[a-zA-Z0-9-]{1,32}$/)
 export const coordinatesInput = z.object({
@@ -70,22 +69,9 @@ export function districtsInServiceRegion(code: string) {
     ? provinces.get(district.province ?? '')?.id === code : serviceCity(district) === code).map(district => district.id)
 }
 
-districtRouter.post('/catalog/map-location', async (req, res) => {
-  const {address,...point} = coordinatesInput.extend({address:z.boolean().optional()}).parse(req.body)
-  const coordinates = mapPointToWgs84(point)
-  const district = districtForPoint(coordinates.latitude,coordinates.longitude)
-  res.json({coordinates,district:district ?? null,...(address ? {place:await resolveTencentPlace(point)} : {})})
-})
-
-districtRouter.post('/catalog/map-search', async (req, res) => {
-  const {keyword,center} = z.object({
-    keyword:z.string().trim().min(1,'请输入店名或地址')
-      .refine(value => Buffer.byteLength(value,'utf8') <= 96,'搜索词过长'),
-    center:coordinatesInput.optional(),
-  }).strict().parse(req.body)
-  const point = center && mapPointToWgs84(center)
-  const district = point && districtForPoint(point.latitude,point.longitude)
-  res.json({places:await searchTencentPlaces(keyword,center,district?.city || district?.province)})
+districtRouter.post('/catalog/map-location', (req, res) => {
+  const coordinates = mapPointToWgs84(coordinatesInput.parse(req.body))
+  res.json({coordinates,district:districtForPoint(coordinates.latitude,coordinates.longitude) ?? null})
 })
 
 districtRouter.get('/catalog/district-boundaries', (req, res) => {
