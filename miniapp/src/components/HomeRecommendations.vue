@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import type { Recommendation } from '../../../src/h5/types'
+import type { RecommendationLabels } from '../../../shared/h5-recommendation-labels.mjs'
 import { api, go, message, user } from '../lib/client'
 import { browseDistrict } from '../lib/location'
 import { recommendationSeed } from '../lib/home'
@@ -9,6 +10,7 @@ import PostGrid from './PostGrid.vue'
 
 const props = defineProps<{ active: boolean }>()
 const items = ref<Recommendation[]>([])
+const labels = ref<RecommendationLabels>()
 const loading = ref(false)
 const error = ref('')
 const retry = ref(0)
@@ -27,8 +29,11 @@ watch([() => props.active, () => user.value?.id, () => browseDistrict.value?.id,
   loading.value = true
   try {
     const query = '?scope=all&seed=' + recommendationSeed + (area ? '&district=' + encodeURIComponent(area) : '')
-    const result = await api<{items: Recommendation[]}>('/h5/posts/recommendations' + query)
-    if (current) items.value = result.items
+    const result = await api<{items: Recommendation[]; labels?: RecommendationLabels}>('/h5/posts/recommendations' + query)
+    if (current) {
+      items.value = result.items
+      labels.value = result.labels
+    }
   } catch (cause) {
     if (current) error.value = message(cause)
   } finally {
@@ -41,7 +46,7 @@ watch([() => props.active, () => user.value?.id, () => browseDistrict.value?.id,
 <template>
   <view class="recommendations">
     <text class="heading">为你推荐</text>
-    <PostGrid v-if="items.length" :recommendations="items" :liked="liked" :show-breed="false" show-pet-type reactions
+    <PostGrid v-if="items.length" :recommendations="items" :labels="labels" :liked="liked" :show-breed="false" show-pet-type reactions
       @view="go('feed', { id: $event.id })" @like="like" />
     <view v-else class="card empty-card" role="status">
       <text>{{ error || (loading ? '正在加载推荐…' : '暂无推荐内容') }}</text>

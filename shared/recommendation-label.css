@@ -1,0 +1,16 @@
+.recommendation-label {
+  position: absolute;
+  z-index: 1;
+  top: 7px;
+  left: 7px;
+  max-width: calc(100% - 14px);
+  box-sizing: border-box;
+  padding: 3px 7px;
+  border-radius: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.35;
+}

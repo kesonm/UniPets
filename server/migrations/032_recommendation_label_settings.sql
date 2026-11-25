@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS h5_recommendation_label_settings (
+  id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+  labels JSON NOT NULL,
+  revision INT UNSIGNED NOT NULL,
+  CHECK (id = 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

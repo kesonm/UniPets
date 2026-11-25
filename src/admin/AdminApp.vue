@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { api, ApiError } from '../lib/api'
 import type { User } from '../lib/types'
 import AdminEditor from './AdminEditor.vue'
+import AdminRecommendationLabels from './AdminRecommendationLabels.vue'
 import AdminServiceCategories from './AdminServiceCategories.vue'
 import AdminStoreCodes from './AdminStoreCodes.vue'
 import AdminStoreJobs from './AdminStoreJobs.vue'
@@ -36,6 +37,8 @@ const categoryManager = ref(false)
 const isStores = computed(() => active.value.id === 'stores')
 const storeTab = ref<'stores'|'jobs'>('stores')
 const isStoreJobs = computed(() => isStores.value && storeTab.value === 'jobs')
+const postTab = ref<'posts'|'labels'>('posts')
+const isRecommendationLabels = computed(() => active.value.id === 'posts' && postTab.value === 'labels')
 const listTitle = computed(() => isStores.value ? '已绑定门店' : active.value.title+'列表')
 const emptyText = computed(() => {
   if (keyword.value || state.value) return isStores.value ? '没有符合条件的已绑定门店' : '没有符合条件的记录'
@@ -52,7 +55,7 @@ const errorMessage = (cause: unknown, fallback: string) => cause instanceof Erro
 let revision = 0
 
 async function load() {
-  if (!user.value || isStoreJobs.value) return
+  if (!user.value || isStoreJobs.value || isRecommendationLabels.value) return
   const current = ++revision
   loading.value = true
   listError.value = ''
@@ -102,6 +105,7 @@ watch(active,() => {
   drawer.value = null
   categoryManager.value = false
   storeTab.value = 'stores'
+  postTab.value = 'posts'
   records.value = []
   search.value = ''
   state.value = ''
@@ -249,13 +253,20 @@ onBeforeUnmount(() => {
             <button class="admin-button admin-primary" type="button" @click="drawer={}"><el-icon><Plus /></el-icon>{{ createLabel }}</button>
           </div>
         </header>
-        <div v-if="isStores" class="admin-store-tabs" role="group" aria-label="门店管理栏目">
+        <div v-if="isStores" class="admin-section-tabs" role="group" aria-label="门店管理栏目">
           <button class="admin-button" :class="{'admin-primary':storeTab==='stores'}" type="button" :aria-pressed="storeTab==='stores'"
             @click="storeTab='stores'; load()">已绑定门店</button>
           <button class="admin-button" :class="{'admin-primary':isStoreJobs}" type="button" :aria-pressed="isStoreJobs"
             @click="storeTab='jobs'">招聘岗位</button>
         </div>
+        <div v-else-if="active.id==='posts'" class="admin-section-tabs" role="group" aria-label="动态管理栏目">
+          <button class="admin-button" :class="{'admin-primary':postTab==='posts'}" type="button" :aria-pressed="postTab==='posts'"
+            @click="postTab='posts'; load()">动态列表</button>
+          <button class="admin-button" :class="{'admin-primary':isRecommendationLabels}" type="button" :aria-pressed="isRecommendationLabels"
+            @click="postTab='labels'">推荐标签</button>
+        </div>
         <AdminStoreJobs v-if="isStoreJobs" />
+        <AdminRecommendationLabels v-else-if="isRecommendationLabels" />
         <div v-else :class="{'admin-store-workspace':isStores}">
           <section class="admin-panel" :class="{'admin-bound-stores':isStores}" :aria-label="listTitle" :aria-busy="loading">
             <header v-if="isStores" class="admin-bound-stores-header">

@@ -4,12 +4,14 @@ import type { H5Post, Recommendation } from '../../../src/h5/types'
 import { areaLabel } from '../../../src/h5/business'
 import { postPetTypeLabels, serviceCategories } from '../../../shared/h5-discovery.mjs'
 import { jobCategories } from '../../../shared/h5-jobs.mjs'
+import { defaultRecommendationLabels, type RecommendationLabels } from '../../../shared/h5-recommendation-labels.mjs'
 import { money } from '../lib/cart'
 import { go, publicImage, servicePostImage } from '../lib/client'
 import UiIcon from './UiIcon.vue'
 
-const props = withDefaults(defineProps<{ posts?: readonly H5Post[]; recommendations?: readonly Recommendation[]; showBreed?: boolean; liked?: string[]; showArea?: boolean; showPetType?: boolean; reactions?: boolean }>(), {
+const props = withDefaults(defineProps<{ posts?: readonly H5Post[]; recommendations?: readonly Recommendation[]; labels?: RecommendationLabels; showBreed?: boolean; liked?: string[]; showArea?: boolean; showPetType?: boolean; reactions?: boolean }>(), {
   posts: () => [],
+  labels: () => defaultRecommendationLabels,
   liked: () => [],
   showBreed: true,
 })
@@ -17,10 +19,10 @@ const emit = defineEmits<{ view: [post: H5Post]; like: [post: H5Post] }>()
 
 type OtherRecommendation = Exclude<Recommendation,{kind:'post'}>
 const kindInfo = {
-  service:{label:'服务',icon:'entry-services',page:'services'},
-  product:{label:'商品',icon:'entry-shop',page:'directory'},
-  job:{label:'招聘',icon:'entry-jobs',page:'jobs'},
-  story:{label:'短剧',icon:'entry-stories',page:'stories'},
+  service:{icon:'entry-services',page:'services'},
+  product:{icon:'entry-shop',page:'directory'},
+  job:{icon:'entry-jobs',page:'jobs'},
+  story:{icon:'entry-stories',page:'stories'},
 }
 
 function recommendationTile(item: OtherRecommendation) {
@@ -44,7 +46,7 @@ function recommendationTile(item: OtherRecommendation) {
 
 const entries = computed(() => {
   const content = props.recommendations ?? props.posts.map(post => ({kind:'post' as const, post}))
-  return content.map(item => item.kind === 'post' ? item : {...item, tile:recommendationTile(item)})
+  return content.map(item => item.kind === 'post' ? item : {...item, tile:recommendationTile(item), badge:props.labels[item.kind]})
 })
 
 function openRecommendation(item: OtherRecommendation) {
@@ -67,11 +69,11 @@ function when(value: string) {
   <view class="post-grid">
     <template v-for="entry in entries" :key="entry.kind + '-' + entry.post.id">
       <view v-if="entry.kind!=='post'" class="post">
-        <button class="post-open" :aria-label="'查看' + kindInfo[entry.kind].label + ' ' + entry.post.title" @tap="openRecommendation(entry)">
+        <button class="post-open" :aria-label="'查看' + defaultRecommendationLabels[entry.kind].text + ' ' + entry.post.title" @tap="openRecommendation(entry)">
           <view class="post-cover" :class="entry.kind+'-cover'">
             <image v-if="entry.tile.image" :src="entry.tile.image" mode="aspectFill" lazy-load />
             <UiIcon v-else :name="kindInfo[entry.kind].icon" :size="30" />
-            <text class="post-badge" :class="entry.kind">{{ kindInfo[entry.kind].label }}</text>
+            <text class="recommendation-label" :style="{color:entry.badge.textColor,backgroundColor:entry.badge.backgroundColor}">{{ entry.badge.text }}</text>
           </view>
           <text class="post-title">{{ entry.post.title }}</text>
         </button>
@@ -121,6 +123,7 @@ function when(value: string) {
   </view>
 </template>
 
+<style src="../../../shared/recommendation-label.css"></style>
 <style scoped>
 .post-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .post { min-width: 0; overflow: hidden; border: 1px solid #ebe8e1; border-radius: 13px; background: #fff; }
@@ -151,7 +154,7 @@ function when(value: string) {
 .job-cover { background: #edf4fc; }
 .story-cover { background: #f4effb; }
 .post-amount { flex: 0 1 auto; min-width: 0; margin-left: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--gold-ink); font-weight: 700; }
-.post-example,.post-badge {
+.post-example {
   position: absolute;
   left: 7px;
   top: 7px;
@@ -163,11 +166,6 @@ function when(value: string) {
   font-weight: 700;
   line-height: 1.35;
 }
-.post-badge { z-index: 1; padding: 3px 7px; }
-.post-badge.service { background: #e1f2de; color: #2d5a38; }
-.post-badge.product { background: #ffe7d4; color: #7a441f; }
-.post-badge.job { background: #e0edfb; color: #2c527a; }
-.post-badge.story { background: #eee3f8; color: #613a7d; }
 .post-title { display: block; padding: 8px 9px 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; }
 .post-footer { display: flex; justify-content: space-between; align-items: center; min-height: 28px; padding: 1px 8px 7px; color: #66625a; font-size: 11px; }
 .post-author { display: flex; align-items: center; gap: 4px; min-width: 0; }

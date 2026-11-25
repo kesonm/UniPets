@@ -9,6 +9,7 @@ import { db, rows, transaction } from './db.js'
 import { HttpError } from './errors.js'
 import { getStoreJobImage, reviewStoreJob, storeJobFields, storeJobsFrom } from './h5-jobs.js'
 import { hasStoreContact, listStoreBindingCodes, refreshStoreBindingCode, storeBindingQr, type StoreContact } from './h5-store-binding.js'
+import { getRecommendationLabelSettings, updateRecommendationLabelSettings } from './recommendation-labels.js'
 import { petSchema, updatePetRecord } from './routes.js'
 import { checkServiceCategory, getServiceCategories, serviceCategoryId, serviceCategoryJoin, serviceCategoryLabel, serviceCategoryName } from './service-categories.js'
 
@@ -59,6 +60,8 @@ adminRouter.use(requireAuth,(req,_res,next) => {
   next()
 })
 adminRouter.get('/me',(req,res) => res.json({user:req.user}))
+adminRouter.get('/recommendation-labels',async (_req,res) => res.json(await getRecommendationLabelSettings()))
+adminRouter.put('/recommendation-labels',async (req,res) => res.json(await updateRecommendationLabelSettings(req.body)))
 
 adminRouter.get('/users',list({
   select:`u.id,u.username,u.display_name AS displayName,u.created_at AS createdAt,u.is_admin AS isAdmin,

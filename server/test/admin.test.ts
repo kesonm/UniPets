@@ -3,10 +3,11 @@ import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import test from 'node:test'
 import sharp from 'sharp'
+import { defaultRecommendationLabels, type RecommendationLabelSettings } from '../../shared/h5-recommendation-labels.mjs'
 import { createApp } from '../src/app.js'
 import { removeFile } from '../src/assets.js'
 import { config } from '../src/config.js'
-import { db } from '../src/db.js'
+import { db, rows } from '../src/db.js'
 
 test('admin management updates the same records used by the customer APIs', {timeout:30_000}, async () => {
   const server = createApp().listen(0,'127.0.0.1')
@@ -20,6 +21,8 @@ test('admin management updates the same records used by the customer APIs', {tim
   const entries: string[] = []
   const files: string[] = []
   const password = 'admin-integration-fixture'
+  const [previousLabels] = await rows<RecommendationLabelSettings>('SELECT labels,revision FROM h5_recommendation_label_settings WHERE id=1')
+  let changedLabels = false
 
   async function request(path:string, method='GET', body?:unknown, cookie?:string) {
     const response = await fetch(base+path,{method,body:JSON.stringify(body),headers:{
@@ -51,6 +54,25 @@ test('admin management updates the same records used by the customer APIs', {tim
     const login = await request('/admin/login','POST',{username:manager.username,password})
     assert.equal(login.status,200)
     const admin = (path:string, method='GET', body?:unknown) => request('/admin'+path,method,body,login.cookie)
+    const labelPath = '/recommendation-labels'
+    const labelsApi = '/h5/posts/recommendations?scope=all'
+    assert.equal((await request('/admin'+labelPath)).status,401)
+    assert.equal((await request('/admin'+labelPath,'PUT',{},member.cookie)).status,403)
+    const labelSettings = await admin(labelPath)
+    assert.equal(labelSettings.status,200)
+    assert.deepEqual(labelSettings.data,previousLabels ?? {labels:defaultRecommendationLabels,revision:0})
+    const next = {labels:{...labelSettings.data.labels,
+      service:{text:' 周边服务 ',textColor:'#2f503c',backgroundColor:'#cfead5'}},revision:labelSettings.data.revision}
+    assert.equal((await admin(labelPath,'PUT',{...next,labels:{...next.labels,service:{...next.labels.service,textColor:'red'}}})).status,400)
+    const concurrent = await Promise.all([1,2].map(() => admin(labelPath,'PUT',next)))
+    changedLabels = concurrent.some(result => result.status === 200)
+    assert.deepEqual(concurrent.map(result => result.status).sort(),[200,409])
+    const savedLabels = concurrent.find(result=>result.status===200)!.data
+    assert.deepEqual(savedLabels.labels.service,{text:'周边服务',textColor:'#2F503C',backgroundColor:'#CFEAD5'})
+    assert.equal(savedLabels.revision,labelSettings.data.revision+1)
+    assert.deepEqual((await admin(labelPath)).data,savedLabels)
+    assert.deepEqual((await request(labelsApi)).data.labels,savedLabels.labels)
+    assert.equal((await request('/h5/posts/recommendations')).data.labels,undefined)
     const users = (await admin('/users?q='+suffix+'&state=enabled')).data
     assert.equal(users.items.length,2)
     assert.equal(users.hasMore,false)
@@ -185,6 +207,9 @@ test('admin management updates the same records used by the customer APIs', {tim
     assert.equal((await request('/auth/login','POST',{username:member.username,password})).status,200)
   } finally {
     await new Promise<void>(resolve => server.close(() => resolve()))
+    if (changedLabels && previousLabels) await db.execute('UPDATE h5_recommendation_label_settings SET labels=?,revision=? WHERE id=1',
+      [JSON.stringify(previousLabels.labels),previousLabels.revision])
+    else if (changedLabels) await db.execute('DELETE FROM h5_recommendation_label_settings WHERE id=1')
     for (const id of accounts) await db.execute('DELETE FROM users WHERE id=?',[id])
     for (const id of entries) await db.execute('DELETE FROM h5_catalog_items WHERE id=?',[id])
     for (const id of stores) await db.execute('DELETE FROM h5_stores WHERE id=?',[id])
