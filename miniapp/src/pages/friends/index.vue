@@ -40,9 +40,7 @@ function search() {
       <button id="friends-submit-search" class="friends-search-button" @tap="search">搜索</button>
     </view>
     <view class="friends-toolbar">
-      <view class="friends-pets">
-        <ChoiceField v-model="petType" :options="petTypes" />
-      </view>
+      <ChoiceField v-model="petType" :options="petTypes" appearance="text" />
       <button id="friends-publish" class="text-button friends-publish" @tap="go('feed',{mode:'write'})">
         <UiIcon name="circle-plus" :size="14" />发布帖子
       </button>
@@ -86,8 +84,7 @@ function search() {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  margin: 10px 0;
+  margin: 3px 0 5px;
 }
-.friends-pets { flex: 1; max-width: 180px; }
 .friends-publish { flex: none; min-height: 36px; white-space: nowrap; }
 </style>
