@@ -40,19 +40,19 @@ export const storeJobFields = `j.id,j.store_id AS storeId,j.title,j.category,j.e
   j.salary,j.description,j.status,j.created_at AS createdAt,j.published_at AS publishedAt,
   j.internal_demo AS internalDemo,(SELECT COUNT(*) FROM h5_store_job_images ji WHERE ji.job_id=j.id) AS imageCount,
   s.name AS storeName,s.city_code AS cityCode,s.address,s.phone`
-const visible = "j.status='published' AND j.internal_demo=FALSE AND s.enabled=TRUE AND s.owner_user_id IS NOT NULL"
+export const publicStoreJobScope = "j.status='published' AND j.internal_demo=FALSE AND s.enabled=TRUE AND s.owner_user_id IS NOT NULL"
 const imagesFrom = `${storeJobsFrom} JOIN h5_store_job_images ji ON ji.job_id=j.id`
 
 h5JobsRouter.get(route+'/:id/images/:position', async (req,res) => {
   const [photo] = await rows<{image:Buffer}>(`SELECT ji.image FROM ${imagesFrom}
-    WHERE j.id=? AND ji.position=? AND ${visible}`, [uuid.parse(req.params.id),postImagePosition.parse(req.params.position)])
+    WHERE j.id=? AND ji.position=? AND ${publicStoreJobScope}`, [uuid.parse(req.params.id),postImagePosition.parse(req.params.position)])
   if (!photo) throw new HttpError(404,'招聘图片不存在')
   res.type('webp').send(photo.image)
 })
 
 h5JobsRouter.get(route, async (req,res) => {
   const filter = listInput.parse(req.query)
-  const conditions = [visible]
+  const conditions = [publicStoreJobScope]
   const values: string[] = []
   for (const [column,value] of [['s.city_code',filter.city],['j.category',filter.category],['j.employment_type',filter.type]]) {
     if (value) {
@@ -74,7 +74,7 @@ h5JobsRouter.get(route, async (req,res) => {
 })
 
 h5JobsRouter.get(route+'/:id', async (req,res) => {
-  const [job] = await rows<StoreJob>(`SELECT ${storeJobFields} FROM ${storeJobsFrom} WHERE j.id=? AND ${visible}`, [uuid.parse(req.params.id)])
+  const [job] = await rows<StoreJob>(`SELECT ${storeJobFields} FROM ${storeJobsFrom} WHERE j.id=? AND ${publicStoreJobScope}`, [uuid.parse(req.params.id)])
   if (!job) throw new HttpError(404,'岗位不存在或已下架')
   res.json({job})
 })

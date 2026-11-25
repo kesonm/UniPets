@@ -23,7 +23,7 @@ import { h5ServicePostsRouter, servicePosts } from './h5-service-posts.js'
 import { h5StoreBindingRouter } from './h5-store-binding.js'
 import { h5MyContentRouter } from './h5-my-content.js'
 import { h5JobsRouter } from './h5-jobs.js'
-import { recommendedPosts, type PublicPost } from './h5-recommendations.js'
+import { additionalRecommendationPosts, recommendedPosts, type PublicPost } from './h5-recommendations.js'
 import { districtAreaIds, districtInput, districtRouter, knownDistrictInput, withDistrict } from './districts.js'
 
 export const h5Router = Router()
@@ -199,13 +199,15 @@ h5Router.get('/posts/breeds', async (req, res) => {
 h5Router.get('/posts/recommendations', optionalAuth, async (req, res) => {
   const query = z.object({
     district: districtInput.optional(), seed: z.string().regex(/^[a-zA-Z0-9-]{1,40}$/).default('guest'),
+    scope: z.enum(['all']).optional(),
   }).parse(req.query)
   const owner = req.user?.id
-  const [posts, services] = await Promise.all([
+  const [posts, services, extra] = await Promise.all([
     rows<PostWithArea>(`${postSelect} WHERE post.hidden_at IS NULL ORDER BY post.created_at DESC,post.id DESC LIMIT 60`),
     servicePosts({ district: query.district, q: '', limit: 60, offset: 0 }, owner),
+    query.scope === 'all' ? additionalRecommendationPosts(query.district) : [],
   ])
-  res.json({ items: await recommendedPosts(posts.map(withDistrict), services, owner, query.seed) })
+  res.json({ items: await recommendedPosts(posts.map(withDistrict), services, extra, owner, query.seed) })
 })
 
 h5Router.get('/posts/:id', async (req, res) => {

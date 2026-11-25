@@ -20,12 +20,17 @@ const storyInput = z.object({title:z.string().trim().min(1,'请填写作品标�
   scenes:z.array(z.string().trim().min(1).max(500)).min(1,'请写至少一个分镜').max(8),
   coverAssetId:uuid.nullable().default(null), publish:z.boolean().default(false)}).strict()
 
-h5StoriesRouter.get('/stories', async (req,res) => {
-  const {q} = z.object({q:z.string().trim().max(60).default('')}).parse(req.query)
-  const stories = await rows(`SELECT ${storyFields} ${storyFrom}
+type PublicStory = { id: string; title: string; publishedAt: Date; petName: string; author: string; hasCover: number; sceneCount: number; likes: number }
+
+export function publicStories(q = '') {
+  return rows<PublicStory>(`SELECT ${storyFields} ${storyFrom}
     WHERE s.published_at IS NOT NULL AND s.hidden_at IS NULL AND (?='' OR LOCATE(?,CONCAT_WS(' ',s.title,p.name,u.display_name))>0)
     ORDER BY s.published_at DESC,s.id LIMIT 60`, [q,q])
-  res.json({stories})
+}
+
+h5StoriesRouter.get('/stories', async (req,res) => {
+  const {q} = z.object({q:z.string().trim().max(60).default('')}).parse(req.query)
+  res.json({stories:await publicStories(q)})
 })
 
 h5StoriesRouter.get('/stories/:id', async (req,res) => {

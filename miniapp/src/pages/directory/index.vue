@@ -84,7 +84,7 @@ async function load() {
     courses.value = (await api<{ courses: H5TrainingCourse[] }>('/h5/training')).courses
   else if (id.value) {
     const result = await api<{ listing: Listing }>('/h5/catalog/' + id.value)
-    if (result.listing.module === 'services') {
+    if (result.listing.module === 'services' && result.listing.kind !== 'product') {
       forwarding.value = true
       uni.redirectTo({ url: '/pages/services/index?id=' + encodeURIComponent(id.value) })
       return

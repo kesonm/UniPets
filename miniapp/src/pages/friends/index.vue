@@ -35,7 +35,7 @@ function search() {
   <view class="screen tab-screen" :style="tabLayout">
     <view class="tab-leading friends-search">
       <UiIcon name="search" :size="15" />
-      <input id="friends-search" v-model="input" :always-embed="true" maxlength="60" placeholder="搜索帖子、宠物或岗位" aria-label="搜索帖子、宠物或岗位"
+      <input id="friends-search" v-model="input" :always-embed="true" maxlength="60" placeholder="搜索帖子或宠物" aria-label="搜索帖子或宠物"
         confirm-type="search" @confirm="search" />
       <button id="friends-submit-search" class="friends-search-button" @tap="search">搜索</button>
     </view>
@@ -45,7 +45,7 @@ function search() {
         <UiIcon name="circle-plus" :size="14" />发布帖子
       </button>
     </view>
-    <FeedSection :active="active" :query="query" :pet-type="petType" :reload="reload" include-jobs @loaded="endRefresh" />
+    <FeedSection :active="active" :query="query" :pet-type="petType" :reload="reload" :show-breed="false" auto-refresh @loaded="endRefresh" />
   </view>
 </template>
 

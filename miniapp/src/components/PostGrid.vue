@@ -1,32 +1,55 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { StoreJob } from '../../../shared/h5-jobs.mjs'
-import type { H5Post, Recommendation, ServicePost } from '../../../src/h5/types'
+import type { H5Post, Recommendation } from '../../../src/h5/types'
 import { areaLabel } from '../../../src/h5/business'
 import { postPetTypeLabels, serviceCategories } from '../../../shared/h5-discovery.mjs'
+import { jobCategories } from '../../../shared/h5-jobs.mjs'
 import { money } from '../lib/cart'
-import { publicImage, servicePostImage } from '../lib/client'
+import { go, publicImage, servicePostImage } from '../lib/client'
 import UiIcon from './UiIcon.vue'
-import JobCard from './JobCard.vue'
 
-const props = withDefaults(defineProps<{ posts?: readonly H5Post[]; jobs?: readonly StoreJob[]; recommendations?: readonly Recommendation[]; showBreed?: boolean; liked?: string[]; showArea?: boolean; showPetType?: boolean; reactions?: boolean }>(), {
+const props = withDefaults(defineProps<{ posts?: readonly H5Post[]; recommendations?: readonly Recommendation[]; showBreed?: boolean; liked?: string[]; showArea?: boolean; showPetType?: boolean; reactions?: boolean }>(), {
   posts: () => [],
   liked: () => [],
-  jobs: () => [],
   showBreed: true,
 })
-const emit = defineEmits<{ view: [post: H5Post]; viewService: [post: ServicePost]; like: [post: H5Post] }>()
+const emit = defineEmits<{ view: [post: H5Post]; like: [post: H5Post] }>()
+
+type OtherRecommendation = Exclude<Recommendation,{kind:'post'}>
+const kindInfo = {
+  service:{label:'服务',icon:'entry-services',page:'services'},
+  product:{label:'商品',icon:'entry-shop',page:'directory'},
+  job:{label:'招聘',icon:'entry-jobs',page:'jobs'},
+  story:{label:'短剧',icon:'entry-stories',page:'stories'},
+}
+
+function recommendationTile(item: OtherRecommendation) {
+  switch (item.kind) {
+    case 'service': {
+      const post = item.post
+      return {image:post.imageCount ? servicePostImage(post.id) : '', name:post.provider,
+        amount:post.priceCents ? money(post.priceCents) : '',
+        detail:post.categoryLabel || serviceCategories.find(category => category.id === post.category)?.label || '其他服务'}
+    }
+    case 'product':
+      return {image:'', name:item.post.provider, amount:money(item.post.priceCents), detail:''}
+    case 'job':
+      return {image:item.post.imageCount ? publicImage('/h5/jobs/'+item.post.id+'/images/1') : '',
+        name:item.post.storeName, amount:item.post.salary, detail:jobCategories[item.post.category]}
+    case 'story':
+      return {image:item.post.hasCover ? publicImage('/h5/stories/'+item.post.id+'/cover') : '',
+        name:item.post.author, amount:'', detail:item.post.sceneCount+' 幕'}
+  }
+}
 
 const entries = computed(() => {
-  if (props.recommendations) return props.recommendations.map(item => ({...item, id:item.post.id}))
-  const posts = props.posts.map(post => ({kind:'post' as const, id:post.id, date:post.createdAt, post}))
-  const jobs = props.jobs.map(job => ({kind:'job' as const, id:job.id, date:job.publishedAt ?? '', job}))
-  if (!jobs.length) return posts
-  return [...posts,...jobs].sort((a,b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
+  const content = props.recommendations ?? props.posts.map(post => ({kind:'post' as const, post}))
+  return content.map(item => item.kind === 'post' ? item : {...item, tile:recommendationTile(item)})
 })
 
-function serviceLabel(post: ServicePost) {
-  return post.categoryLabel || serviceCategories.find(category => category.id === post.category)?.label || '其他服务'
+function openRecommendation(item: OtherRecommendation) {
+  const args = { id:item.post.id, ...(item.kind === 'product' ? {module:'shop'} : {}) }
+  go(kindInfo[item.kind].page,args)
 }
 
 function when(value: string) {
@@ -42,24 +65,24 @@ function when(value: string) {
 
 <template>
   <view class="post-grid">
-    <template v-for="entry in entries" :key="entry.kind + '-' + entry.id">
-      <JobCard v-if="entry.kind==='job'" :job="entry.job" compact />
-      <view v-else-if="entry.kind==='service'" class="post">
-        <button class="post-open" :aria-label="'查看服务 ' + entry.post.title" @tap="emit('viewService', entry.post)">
-          <view class="post-cover service-cover">
-            <image v-if="entry.post.imageCount" :src="servicePostImage(entry.id)" mode="aspectFill" lazy-load />
-            <UiIcon v-else name="entry-services" :size="30" />
+    <template v-for="entry in entries" :key="entry.kind + '-' + entry.post.id">
+      <view v-if="entry.kind!=='post'" class="post">
+        <button class="post-open" :aria-label="'查看' + kindInfo[entry.kind].label + ' ' + entry.post.title" @tap="openRecommendation(entry)">
+          <view class="post-cover" :class="entry.kind+'-cover'">
+            <image v-if="entry.tile.image" :src="entry.tile.image" mode="aspectFill" lazy-load />
+            <UiIcon v-else :name="kindInfo[entry.kind].icon" :size="30" />
+            <text class="post-badge" :class="entry.kind">{{ kindInfo[entry.kind].label }}</text>
           </view>
           <text class="post-title">{{ entry.post.title }}</text>
         </button>
         <view class="post-footer">
-          <view class="post-author">
-            <UiIcon name="location" :size="11" />
-            <text>{{ entry.post.provider }}</text>
+          <view v-if="entry.tile.name" class="post-author">
+            <UiIcon :name="entry.kind==='story' ? 'post-author' : 'location'" :size="11" />
+            <text>{{ entry.tile.name }}</text>
           </view>
-          <text v-if="entry.post.priceCents" class="service-tile-price">{{ money(entry.post.priceCents) }}</text>
+          <text v-if="entry.tile.amount" class="post-amount">{{ entry.tile.amount }}</text>
         </view>
-        <text class="post-type">{{ serviceLabel(entry.post) }}</text>
+        <text v-if="entry.tile.detail" class="post-type">{{ entry.tile.detail }}</text>
       </view>
       <view v-else class="post">
         <button class="post-open" :aria-label="'查看动态 ' + entry.post.title" @tap="emit('view', entry.post)">
@@ -123,9 +146,12 @@ function when(value: string) {
   background: #fbf2d7;
 }
 .post-cover > image { position: absolute; inset: 0; width: 100%; height: 100%; }
-.service-cover { background: #e5f3f2; }
-.service-tile-price { flex: none; margin-left: 4px; color: var(--gold-ink); font-weight: 700; }
-.post-example {
+.service-cover { background: #edf6e9; }
+.product-cover { background: #fff3e8; }
+.job-cover { background: #edf4fc; }
+.story-cover { background: #f4effb; }
+.post-amount { flex: 0 1 auto; min-width: 0; margin-left: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--gold-ink); font-weight: 700; }
+.post-example,.post-badge {
   position: absolute;
   left: 7px;
   top: 7px;
@@ -137,6 +163,11 @@ function when(value: string) {
   font-weight: 700;
   line-height: 1.35;
 }
+.post-badge { z-index: 1; padding: 3px 7px; }
+.post-badge.service { background: #e1f2de; color: #2d5a38; }
+.post-badge.product { background: #ffe7d4; color: #7a441f; }
+.post-badge.job { background: #e0edfb; color: #2c527a; }
+.post-badge.story { background: #eee3f8; color: #613a7d; }
 .post-title { display: block; padding: 8px 9px 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; }
 .post-footer { display: flex; justify-content: space-between; align-items: center; min-height: 28px; padding: 1px 8px 7px; color: #66625a; font-size: 11px; }
 .post-author { display: flex; align-items: center; gap: 4px; min-width: 0; }

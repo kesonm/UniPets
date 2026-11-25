@@ -26,7 +26,7 @@ watch([() => props.active, () => user.value?.id, () => browseDistrict.value?.id,
   error.value = ''
   loading.value = true
   try {
-    const query = '?seed=' + recommendationSeed + (area ? '&district=' + encodeURIComponent(area) : '')
+    const query = '?scope=all&seed=' + recommendationSeed + (area ? '&district=' + encodeURIComponent(area) : '')
     const result = await api<{items: Recommendation[]}>('/h5/posts/recommendations' + query)
     if (current) items.value = result.items
   } catch (cause) {
@@ -42,7 +42,7 @@ watch([() => props.active, () => user.value?.id, () => browseDistrict.value?.id,
   <view class="recommendations">
     <text class="heading">为你推荐</text>
     <PostGrid v-if="items.length" :recommendations="items" :liked="liked" :show-breed="false" show-pet-type reactions
-      @view="go('feed', { id: $event.id })" @view-service="go('services', { id: $event.id })" @like="like" />
+      @view="go('feed', { id: $event.id })" @like="like" />
     <view v-else class="card empty-card" role="status">
       <text>{{ error || (loading ? '正在加载推荐…' : '暂无推荐内容') }}</text>
       <button v-if="error" class="text-button" @tap="retry++">重试</button>

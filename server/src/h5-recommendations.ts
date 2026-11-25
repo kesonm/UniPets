@@ -1,7 +1,12 @@
 import { createHash } from 'node:crypto'
 import { serviceCategories, type PostPetType } from '../../shared/h5-discovery.mjs'
+import type { StoreJob } from '../../shared/h5-jobs.mjs'
+import { catalogProvider, catalogStore, catalogVisible } from './catalog.js'
 import { rows } from './db.js'
+import { districtById } from './districts.js'
+import { publicStoreJobScope, storeJobFields, storeJobsFrom } from './h5-jobs.js'
 import type { ServiceRecord } from './h5-service-posts.js'
+import { publicStories } from './h5-stories.js'
 import { serviceCategoryColumn, serviceCategoryLabel } from './service-categories.js'
 
 export interface PublicPost {
@@ -13,7 +18,11 @@ export interface PublicPost {
   createdAt: Date
 }
 
+type Product = {id:string;title:string;provider:string;description:string;priceCents:number;updatedAt:Date}
+type Job = Omit<StoreJob,'publishedAt'> & {publishedAt:Date}
+type Story = Awaited<ReturnType<typeof publicStories>>[number]
 type Candidate = { kind: 'post'; post: PublicPost } | { kind: 'service'; post: ServiceRecord }
+  | { kind: 'product'; post: Product } | { kind: 'job'; post: Job } | { kind: 'story'; post: Story }
 type PetSignal = { petType: PostPetType; breed: string }
 type Text = { title: string; body: string }
 
@@ -66,8 +75,10 @@ function rankFor(seed: string, pets: PetSignal[], requests: Text[]) {
 
   return (item: Candidate) => {
     const { post } = item
-    const text = (item.kind === 'post' ? post.title + ' ' + item.post.body : post.title + ' ' + item.post.description).toLowerCase()
-    const date = item.kind === 'post' ? item.post.createdAt : item.post.updatedAt
+    const detail = 'body' in post ? post.body : 'description' in post ? post.description : post.petName
+    const text = (post.title + ' ' + detail).toLowerCase()
+    const date = item.kind === 'post' ? item.post.createdAt
+      : 'updatedAt' in item.post ? item.post.updatedAt : item.post.publishedAt
     const age = Math.max(0, (Date.now() - date.getTime()) / 86_400_000)
     const fresh = 1 / (1 + age / 7)
     const match = item.kind === 'post' ? types.has(item.post.petType)
@@ -83,19 +94,37 @@ function rankFor(seed: string, pets: PetSignal[], requests: Text[]) {
   }
 }
 
-export async function recommendedPosts(posts: PublicPost[], services: ServiceRecord[], owner: string | undefined, seed: string) {
+export async function additionalRecommendationPosts(district?: string): Promise<Candidate[]> {
+  const city = districtById(district)?.serviceCityCode ?? null
+  const [products,jobs,stories] = await Promise.all([
+    rows<Product>(`SELECT i.id,i.title,${catalogProvider} AS provider,i.description,i.price_cents AS priceCents,
+      i.updated_at AS updatedAt FROM h5_catalog_items i ${catalogStore}
+      WHERE ${catalogVisible} AND i.kind='product' AND i.price_cents>0 AND i.stock>0
+      ORDER BY i.updated_at DESC,i.id DESC LIMIT 60`),
+    rows<Job>(`SELECT ${storeJobFields} FROM ${storeJobsFrom} WHERE ${publicStoreJobScope}
+      ORDER BY COALESCE(s.city_code=?,FALSE) DESC,j.published_at DESC,j.id DESC LIMIT 60`, [city]),
+    publicStories(),
+  ])
+  return [
+    ...products.map(post => ({kind:'product' as const,post})),
+    ...jobs.map(post => ({kind:'job' as const,post})),
+    ...stories.map(post => ({kind:'story' as const,post})),
+  ]
+}
+
+export async function recommendedPosts(posts: PublicPost[], services: ServiceRecord[], extra: Candidate[], owner: string | undefined, seed: string) {
   const [pets, help] = await recommendationSignals(owner)
   const score = rankFor((owner ?? seed) + ':' + new Date().toISOString().slice(0, 10), pets, help)
   const content: Candidate[] = [
     ...posts.map(post => ({ kind: 'post' as const, post })),
     ...services.map(post => ({ kind: 'service' as const, post })),
+    ...extra,
   ]
   const ranked = content.map(item => ({ item, score: score(item) })).sort((a, b) => b.score - a.score)
   const max = 12
-  const reserved = new Set([
-    ...ranked.filter(row => row.item.kind === 'service').slice(0, max / 2),
-    ...ranked.filter(row => row.item.kind === 'post').slice(0, max / 2),
-  ])
+  const kinds = [...new Set(ranked.map(row => row.item.kind))]
+  const perKind = Math.floor(max / Math.max(kinds.length, 1))
+  const reserved = new Set(kinds.flatMap(kind => ranked.filter(row => row.item.kind === kind).slice(0, perKind)))
   for (const row of ranked) {
     if (reserved.size >= max) break
     reserved.add(row)

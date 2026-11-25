@@ -3,11 +3,11 @@ import { employmentTypes, jobCategories, jobCityLabel, type StoreJob } from '../
 import { go, publicImage } from '../lib/client'
 import UiIcon from './UiIcon.vue'
 
-defineProps<{job:StoreJob;compact?:boolean}>()
+defineProps<{job:StoreJob}>()
 </script>
 
 <template>
-<button :id="'job-'+job.id" class="card job-card" :class="{compact}" @tap="go('jobs',{id:job.id})">
+<button :id="'job-'+job.id" class="card job-card" @tap="go('jobs',{id:job.id})">
   <image v-if="job.imageCount" class="job-cover" :src="publicImage('/h5/jobs/'+job.id+'/images/1')" mode="aspectFill" lazy-load />
   <view class="job-card-heading">
     <text class="heading job-title">{{ job.title }}</text>
@@ -37,5 +37,4 @@ defineProps<{job:StoreJob;compact?:boolean}>()
 .job-meta { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 0; }
 .job-meta text { padding: 2px 7px; border-radius: 5px; background: #f5f0e4; color: #675328; font-size: 11px; }
 .job-address { display: block; margin-top: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.job-card.compact { height: 100%; margin: 0; }
 </style>

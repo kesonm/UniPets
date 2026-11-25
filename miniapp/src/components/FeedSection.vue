@@ -1,48 +1,25 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import type { H5Post } from '../../../src/h5/types'
-import type { StoreJob } from '../../../shared/h5-jobs.mjs'
 import { api, go, message } from '../lib/client'
 import { usePostLikes } from '../lib/post-likes'
 import PostGrid from './PostGrid.vue'
 
 const props = withDefaults(defineProps<{
-  active: boolean; query?: string; petType?: string; includeJobs?: boolean; reload?: number
-}>(), { query: '' })
+  active: boolean; query?: string; petType?: string; autoRefresh?: boolean; showBreed?: boolean; reload?: number
+}>(), { query: '', showBreed: true })
 const emit = defineEmits<{ loaded: [] }>()
-const showJobs = computed(() => props.includeJobs && !props.petType)
 const filters = computed(() => [
   '&q=' + encodeURIComponent(props.query),
   props.petType && '&petType=' + encodeURIComponent(props.petType),
 ].join(''))
 const posts = ref<H5Post[]>([])
-const jobs = ref<StoreJob[]>([])
 const loading = ref(false)
 const error = ref('')
 const page = ref(1)
-const morePosts = ref(false)
-const moreJobs = ref(false)
-const more = computed(() => morePosts.value || moreJobs.value)
-// Wait for both pages to cover a timestamp before showing it in the combined feed.
-const cutoff = computed(() => {
-  if (!showJobs.value) return -Infinity
-  const postTime = morePosts.value ? Date.parse(posts.value[posts.value.length - 1].createdAt) : -Infinity
-  const jobTime = moreJobs.value ? Date.parse(jobs.value[jobs.value.length - 1].publishedAt ?? '') : -Infinity
-  return Math.max(postTime, jobTime)
-})
-const visiblePosts = computed(() => cutoff.value === -Infinity
-  ? posts.value
-  : posts.value.filter(post => Date.parse(post.createdAt) >= cutoff.value))
-const visibleJobs = computed(() => showJobs.value
-  ? jobs.value.filter(job => job.publishedAt && Date.parse(job.publishedAt) >= cutoff.value)
-  : [])
+const more = ref(false)
 let revision = 0
 let loadedFilters: string | undefined
-
-function appendItems<T extends {id:string}>(current: T[], next: T[]) {
-  const ids = new Set(current.map(item => item.id))
-  return [...current, ...next.filter(item => !ids.has(item.id))]
-}
 
 async function load(append = false) {
   const version = ++revision
@@ -51,23 +28,11 @@ async function load(append = false) {
   const nextPage = append ? page.value + 1 : 1
   const query = filters.value
   try {
-    const [social, recruiting] = await Promise.all([
-      !append || morePosts.value
-        ? api<{ posts: H5Post[]; hasMore: boolean }>('/h5/posts?sort=latest&page=' + nextPage + query)
-        : undefined,
-      showJobs.value && (!append || moreJobs.value)
-        ? api<{ items: StoreJob[]; hasMore: boolean }>('/h5/jobs?page=' + nextPage + query)
-        : undefined,
-    ])
+    const result = await api<{ posts: H5Post[]; hasMore: boolean }>('/h5/posts?sort=latest&page=' + nextPage + query)
     if (version !== revision) return
-    if (social) {
-      posts.value = append ? appendItems(posts.value,social.posts) : social.posts
-      morePosts.value = social.hasMore
-    }
-    if (recruiting) {
-      jobs.value = append ? appendItems(jobs.value,recruiting.items) : recruiting.items
-      moreJobs.value = recruiting.hasMore
-    }
+    const seen = new Set(posts.value.map(item => item.id))
+    posts.value = append ? [...posts.value, ...result.posts.filter(item => !seen.has(item.id))] : result.posts
+    more.value = result.hasMore
     page.value = nextPage
     loadedFilters = query
   } catch (cause) {
@@ -87,16 +52,14 @@ watch([() => props.active, filters, () => props.reload], ([active,query]) => {
   }
   if (query !== loadedFilters) {
     posts.value = []
-    jobs.value = []
-    morePosts.value = false
-    moreJobs.value = false
+    more.value = false
   }
   void load()
 }, { immediate: true })
 onUnmounted(() => { revision++ })
 
 watch(() => props.active, (active, _, onCleanup) => {
-  if (!active || !props.includeJobs) return
+  if (!active || !props.autoRefresh) return
   const timer = setInterval(() => { if (!loading.value) void load() }, 5 * 60 * 1000)
   onCleanup(() => clearInterval(timer))
 }, { immediate: true })
@@ -116,8 +79,8 @@ function view(post: H5Post) {
       <text>{{ error }}</text>
       <button class="text-button" @tap="load()">重新加载</button>
     </view>
-    <PostGrid v-else-if="visiblePosts.length || visibleJobs.length" :posts="visiblePosts" :jobs="visibleJobs"
-      :liked="liked" :show-breed="!includeJobs" show-pet-type reactions @view="view" @like="like" />
+    <PostGrid v-else-if="posts.length" :posts="posts" :liked="liked" :show-breed="showBreed"
+      show-pet-type reactions @view="view" @like="like" />
     <view v-else class="card empty-card" role="status">
       <text>{{ loading ? '正在加载帖子…' : query || petType ? '没有匹配的帖子' : '还没有发布的帖子' }}</text>
     </view>

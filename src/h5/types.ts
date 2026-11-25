@@ -1,5 +1,6 @@
 import type { Pet } from '../lib/types'
-import type { BusinessModule } from './business'
+import type { BusinessModule, StorySummary } from './business'
+import type { StoreJob } from '../../shared/h5-jobs.mjs'
 import type { PostPetType, ServiceCoordinates } from '../../shared/h5-discovery.mjs'
 import type { District } from '../../shared/h5-districts.mjs'
 export type { District } from '../../shared/h5-districts.mjs'
@@ -80,6 +81,8 @@ export interface PersonalContentItem {
 }
 
 export type Recommendation = { kind: 'post'; post: H5Post } | { kind: 'service'; post: ServicePost }
+  | { kind: 'product'; post: {id:string; title:string; provider:string; priceCents:number} }
+  | { kind: 'job'; post: StoreJob } | { kind: 'story'; post: StorySummary }
 
 export interface H5Social {
   published: H5Post[]
