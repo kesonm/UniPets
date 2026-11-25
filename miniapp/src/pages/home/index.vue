@@ -156,12 +156,12 @@ watch([query, kind, () => browseDistrict.value?.id, retry], async ([term, target
     </view>
 
     <view v-if="!query" class="market-content">
-      <HomeRecommendations :active="active" />
       <button id="entry-stories" class="stories-link" @tap="go('stories')">
         <view class="stories-link-icon"><UiIcon name="entry-stories" :size="18" /></view>
         <text>宠物短剧漫剧</text>
         <UiIcon name="right" :size="12" />
       </button>
+      <HomeRecommendations :active="active" />
     </view>
     <view v-else-if="kind === 'feed'" class="market-content">
       <FeedSection :active="active" :query="query" />
@@ -202,7 +202,7 @@ watch([query, kind, () => browseDistrict.value?.id, retry], async ([term, target
   align-items: center;
   gap: 10px;
   width: 100%;
-  margin: 12px 0 4px;
+  margin: 0 0 12px;
   padding: 9px 12px;
   border: 1px solid var(--border);
   border-radius: 13px;

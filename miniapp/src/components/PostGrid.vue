@@ -1,26 +1,32 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { StoreJob } from '../../../shared/h5-jobs.mjs'
-import type { H5Post } from '../../../src/h5/types'
+import type { H5Post, Recommendation, ServicePost } from '../../../src/h5/types'
 import { areaLabel } from '../../../src/h5/business'
-import { postPetTypeLabels } from '../../../shared/h5-discovery.mjs'
+import { postPetTypeLabels, serviceCategories } from '../../../shared/h5-discovery.mjs'
 import { publicImage } from '../lib/client'
 import UiIcon from './UiIcon.vue'
 import JobCard from './JobCard.vue'
 
-const props = withDefaults(defineProps<{ posts: readonly H5Post[]; jobs?: readonly StoreJob[]; showBreed?: boolean; liked?: string[]; showArea?: boolean; showPetType?: boolean; reactions?: boolean }>(), {
+const props = withDefaults(defineProps<{ posts?: readonly H5Post[]; jobs?: readonly StoreJob[]; recommendations?: readonly Recommendation[]; showBreed?: boolean; liked?: string[]; showArea?: boolean; showPetType?: boolean; reactions?: boolean }>(), {
+  posts: () => [],
   liked: () => [],
   jobs: () => [],
   showBreed: true,
 })
-const emit = defineEmits<{ view: [post: H5Post]; like: [post: H5Post] }>()
+const emit = defineEmits<{ view: [post: H5Post]; viewService: [post: ServicePost]; like: [post: H5Post] }>()
 
 const entries = computed(() => {
+  if (props.recommendations) return props.recommendations.map(item => ({...item, id:item.post.id}))
   const posts = props.posts.map(post => ({kind:'post' as const, id:post.id, date:post.createdAt, post}))
   const jobs = props.jobs.map(job => ({kind:'job' as const, id:job.id, date:job.publishedAt ?? '', job}))
   if (!jobs.length) return posts
   return [...posts,...jobs].sort((a,b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
 })
+
+function serviceLabel(post: ServicePost) {
+  return post.categoryLabel || serviceCategories.find(category => category.id === post.category)?.label || '其他服务'
+}
 
 function when(value: string) {
   const date = new Date(value)
@@ -37,6 +43,19 @@ function when(value: string) {
   <view class="post-grid">
     <template v-for="entry in entries" :key="entry.kind + '-' + entry.id">
       <JobCard v-if="entry.kind==='job'" :job="entry.job" compact />
+      <view v-else-if="entry.kind==='service'" class="post">
+        <button class="post-open" :aria-label="'查看服务 ' + entry.post.title" @tap="emit('viewService', entry.post)">
+          <view class="post-cover service-cover"><UiIcon name="entry-services" :size="30" /></view>
+          <text class="post-title">{{ entry.post.title }}</text>
+        </button>
+        <view class="post-footer">
+          <view class="post-author">
+            <UiIcon name="location" :size="11" />
+            <text>{{ entry.post.provider }}</text>
+          </view>
+        </view>
+        <text class="post-type">{{ serviceLabel(entry.post) }}</text>
+      </view>
       <view v-else class="post">
         <button class="post-open" :aria-label="'查看动态 ' + entry.post.title" @tap="emit('view', entry.post)">
           <view class="post-cover">
@@ -99,6 +118,7 @@ function when(value: string) {
   background: #fbf2d7;
 }
 .post-cover > image { position: absolute; inset: 0; width: 100%; height: 100%; }
+.service-cover { background: #e5f3f2; }
 .post-example {
   position: absolute;
   left: 7px;

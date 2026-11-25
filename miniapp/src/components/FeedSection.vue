@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import type { H5Post, H5Social } from '../../../src/h5/types'
+import type { H5Post } from '../../../src/h5/types'
 import type { StoreJob } from '../../../shared/h5-jobs.mjs'
-import { api, go, message, toast, user } from '../lib/client'
+import { api, go, message } from '../lib/client'
+import { usePostLikes } from '../lib/post-likes'
 import PostGrid from './PostGrid.vue'
 
 const props = withDefaults(defineProps<{
@@ -16,7 +17,6 @@ const filters = computed(() => [
 ].join(''))
 const posts = ref<H5Post[]>([])
 const jobs = ref<StoreJob[]>([])
-const liked = ref<string[]>([])
 const loading = ref(false)
 const error = ref('')
 const page = ref(1)
@@ -101,37 +101,12 @@ watch(() => props.active, (active, _, onCleanup) => {
   onCleanup(() => clearInterval(timer))
 }, { immediate: true })
 
-watch([() => props.active, () => user.value?.id], async ([active, owner], _, onCleanup) => {
-  let current = true
-  onCleanup(() => { current = false })
-  liked.value = []
-  if (!active || !owner) return
-  try {
-    const result = await api<H5Social>('/h5/me')
-    if (current) liked.value = result.likedIds
-  } catch { /* Feed reading does not require reactions. */ }
-}, { immediate: true })
+const { liked, like } = usePostLikes(() => props.active, (id, likes) => {
+  posts.value = posts.value.map(item => item.id === id ? { ...item, likes } : item)
+})
 
 function view(post: H5Post) {
   go('feed', { id: post.id })
-}
-const reacting = new Set<string>()
-async function like(post: H5Post) {
-  if (!user.value) return view(post)
-  if (reacting.has(post.id)) return
-  const owner = user.value.id
-  const active = !liked.value.includes(post.id)
-  reacting.add(post.id)
-  try {
-    const result = await api<{ likes: number }>('/h5/posts/' + post.id + '/reaction', 'PUT', { kind: 'like', active })
-    if (user.value?.id !== owner) return
-    liked.value = active ? liked.value.concat(post.id) : liked.value.filter(id => id !== post.id)
-    posts.value = posts.value.map(item => item.id === post.id ? { ...item, likes: result.likes } : item)
-  } catch (cause) {
-    toast(message(cause))
-  } finally {
-    reacting.delete(post.id)
-  }
 }
 </script>
 

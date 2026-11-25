@@ -1,17 +1,22 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { postPetTypeLabels, serviceCategories } from '../../../shared/h5-discovery.mjs'
 import type { Recommendation } from '../../../src/h5/types'
-import { api, go, message, publicImage, user } from '../lib/client'
+import { api, go, message, user } from '../lib/client'
 import { browseDistrict } from '../lib/location'
 import { recommendationSeed } from '../lib/home'
-import UiIcon from './UiIcon.vue'
+import { usePostLikes } from '../lib/post-likes'
+import PostGrid from './PostGrid.vue'
 
 const props = defineProps<{ active: boolean }>()
 const items = ref<Recommendation[]>([])
 const loading = ref(false)
 const error = ref('')
 const retry = ref(0)
+const { liked, like } = usePostLikes(() => props.active, (id, likes) => {
+  items.value = items.value.map(item => item.kind === 'post' && item.post.id === id
+    ? { ...item, post: { ...item.post, likes } }
+    : item)
+})
 
 watch([() => props.active, () => user.value?.id, () => browseDistrict.value?.id, retry], async ([active, , area], _, onCleanup) => {
   if (!active) return
@@ -31,52 +36,16 @@ watch([() => props.active, () => user.value?.id, () => browseDistrict.value?.id,
   }
 }, { immediate: true })
 
-function label(item: Recommendation) {
-  if (item.kind === 'service') return item.post.categoryLabel || serviceCategories.find(category => category.id === item.post.category)?.label || '其他服务'
-  return postPetTypeLabels[item.post.petType || item.post.species] + ' · 动态'
-}
-function open(item: Recommendation) {
-  go(item.kind === 'service' ? 'services' : 'feed', { id: item.post.id })
-}
 </script>
 
 <template>
   <view class="recommendations">
     <text class="heading">为你推荐</text>
-    <button v-for="item in items" :key="item.kind + '-' + item.post.id" class="card recommended-card" @tap="open(item)">
-      <view class="recommended-copy">
-        <view class="recommended-meta">
-          <text :class="['recommended-type', { merchant: item.kind === 'service' }]">{{ label(item) }}</text>
-          <text class="recommended-author">{{ item.kind === 'service' ? item.post.provider : item.post.author }}</text>
-        </view>
-        <text class="recommended-title">{{ item.post.title }}</text>
-        <text class="recommended-excerpt">{{ item.kind === 'service' ? item.post.description : item.post.body }}</text>
-      </view>
-      <image
-        v-if="item.kind === 'post' && item.post.hasImage"
-        class="recommended-image"
-        :src="publicImage('/h5/posts/' + item.post.id + '/image')"
-        mode="aspectFill"
-        lazy-load
-      />
-      <UiIcon v-else name="right" :size="12" />
-    </button>
-    <view v-if="!items.length" class="card empty-card" role="status">
+    <PostGrid v-if="items.length" :recommendations="items" :liked="liked" :show-breed="false" show-pet-type reactions
+      @view="go('feed', { id: $event.id })" @view-service="go('services', { id: $event.id })" @like="like" />
+    <view v-else class="card empty-card" role="status">
       <text>{{ error || (loading ? '正在加载推荐…' : '暂无推荐内容') }}</text>
       <button v-if="error" class="text-button" @tap="retry++">重试</button>
     </view>
   </view>
 </template>
-
-<style scoped>
-.recommended-card { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
-.recommended-copy { flex: 1; min-width: 0; }
-.recommended-meta { display: flex; align-items: center; gap: 7px; font-size: 11px; }
-.recommended-type { flex: none; padding: 2px 6px; border-radius: 5px; background: #f3eee1; color: #624d21; }
-.recommended-type.merchant { background: #fdf1c4; }
-.recommended-author { min-width: 0; overflow: hidden; color: var(--muted); white-space: nowrap; text-overflow: ellipsis; }
-.recommended-title,.recommended-excerpt { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.recommended-title { margin: 5px 0 2px; color: var(--ink); font-size: 15px; }
-.recommended-excerpt { color: var(--muted); font-size: 12px; font-weight: 400; }
-.recommended-image { flex: none; width: 62px; height: 62px; border-radius: 9px; }
-</style>
