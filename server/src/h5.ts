@@ -23,13 +23,14 @@ import { h5ServicePostsRouter, servicePosts } from './h5-service-posts.js'
 import { h5StoreBindingRouter } from './h5-store-binding.js'
 import { h5MyContentRouter } from './h5-my-content.js'
 import { h5JobsRouter } from './h5-jobs.js'
+import { h5StorefrontRouter, requirePublishingStore } from './h5-storefront.js'
 import { additionalRecommendationPosts, recommendedPosts, type PublicPost } from './h5-recommendations.js'
 import { getRecommendationLabelSettings } from './recommendation-labels.js'
 import { districtAreaIds, districtInput, districtRouter, knownDistrictInput, withDistrict } from './districts.js'
 
 export const h5Router = Router()
 h5Router.use('/operations',h5OperationsRouter)
-h5Router.use(districtRouter,h5ServicePostsRouter,h5StoreBindingRouter,h5MyContentRouter,h5JobsRouter,
+h5Router.use(districtRouter,h5ServicePostsRouter,h5StoreBindingRouter,h5MyContentRouter,h5JobsRouter,h5StorefrontRouter,
   h5ProgramsRouter,h5DirectoryRouter,h5OrdersRouter,h5PetRecordsRouter,h5StoriesRouter,h5SocialPagesRouter)
 const uuid = z.string().uuid()
 const area = z.string().refine(id => h5Areas.some(item => item.id === id), '请选择已有商圈')
@@ -145,10 +146,12 @@ const profilePetType = `CASE WHEN p.species='other' AND (LOCATE('兔',p.breed)>0
 const postPetType = `COALESCE(post.pet_type,(${profilePetType}))`
 const postSelect = `SELECT post.id,post.title,post.body,post.area,post.topic,post.created_at AS createdAt,
   p.name AS petName,p.species,p.breed,${postPetType} AS petType,u.display_name AS author,
+  merchant.id AS storeId,merchant.name AS storeName,
   (post.asset_id IS NOT NULL AND post.hidden_at IS NULL) AS hasImage,
   (post.hidden_at IS NOT NULL) AS hidden,
   (SELECT COUNT(*) FROM h5_reactions r WHERE r.post_id=post.id AND r.kind='like') AS likes
-  FROM h5_posts post JOIN pets p ON p.id=post.pet_id JOIN users u ON u.id=post.user_id`
+  FROM h5_posts post JOIN pets p ON p.id=post.pet_id JOIN users u ON u.id=post.user_id
+  LEFT JOIN h5_stores merchant ON merchant.id=post.store_id AND merchant.owner_user_id=post.user_id AND merchant.enabled=TRUE`
 type PostWithArea = PublicPost & {area: string | null}
 
 h5Router.get('/posts', async (req, res) => {
@@ -249,7 +252,7 @@ h5Router.get('/me', async (req, res) => {
 
 h5Router.post('/posts', async (req, res) => {
   const input = z.object({petId:uuid, assetId:uuid.nullable().default(null), area:postArea.nullable().default(null),
-    petType:z.enum(['rabbit','other']).optional(),
+    petType:z.enum(['rabbit','other']).optional(), storeId:uuid.nullable().optional(),
     topic:topics.default('daily'),title:z.string().trim().min(1,'请填写标题').max(100), body:z.string().trim().max(3000).default('')}).parse(req.body)
   const owner = req.user.id
   const [pet] = await rows<{species: PostPetType}>('SELECT species FROM pets WHERE id=? AND user_id=?', [input.petId,owner])
@@ -259,11 +262,30 @@ h5Router.post('/posts', async (req, res) => {
     if (asset.kind!=='photo' || asset.petId!==input.petId) throw new HttpError(400,'请选择当前宠物的照片')
   }
   const id = randomUUID()
-  await db.execute(`INSERT INTO h5_posts (id,user_id,pet_id,asset_id,title,body,area,topic,pet_type,created_at)
-    VALUES (?,?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3))`,
-  [id,owner,input.petId,input.assetId,input.title,input.body,input.area,input.topic,pet.species==='other' ? input.petType ?? null : null])
+  await transaction(async connection => {
+    if (input.storeId) await requirePublishingStore(connection,input.storeId,owner)
+    await connection.execute(`INSERT INTO h5_posts (id,user_id,pet_id,asset_id,title,body,area,topic,pet_type,store_id,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3))`,
+    [id,owner,input.petId,input.assetId,input.title,input.body,input.area,input.topic,
+      pet.species==='other' ? input.petType ?? null : null,input.storeId??null])
+  })
   const [post] = await rows<PostWithArea>(`${postSelect} WHERE post.id=?`, [id])
   res.status(201).json({post:withDistrict(post)})
+})
+
+h5Router.put('/posts/:id/store', async (req,res) => {
+  const id = uuid.parse(req.params.id)
+  const {storeId} = z.object({storeId:uuid.nullable()}).strict().parse(req.body)
+  await transaction(async connection => {
+    if (storeId) await requirePublishingStore(connection,storeId,req.user.id)
+    const [updated] = await connection.execute<ResultSetHeader>(
+      'UPDATE h5_posts SET store_id=? WHERE id=? AND user_id=?',[storeId,id,req.user.id],
+    )
+    if (!updated.affectedRows) throw new HttpError(404,'动态不存在')
+  })
+  const [post] = await rows<PostWithArea>(`${postSelect} WHERE post.id=? AND post.user_id=?`,[id,req.user.id])
+  if (!post) throw new HttpError(404,'动态不存在')
+  res.json({post:withDistrict(post)})
 })
 
 h5Router.delete('/posts/:id', async (req, res) => {

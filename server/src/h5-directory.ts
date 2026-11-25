@@ -14,6 +14,7 @@ const uuid = z.string().uuid()
 
 interface CatalogItem {
   id: string
+  storeId: string|null
   module: z.infer<typeof catalogModules>
   category: string
   kind: 'article'|'appointment'|'enrollment'|'product'|'group'|'link'
@@ -34,7 +35,7 @@ interface CatalogItem {
   salesCount?: number
   externalUrl: string|null
 }
-const fields = `i.id,i.module,i.category,i.kind,i.title,${catalogProvider} AS provider,i.description,
+const fields = `i.id,store.id AS storeId,i.module,i.category,i.kind,i.title,${catalogProvider} AS provider,i.description,
   ${catalogArea} AS area,${catalogVenue} AS venue,i.starts_at AS startsAt,i.closes_at AS closesAt,
   store.district_code AS storeDistrictCode,store.city_code AS cityCode,
   CAST(store.latitude AS DOUBLE) AS latitude,CAST(store.longitude AS DOUBLE) AS longitude,

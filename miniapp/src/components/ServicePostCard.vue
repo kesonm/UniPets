@@ -4,6 +4,7 @@ import type { ServicePost } from '../../../src/h5/types'
 import { serviceCategories } from '../../../shared/h5-discovery.mjs'
 import { money } from '../lib/cart'
 import { servicePostImage } from '../lib/client'
+import StoreLink from './StoreLink.vue'
 import UiIcon from './UiIcon.vue'
 
 const props = defineProps<{ post: ServicePost; detail?: boolean }>()
@@ -33,13 +34,14 @@ function preview(current: string) {
       <view v-else class="browse-card-cover"><UiIcon name="entry-services" :size="32" /></view>
       <view class="browse-card-copy">
         <text class="browse-card-title">{{ post.title }}</text>
-        <text class="browse-card-meta">{{ [post.provider, categoryName].filter(Boolean).join(' · ') }}</text>
+        <text class="browse-card-meta">{{ post.storeId ? categoryName : [post.provider, categoryName].filter(Boolean).join(' · ') }}</text>
         <view class="service-list-price">
           <text v-if="post.priceCents !== null" class="service-price">{{ money(post.priceCents) }}</text>
           <text v-if="distance" class="browse-card-meta">{{ distance }}</text>
         </view>
       </view>
     </button>
+    <view v-if="post.storeId" class="service-store"><StoreLink :store-id="post.storeId" :name="post.provider" /></view>
     <view class="service-list-actions">
       <button class="text-button" :aria-label="'点赞 ' + post.likes" :aria-pressed="Boolean(post.liked)" @tap="emit('like')">
         <UiIcon :name="post.liked ? 'star-active' : 'star'" :size="14" />{{ post.likes }}
@@ -52,7 +54,8 @@ function preview(current: string) {
   <view v-else class="card service-card">
     <view class="spread service-meta">
       <text class="service-category">{{ categoryName }}</text>
-      <text class="sub">{{ post.provider }}</text>
+      <StoreLink v-if="post.storeId" :store-id="post.storeId" :name="post.provider" />
+    <text v-else class="sub">{{ post.provider }}</text>
     </view>
     <text class="heading service-title">{{ post.title }}</text>
     <view v-if="images.length" class="service-gallery" :class="{ single:images.length===1 }">
@@ -83,6 +86,7 @@ function preview(current: string) {
 .service-list-card { display: flex; flex-direction: column; }
 .service-open { display: block; width: 100%; padding: 0; border: 0; border-radius: 0; text-align: left; }
 .service-list-price { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 7px; }
+.service-store { padding: 0 9px; }
 .service-list-actions { display: flex; gap: 6px; margin: auto 8px 0; border-top: 1px solid var(--border); }
 .service-list-actions .text-button { flex: 1; min-width: 0; min-height: 32px; padding: 0 2px; font-size: 11px; }
 .service-card { overflow: hidden; }

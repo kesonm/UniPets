@@ -6,10 +6,12 @@ import { areaLabel } from '../../../../src/h5/business'
 import { examplePosts, feedSorting } from '../../../../src/h5/home'
 import type { Pet, Asset } from '../../../../src/lib/types'
 import { api, user, go, publicImage, confirm, toast } from '../../lib/client'
+import { publishingStoreOptions } from '../../lib/stores'
 import { listPets } from '../../lib/pets'
 import { pageLoad, submitAction } from '../../lib/page'
 import { homeImage } from '../../lib/home'
 import { changeBrowseLocation, openMapPicker, selectedLocation, selectedLocationLabel, type MapLocation } from '../../lib/location'
+import StoreLink from '../../components/StoreLink.vue'
 import LoadState from '../../components/LoadState.vue'
 import LoginCard from '../../components/LoginCard.vue'
 import PetPicker from '../../components/PetPicker.vue'
@@ -45,6 +47,9 @@ const mineTab = ref('published'),
   title = ref(''),
   body = ref(''),
   reply = ref('')
+const storeId = ref('')
+const stores = ref<{id:string;label:string}[]>([])
+const editingStore = ref(false)
 const selectedPet = computed(() => pets.value.find(pet => pet.id === petId.value))
 const visiblePosts = computed(() =>
   mode.value === 'mine'
@@ -87,7 +92,9 @@ async function fetchPage(n: number) {
 async function load() {
   if (mode.value === 'all') return fetchPage(1)
   if (mode.value === 'write' && user.value) {
-    const [p, a] = await Promise.all([listPets(), api<{ assets: Asset[] }>('/assets?kind=photo')])
+    const [p, a, options] = await Promise.all([listPets(), api<{ assets: Asset[] }>('/assets?kind=photo'), publishingStoreOptions()])
+    stores.value = options
+    if (!options.some(option => option.id === storeId.value)) storeId.value = ''
     pets.value = p
     assets.value = a.assets
     if (!p.some((x) => x.id === petId.value)) petId.value = p[0]?.id || ''
@@ -121,6 +128,9 @@ const { error, loading, refresh } = pageLoad(load, () => {
   myComments.value = []
   pets.value = []
   assets.value = []
+  stores.value = []
+  storeId.value = ''
+  editingStore.value = false
 })
 const { run, busy, error: actionError } = submitAction()
 function setSort(value: string) {
@@ -139,9 +149,27 @@ function publish() {
       body: body.value,
       area: postLocation.value?.district.id ?? null,
       topic: topic.value,
+      ...(storeId.value ? {storeId:storeId.value} : {}),
       ...(selectedPet.value?.species === 'other' ? { petType: petType.value } : {}),
     })
     uni.redirectTo({ url: '/pages/feed/index?id=' + r.post.id })
+  })
+}
+function editStore() {
+  return run(async () => {
+    const options = await publishingStoreOptions()
+    if (options.length < 2) throw new Error('暂无可关联的营业门店')
+    stores.value = options
+    storeId.value = current.value?.storeId || ''
+    editingStore.value = true
+  })
+}
+function saveStore() {
+  return run(async () => {
+    const result = await api<{post:H5Post}>('/h5/posts/'+id.value+'/store','PUT',{storeId:storeId.value || null})
+    current.value = result.post
+    editingStore.value = false
+    toast('已更新发布门店')
   })
 }
 function react(kind: 'like' | 'favorite') {
@@ -231,6 +259,10 @@ const owned = computed(() => mode.value === 'private' ? Boolean(current.value &&
       <ChoiceField v-model="topic" :options="topics" />
       <text class="label">公开地区（选填）</text>
       <button class="field" @tap="choosePostLocation">{{ areaLabel(null, postLocation?.district) || '地图选位置' }}</button>
+      <template v-if="stores.length > 1">
+        <text class="label">发布门店</text>
+        <ChoiceField v-model="storeId" :options="stores" />
+      </template>
       <text class="label">档案照片</text>
       <ChoiceField v-model="assetId" :options="photoOptions" />
       <view class="actions">
@@ -241,6 +273,7 @@ const owned = computed(() => mode.value === 'private' ? Boolean(current.value &&
       <view class="card">
         <text class="title">{{ current.title }}</text>
         <text class="sub">{{ [current.petName, current.author, areaLabel(current.area, current.district)].filter(Boolean).join(' · ') }}</text>
+        <StoreLink v-if="current.storeId && !current.hidden" :store-id="current.storeId" :name="current.storeName" />
         <text v-if="current.hidden" class="sub">这条动态已隐藏</text>
         <image
           v-if="current.hasImage"
@@ -257,8 +290,19 @@ const owned = computed(() => mode.value === 'private' ? Boolean(current.value &&
             {{ social?.savedIds.includes(id) ? '已收藏' : '收藏' }}
           </button>
           <button v-if="mode !== 'private'" class="small" open-type="share">分享</button>
+          <button v-if="owned && !editingStore" class="small" :disabled="busy" @tap="editStore">
+            {{ current.storeId ? '更改发布门店' : '关联门店' }}
+          </button>
           <button v-if="owned" class="small danger" :disabled="busy" @tap="remove()">删除</button>
         </view>
+        <template v-if="owned && editingStore">
+          <text class="label">发布门店</text>
+          <ChoiceField v-model="storeId" :options="stores" :disabled="busy" />
+          <view class="actions">
+            <button class="small" :disabled="busy" @tap="editingStore = false">取消</button>
+            <button class="small primary" :disabled="busy" @tap="saveStore">保存</button>
+          </view>
+        </template>
       </view>
       <LoginCard v-if="!user && !example" />
       <view v-if="!example && mode !== 'private'" class="card">

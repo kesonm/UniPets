@@ -8,6 +8,7 @@ import { go, productCover } from '../lib/client'
 import BrowseLocation from './BrowseLocation.vue'
 import LoadState from './LoadState.vue'
 import ChoiceField from './ChoiceField.vue'
+import StoreLink from './StoreLink.vue'
 import UiIcon from './UiIcon.vue'
 
 const props = withDefaults(defineProps<{ listings: Listing[]; query?: string; filter?: boolean; loading?: boolean; error?: string }>(), { query: '' })
@@ -101,9 +102,10 @@ watch(selectedLocation, location => {
         <image v-if="product.hasCover" class="product-art" :src="productCover(product.id)" mode="aspectFill" lazy-load />
         <view v-else class="product-art product-art-platform"><UiIcon name="entry-shop" :size="30" /></view>
         <text class="product-title">{{ product.name }}</text>
-        <text class="product-merchant">{{ product.merchant }}</text>
-        <text class="product-area">{{ areaLabel(product.area, product.district) || (product.stock === 0 ? '暂无库存' : '') }}</text>
       </button>
+      <view v-if="product.storeId" class="product-store"><StoreLink :store-id="product.storeId" :name="product.merchant" /></view>
+      <text v-else class="product-merchant">{{ product.merchant }}</text>
+      <text class="product-area">{{ areaLabel(product.area, product.district) || (product.stock === 0 ? '暂无库存' : '') }}</text>
       <view class="product-foot">
         <text>¥<text class="product-price">{{ amount(product.variants[0].cents) }}</text></text>
         <button class="text-button product-plus" :aria-label="'选购' + product.name" @tap="show(product)"><UiIcon name="plus" /></button>
@@ -128,6 +130,7 @@ watch(selectedLocation, location => {
 .product-art-platform { display: flex; align-items: center; justify-content: center; aspect-ratio: 1.45; }
 .product-title, .product-merchant, .product-area { display: block; padding: 1px 9px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .product-title { padding-top: 8px; font-size: 14px; }
+.product-store { padding: 0 9px; }
 .product-merchant, .product-area { color: #66625a; font-size: 12px; font-weight: 400; }
 .product-area { font-size: 10px; }
 .product-foot { display: flex; justify-content: space-between; align-items: center; padding: 5px 8px 8px; color: #b34323; }

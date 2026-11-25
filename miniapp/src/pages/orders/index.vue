@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { onHide } from '@dcloudio/uni-app'
+import { onHide, onShow } from '@dcloudio/uni-app'
 import type { H5Order } from '../../../../src/h5/business'
 import { api, user, go, confirm, toast, productCover } from '../../lib/client'
-import { cart, orderPanel, quantity, checkout, money, statusName } from '../../lib/cart'
+import { cart, orderPanel, quantity, checkout, money, statusName, refreshCartStores, type CartLine } from '../../lib/cart'
 import { pageLoad, submitAction } from '../../lib/page'
 import { useTabPage } from '../../lib/tab-page'
 import LoginCard from '../../components/LoginCard.vue'
@@ -18,6 +18,23 @@ const coverErrors = ref(new Set<string>())
 const selectedItems = computed(() => cart.value.items.filter(item => selected.value.has(item.itemId)))
 const allSelected = computed(() => cart.value.items.length > 0 && selectedItems.value.length === cart.value.items.length)
 const total = computed(() => selectedItems.value.reduce((sum, item) => sum + item.unitCents * item.quantity, 0))
+type CartGroup = {storeId: string|null; label: string; items: CartLine[]}
+const groups = computed(() => {
+  const grouped = new Map<string|null, CartGroup>()
+  for (const item of cart.value.items) {
+    const storeId = item.storeId ?? null
+    let group = grouped.get(storeId)
+    if (!group) {
+      group = {storeId,label:item.storeName || (storeId ? '门店' : '其他商品'),items:[]}
+      grouped.set(storeId,group)
+    }
+    group.items.push(item)
+  }
+  return [...grouped.values()].map(group => {
+    const count = group.items.filter(item => selected.value.has(item.itemId)).length
+    return {...group,checked:count === group.items.length,partial:count > 0 && count < group.items.length}
+  })
+})
 
 watch(() => cart.value.items.map(item => item.itemId), ids => {
   selected.value = new Set(ids.filter(id => selected.value.has(id)))
@@ -37,6 +54,7 @@ const { error, loading, refresh } = pageLoad(load, () => {
   coverErrors.value = new Set()
 })
 const { run, busy, error: actionError } = submitAction()
+onShow(() => { void refreshCartStores().catch(() => {}) })
 onHide(() => { orderPanel.value = 'cart' })
 function shop() { go('directory', { module: 'shop' }) }
 function product(id: string) { go('directory', { module: 'shop', id }) }
@@ -46,6 +64,12 @@ function toggleSelected(id: string) {
 }
 function toggleAll() {
   selected.value = new Set(allSelected.value ? [] : cart.value.items.map(item => item.itemId))
+}
+function toggleGroup(group: CartGroup & {checked:boolean}) {
+  for (const item of group.items) {
+    if (group.checked) selected.value.delete(item.itemId)
+    else selected.value.add(item.itemId)
+  }
 }
 function openSupport(order: H5Order) {
   support.value = order.id
@@ -97,27 +121,39 @@ function help(id: string) {
         <text class="cart-empty-title">购物车还是空的</text>
         <button class="primary" @tap="shop">去商城</button>
       </view>
-      <view v-else class="cart-list">
-        <view v-for="i in cart.items" :key="i.itemId" class="cart-item">
-          <button class="cart-checkbox" :aria-label="'勾选' + i.title" :aria-pressed="selected.has(i.itemId)" :disabled="busy"
-            @tap="toggleSelected(i.itemId)">
-            <text :class="['cart-checkmark', { checked: selected.has(i.itemId) }]">{{ selected.has(i.itemId) ? '✓' : '' }}</text>
-          </button>
-          <button class="cart-photo" :aria-label="'查看' + i.title" @tap="product(i.itemId)">
-            <image v-if="i.hasCover !== false && i.hasCover !== 0 && !coverErrors.has(i.itemId)"
-              :src="productCover(i.itemId)" mode="aspectFill" lazy-load @error="coverErrors.add(i.itemId)" />
-            <UiIcon v-else name="entry-shop" :size="23" />
-          </button>
-          <view class="cart-item-details">
-            <text class="cart-item-title" @tap="product(i.itemId)">{{ i.title }}</text>
-            <view class="cart-item-meta">
-              <text class="cart-price">{{ money(i.unitCents) }}</text>
-              <view class="cart-stepper" role="group" :aria-label="i.title + '数量'">
-                <button class="cart-minus" :aria-label="i.quantity === 1 ? '移除' + i.title : '减少数量'" :disabled="busy"
-                  @tap="quantity(i.itemId, i.quantity - 1)">−</button>
-                <text class="cart-quantity">{{ i.quantity }}</text>
-                <button class="cart-plus" aria-label="增加数量" :disabled="busy || i.quantity >= 99"
-                  @tap="quantity(i.itemId, i.quantity + 1)">＋</button>
+      <view v-else class="cart-groups">
+        <view v-for="group in groups" :key="group.storeId || 'other'" class="cart-list">
+          <view class="cart-store">
+            <button class="cart-checkbox cart-store-checkbox" :aria-label="'选择' + group.label + '的全部商品'"
+              :aria-pressed="group.checked" :disabled="busy" @tap="toggleGroup(group)">
+              <text :class="['cart-checkmark', {checked:group.checked,partial:group.partial}]">{{ group.checked ? '✓' : group.partial ? '−' : '' }}</text>
+            </button>
+            <button v-if="group.storeId" class="text-button cart-store-name" @tap="go('storefront',{id:group.storeId})">
+              <UiIcon name="entry-shop" :size="15" /><text>{{ group.label }}</text><UiIcon name="right" :size="12" />
+            </button>
+            <text v-else class="cart-store-name">{{ group.label }}</text>
+          </view>
+          <view v-for="i in group.items" :key="i.itemId" class="cart-item">
+            <button class="cart-checkbox" :aria-label="'勾选' + i.title" :aria-pressed="selected.has(i.itemId)" :disabled="busy"
+              @tap="toggleSelected(i.itemId)">
+              <text :class="['cart-checkmark', { checked: selected.has(i.itemId) }]">{{ selected.has(i.itemId) ? '✓' : '' }}</text>
+            </button>
+            <button class="cart-photo" :aria-label="'查看' + i.title" @tap="product(i.itemId)">
+              <image v-if="i.hasCover !== false && i.hasCover !== 0 && !coverErrors.has(i.itemId)"
+                :src="productCover(i.itemId)" mode="aspectFill" lazy-load @error="coverErrors.add(i.itemId)" />
+              <UiIcon v-else name="entry-shop" :size="23" />
+            </button>
+            <view class="cart-item-details">
+              <text class="cart-item-title" @tap="product(i.itemId)">{{ i.title }}</text>
+              <view class="cart-item-meta">
+                <text class="cart-price">{{ money(i.unitCents) }}</text>
+                <view class="cart-stepper" role="group" :aria-label="i.title + '数量'">
+                  <button class="cart-minus" :aria-label="i.quantity === 1 ? '移除' + i.title : '减少数量'" :disabled="busy"
+                    @tap="quantity(i.itemId, i.quantity - 1)">−</button>
+                  <text class="cart-quantity">{{ i.quantity }}</text>
+                  <button class="cart-plus" aria-label="增加数量" :disabled="busy || i.quantity >= 99"
+                    @tap="quantity(i.itemId, i.quantity + 1)">＋</button>
+                </view>
               </view>
             </view>
           </view>
@@ -174,6 +210,11 @@ function help(id: string) {
   border-radius: 14px;
   background: var(--paper);
 }
+.cart-list + .cart-list { margin-top: 10px; }
+.cart-store { display:flex; align-items:center; gap:7px; padding:2px 10px 0 3px; }
+.cart-store-name { display:flex; align-items:center; gap:6px; min-width:0; color:var(--ink); font-size:14px; font-weight:800; }
+button.cart-store-name { min-height:40px; padding:0; color:var(--ink); }
+.cart-store-name text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .cart-item {
   display: grid;
   grid-template-columns: 36px 72px minmax(0,1fr);
@@ -204,6 +245,7 @@ function help(id: string) {
   font-size: 13px;
 }
 .cart-checkmark.checked { border-color: var(--yellow); background: var(--yellow); }
+.cart-checkmark.partial { border-color:#d6ae2e; background:#fff4cd; }
 .cart-photo {
   width: 72px;
   height: 72px;

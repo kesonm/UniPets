@@ -35,6 +35,7 @@ export const listingKindNames: Record<ListingKind,string> = {
 
 export interface Listing {
   id: string
+  storeId?: string|null
   module: ListingModule
   category: string
   kind: ListingKind
@@ -115,6 +116,8 @@ export interface PetRecords {
 }
 
 export interface StorySummary {
+  storeId?: string|null
+  storeName?: string|null
   id: string
   title: string
   petName: string

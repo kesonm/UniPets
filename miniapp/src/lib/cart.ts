@@ -1,9 +1,15 @@
 import { ref, watch } from 'vue'
 import type { Listing } from '../../../src/h5/business'
+import type { CartProductStore } from '../../../src/h5/types'
 import { api, user } from './client'
 type CheckoutLine = { itemId: string; unitCents: number; quantity: number }
-type Line = CheckoutLine & { title: string; hasCover?: Listing['hasCover'] }
-type Cart = { items: Line[]; requestKey: string; checkoutKeys?: Record<string, string> }
+export type CartLine = CheckoutLine & {
+  title: string
+  hasCover?: Listing['hasCover']
+  storeId?: string|null
+  storeName?: string|null
+}
+type Cart = { items: CartLine[]; requestKey: string; checkoutKeys?: Record<string, string> }
 const fresh = (): Cart => ({ items: [], requestKey: '' })
 export const cart = ref<Cart>(fresh())
 export const orderPanel = ref<'cart' | 'orders'>('cart')
@@ -41,15 +47,34 @@ export function addProduct(p: Listing) {
   if (!user.value) throw new Error('请先微信登录')
   if (!p.priceCents || !p.stock) throw new Error('商品暂不可购买')
   const prior = cart.value.items.find((i) => i.itemId === p.id)
+  const store = p.storeId === undefined ? {} : {storeId:p.storeId,storeName:p.storeId ? p.provider : null}
+  const details = {title:p.title,unitCents:p.priceCents,hasCover:p.hasCover,...store}
   if (prior) {
     if (prior.quantity >= Math.min(99, p.stock)) throw new Error('已达到可购买数量')
-    prior.unitCents = p.priceCents
-    prior.title = p.title
-    prior.hasCover = p.hasCover
+    Object.assign(prior,details)
     prior.quantity++
-  } else cart.value.items.push({ itemId: p.id, title: p.title, unitCents: p.priceCents, quantity: 1, hasCover: p.hasCover })
+  } else cart.value.items.push({itemId:p.id,quantity:1,...details})
   cart.value.requestKey = ''
   save()
+}
+export async function refreshCartStores() {
+  const state = cart.value
+  const ids = state.items.map(item => item.itemId)
+  for (let index=0; index<ids.length; index+=40) {
+    const batch = ids.slice(index,index+40)
+    const {items} = await api<{items:CartProductStore[]}>('/h5/catalog/cart-stores?ids='+encodeURIComponent(batch.join(',')))
+    if (cart.value !== state) return
+    const metadata = new Map(items.map(item => [item.itemId,item]))
+    let changed = false
+    for (const line of state.items) {
+      const store = metadata.get(line.itemId)
+      if (!store || (line.storeId === store.storeId && line.storeName === store.storeName && line.hasCover === store.hasCover)) continue
+      const {storeId,storeName,hasCover} = store
+      Object.assign(line,{storeId,storeName,hasCover})
+      changed = true
+    }
+    if (changed) save()
+  }
 }
 function checkoutSnapshot(items: readonly CheckoutLine[]) {
   return JSON.stringify(items.map(item => [item.itemId, item.quantity, item.unitCents]).sort())

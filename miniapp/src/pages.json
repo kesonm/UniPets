@@ -58,6 +58,13 @@
       }
     },
     {
+      "path": "pages/storefront/index",
+      "style": {
+        "navigationBarTitleText": "门店主页",
+        "navigationBarBackgroundColor": "#f5f4f1"
+      }
+    },
+    {
       "path": "pages/store-jobs/index",
       "style": {
         "navigationBarTitleText": "门店招聘",

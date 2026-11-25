@@ -22,7 +22,7 @@ const from = 'FROM h5_catalog_items i JOIN h5_stores store ON store.id=i.store_i
 const district = `COALESCE(store.district_code, CASE store.area
   ${Object.entries(legacyDistricts).map(([area, id]) => `WHEN '${area}' THEN '${id}'`).join(' ')}
   ELSE NULL END)`
-const fields = `i.id,i.title,i.description,${serviceCategoryColumn} AS category,${serviceCategoryLabel} AS categoryLabel,
+const fields = `i.id,store.id AS storeId,i.title,i.description,${serviceCategoryColumn} AS category,${serviceCategoryLabel} AS categoryLabel,
   store.name AS provider,${catalogVenue} AS venue,store.phone,${district} AS district,
   i.price_cents AS priceCents,i.updated_at AS updatedAt,
   (SELECT COUNT(*) FROM h5_service_post_images image WHERE image.item_id=i.id) AS imageCount,
@@ -32,6 +32,7 @@ const fields = `i.id,i.title,i.description,${serviceCategoryColumn} AS category,
 
 export interface ServiceRecord {
   id: string
+  storeId: string
   title: string
   description: string
   category: string

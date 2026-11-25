@@ -5,7 +5,9 @@ import type { StorySummary, StoryDetail, PersonalStory } from '../../../../src/h
 import type { Pet, Asset } from '../../../../src/lib/types'
 import { api, user, go, publicImage, toast } from '../../lib/client'
 import { pageLoad, submitAction } from '../../lib/page'
+import { publishingStoreOptions } from '../../lib/stores'
 import { listPets } from '../../lib/pets'
+import StoreLink from '../../components/StoreLink.vue'
 import LoadState from '../../components/LoadState.vue'
 import LoginCard from '../../components/LoginCard.vue'
 import PetPicker from '../../components/PetPicker.vue'
@@ -24,6 +26,8 @@ const fav = ref<StorySummary[]>([]),
   title = ref(''),
   scenes = ref<string[]>(['']),
   cover = ref('')
+const storeId = ref('')
+const stores = ref<{id:string;label:string}[]>([])
 const assets = ref<Asset[]>([]),
   photos = computed(() => [
     { id: '', label: '无封面' },
@@ -64,7 +68,8 @@ async function load() {
   if (mode.value === 'mine' || (mode.value === 'write' && id.value))
     mine.value = (await api<{ stories: PersonalStory[] }>('/h5/my-stories')).stories
   if (mode.value === 'write') {
-    const [p, a] = await Promise.all([listPets(), api<{ assets: Asset[] }>('/assets?kind=photo')])
+    const [p, a, options] = await Promise.all([listPets(), api<{ assets: Asset[] }>('/assets?kind=photo'), publishingStoreOptions()])
+    stores.value = options
     pets.value = p
     assets.value = a.assets
     if (!loadedDraft) {
@@ -74,8 +79,10 @@ async function load() {
       title.value = draft?.title || ''
       scenes.value = draft?.scenes || ['']
       cover.value = draft?.coverAssetId || ''
+      storeId.value = draft?.storeId || ''
       loadedDraft = !!petId.value
     }
+    if (!options.some(option => option.id === storeId.value)) storeId.value = ''
   }
 }
 const { loading, error, refresh } = pageLoad(load, () => {
@@ -83,6 +90,8 @@ const { loading, error, refresh } = pageLoad(load, () => {
   fav.value = []
   liked.value = []
   loadedDraft = false
+  stores.value = []
+  storeId.value = ''
   assets.value = []
   pets.value = []
 })
@@ -93,6 +102,7 @@ function save(publish: boolean) {
       title: title.value,
       scenes: scenes.value.map((s) => s.trim()).filter(Boolean),
       coverAssetId: cover.value || null,
+      ...(stores.value.length > 1 ? {storeId:storeId.value || null} : {}),
       publish,
     }
     if (!data.scenes.length) throw new Error('请至少填写一个分镜')
@@ -160,6 +170,10 @@ function open(s: StorySummary) {
       <PetPicker v-if="!id" v-model="petId" :pets="pets" />
       <text class="label">标题</text>
       <input v-model="title" :always-embed="true" maxlength="100" />
+      <template v-if="stores.length > 1">
+        <text class="label">发布门店</text>
+        <ChoiceField v-model="storeId" :options="stores" />
+      </template>
       <text class="label">封面照片</text>
       <ChoiceField v-model="cover" :options="photos" />
       <view v-for="(_, i) in scenes" :key="i">
@@ -177,6 +191,7 @@ function open(s: StorySummary) {
       <view class="card">
         <text class="title">{{ story.title }}</text>
         <text class="sub">{{ story.author }} · {{ story.petName }}</text>
+        <StoreLink v-if="story.storeId" :store-id="story.storeId" :name="story.storeName" />
         <image
           v-if="story.hasCover"
           class="photo"

@@ -11,6 +11,7 @@ export interface Product {
   id: string
   name: string
   merchant: string
+  storeId?: Listing['storeId']
   area: string
   district?: Listing['district']
   cityCode?: Listing['cityCode']
@@ -54,7 +55,7 @@ export function productFromListing(item: Listing): Product|undefined {
   const category = item.module==='immortality' ? 'memorial' : item.module==='services' ? 'package' :
     item.module==='medical' ? 'care' : categories.find(group=>group.id!=='all'&&group.id===item.category)?.id
   return {id:item.id,name:item.title,merchant:item.provider || '云上空间',area:item.area ?? '',
-    district:item.district,cityCode:item.cityCode,coordinates:item.coordinates,
+    storeId:item.storeId,district:item.district,cityCode:item.cityCode,coordinates:item.coordinates,
     category:category && category!=='all' ? category : 'culture',illustration:0,description:item.description,
     variants:[{name:'标准规格',cents:item.priceCents}],example:false,platform:true,stock:item.stock,hasCover:item.hasCover,salesCount:item.salesCount}
 }

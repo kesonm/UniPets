@@ -18,7 +18,7 @@ export interface PublicPost {
   createdAt: Date
 }
 
-type Product = {id:string;title:string;provider:string;description:string;priceCents:number;stock:number;hasCover:number;updatedAt:Date}
+type Product = {id:string;storeId:string|null;title:string;provider:string;description:string;priceCents:number;stock:number;hasCover:number;updatedAt:Date}
 type Job = Omit<StoreJob,'publishedAt'> & {publishedAt:Date}
 type Story = Awaited<ReturnType<typeof publicStories>>[number]
 type Candidate = { kind: 'post'; post: PublicPost } | { kind: 'service'; post: ServiceRecord }
@@ -97,7 +97,7 @@ function rankFor(seed: string, pets: PetSignal[], requests: Text[]) {
 export async function additionalRecommendationPosts(district?: string): Promise<Candidate[]> {
   const city = districtById(district)?.serviceCityCode ?? null
   const [products,jobs,stories] = await Promise.all([
-    rows<Product>(`SELECT i.id,i.title,${catalogProvider} AS provider,i.description,i.price_cents AS priceCents,i.stock,
+    rows<Product>(`SELECT i.id,store.id AS storeId,i.title,${catalogProvider} AS provider,i.description,i.price_cents AS priceCents,i.stock,
       ${catalogProductHasCover} AS hasCover,i.updated_at AS updatedAt FROM h5_catalog_items i ${catalogStore}
       WHERE ${catalogVisible} AND i.kind='product' AND i.price_cents>0
       ORDER BY (i.stock>0) DESC,i.updated_at DESC,i.id DESC LIMIT 60`),

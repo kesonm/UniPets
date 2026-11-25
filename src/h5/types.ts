@@ -15,6 +15,8 @@ export type PostTopic = 'daily'|'travel'|'rescue'|'help'
 
 export interface H5Post {
   id: string
+  storeId?: string|null
+  storeName?: string|null
   title: string
   body: string
   petName: string
@@ -34,6 +36,7 @@ export interface H5Post {
 
 export interface ServicePost {
   id: string
+  storeId?: string|null
   title: string
   description: string
   category: string
@@ -62,6 +65,31 @@ export interface BoundStore {
   location: ServiceCoordinates | null
 }
 
+export type StoreContentKind = 'product'|'service'|'job'|'post'|'story'|'catalog'
+export interface StoreContent {
+  id: string
+  kind: StoreContentKind
+  title: string
+  excerpt: string|null
+  module: string|null
+  hasCover: boolean|number
+  priceCents: number|null
+  activityAt: string
+}
+export interface PublicStore {
+  id: string
+  name: string
+  address: string
+  phone: string
+  cityCode: string|null
+}
+export interface CartProductStore {
+  itemId: string
+  storeId: string|null
+  storeName: string|null
+  hasCover: boolean|number
+}
+
 export interface MerchantStoreProfile {
   name: string
   address: string
@@ -81,7 +109,7 @@ export interface PersonalContentItem {
 }
 
 export type Recommendation = { kind: 'post'; post: H5Post } | { kind: 'service'; post: ServicePost }
-  | { kind: 'product'; post: {id:string; title:string; provider:string; priceCents:number; stock?:number; hasCover?:boolean|number} }
+  | { kind: 'product'; post: {id:string; storeId?:string|null; title:string; provider:string; priceCents:number; stock?:number; hasCover?:boolean|number} }
   | { kind: 'job'; post: StoreJob } | { kind: 'story'; post: StorySummary }
 
 export interface H5Social {

@@ -16,6 +16,7 @@ import BrowseToolbar from '../../components/BrowseToolbar.vue'
 import ChoiceField from '../../components/ChoiceField.vue'
 import DirectoryListing from '../../components/DirectoryListing.vue'
 import LoginCard from '../../components/LoginCard.vue'
+import StoreLink from '../../components/StoreLink.vue'
 import LoadState from '../../components/LoadState.vue'
 import PetPicker from '../../components/PetPicker.vue'
 import ShopShelf from '../../components/ShopShelf.vue'
@@ -192,7 +193,8 @@ function copyLink() {
     <template v-if="event || item">
       <view class="card">
         <text class="title">{{ event?.title || item?.title }}</text>
-        <text class="sub">{{ event?.organizer || item?.provider }}</text>
+        <StoreLink v-if="item?.storeId" :store-id="item.storeId" :name="item.provider" />
+        <text v-else class="sub">{{ event?.organizer || item?.provider }}</text>
         <image v-if="item?.kind==='product' && item.hasCover" class="product-detail-cover" :src="productCover(item.id)" mode="aspectFill" />
         <text v-if="event" class="line">
           {{ event.city }} · {{ event.venue }} · {{ date(event.startsAt) }}

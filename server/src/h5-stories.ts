@@ -7,20 +7,23 @@ import { requireAuth } from './auth.js'
 import { db, rows, transaction } from './db.js'
 import { HttpError } from './errors.js'
 import { assertPetPhoto } from './h5-pet-records.js'
+import { requirePublishingStore } from './h5-storefront.js'
 
 export const h5StoriesRouter = Router()
 const uuid = z.string().uuid()
 const storyFields = `s.id,s.title,s.published_at AS publishedAt,p.name AS petName,u.display_name AS author,
+  merchant.id AS storeId,merchant.name AS storeName,
   (a.id IS NOT NULL) AS hasCover, JSON_LENGTH(s.scenes) AS sceneCount,
   (SELECT COUNT(*) FROM h5_story_reactions r WHERE r.story_id=s.id AND kind='like') AS likes`
 const storyFrom = `FROM h5_stories s JOIN pets p ON p.id=s.pet_id AND p.user_id=s.user_id
   JOIN users u ON u.id=s.user_id LEFT JOIN assets a ON a.id=s.cover_asset_id
-    AND a.kind='photo' AND a.pet_id=s.pet_id AND a.user_id=s.user_id`
+    AND a.kind='photo' AND a.pet_id=s.pet_id AND a.user_id=s.user_id
+  LEFT JOIN h5_stores merchant ON merchant.id=s.store_id AND merchant.owner_user_id=s.user_id AND merchant.enabled=TRUE`
 const storyInput = z.object({title:z.string().trim().min(1,'请填写作品标题').max(100),
   scenes:z.array(z.string().trim().min(1).max(500)).min(1,'请写至少一个分镜').max(8),
-  coverAssetId:uuid.nullable().default(null), publish:z.boolean().default(false)}).strict()
+  coverAssetId:uuid.nullable().default(null), publish:z.boolean().default(false),storeId:uuid.nullable().optional()}).strict()
 
-type PublicStory = { id: string; title: string; publishedAt: Date; petName: string; author: string; hasCover: number; sceneCount: number; likes: number }
+type PublicStory = { id: string; title: string; publishedAt: Date; petName: string; author: string; hasCover: number; sceneCount: number; likes: number; storeId:string|null; storeName:string|null }
 
 export function publicStories(q = '') {
   return rows<PublicStory>(`SELECT ${storyFields} ${storyFrom}
@@ -65,13 +68,16 @@ h5StoriesRouter.get('/my-story-reactions', requireAuth, async (req,res) => {
 })
 
 h5StoriesRouter.post('/stories', requireAuth, async (req,res) => {
-  const {petId, title, scenes, coverAssetId, publish} = storyInput.extend({petId:uuid}).parse(req.body)
+  const {petId, title, scenes, coverAssetId, publish, storeId} = storyInput.extend({petId:uuid}).parse(req.body)
   const userId = req.user.id
   await ownedPet(userId,petId)
   await assertPetPhoto(userId,petId,coverAssetId)
   const id = randomUUID()
-  await db.execute(`INSERT INTO h5_stories (id,pet_id,user_id,title,scenes,cover_asset_id,published_at)
-    VALUES (?,?,?,?,?,?,IF(?,UTC_TIMESTAMP(3),NULL))`, [id,petId,userId,title,JSON.stringify(scenes),coverAssetId,publish])
+  await transaction(async connection => {
+    if (storeId) await requirePublishingStore(connection,storeId,userId)
+    await connection.execute(`INSERT INTO h5_stories (id,pet_id,user_id,title,scenes,cover_asset_id,store_id,published_at)
+      VALUES (?,?,?,?,?,?,?,IF(?,UTC_TIMESTAMP(3),NULL))`, [id,petId,userId,title,JSON.stringify(scenes),coverAssetId,storeId??null,publish])
+  })
   res.status(201).json({id})
 })
 
@@ -81,9 +87,12 @@ h5StoriesRouter.put('/stories/:id', requireAuth, async (req,res) => {
   const [story] = await rows<{petId:string}>('SELECT pet_id AS petId FROM h5_stories WHERE id=? AND user_id=?', [id,req.user.id])
   if (!story) throw new HttpError(404, '作品不存在')
   await assertPetPhoto(req.user.id,story.petId,input.coverAssetId)
-  await db.execute(`UPDATE h5_stories SET title=?, scenes=?, cover_asset_id=?,
-    published_at=IF(?,COALESCE(published_at,UTC_TIMESTAMP(3)),NULL) WHERE id=? AND user_id=?`,
-  [input.title,JSON.stringify(input.scenes),input.coverAssetId,input.publish,id,req.user.id])
+  await transaction(async connection => {
+    if (input.storeId) await requirePublishingStore(connection,input.storeId,req.user.id)
+    await connection.execute(`UPDATE h5_stories SET title=?,scenes=?,cover_asset_id=?,
+      store_id=IF(?, ?, store_id),published_at=IF(?,COALESCE(published_at,UTC_TIMESTAMP(3)),NULL) WHERE id=? AND user_id=?`,
+    [input.title,JSON.stringify(input.scenes),input.coverAssetId,input.storeId!==undefined,input.storeId??null,input.publish,id,req.user.id])
+  })
   const [saved] = await rows<{hidden:number}>('SELECT hidden_at IS NOT NULL AS hidden FROM h5_stories WHERE id=? AND user_id=?',[id,req.user.id])
   res.json({id,hidden:Boolean(saved?.hidden)})
 })

@@ -7,6 +7,7 @@ import { jobCategoryLabel } from '../../../shared/h5-jobs.mjs'
 import { defaultRecommendationLabels, type RecommendationLabels } from '../../../shared/h5-recommendation-labels.mjs'
 import { money } from '../lib/cart'
 import { go, productCover, publicImage, servicePostImage } from '../lib/client'
+import StoreLink from './StoreLink.vue'
 import UiIcon from './UiIcon.vue'
 
 const props = withDefaults(defineProps<{ posts?: readonly H5Post[]; recommendations?: readonly Recommendation[]; labels?: RecommendationLabels; showBreed?: boolean; liked?: string[]; showArea?: boolean; showPetType?: boolean; reactions?: boolean }>(), {
@@ -41,7 +42,7 @@ function recommendationTile(item: OtherRecommendation) {
         name:item.post.storeName, amount:item.post.salary, detail:jobCategoryLabel(item.post)}
     case 'story':
       return {image:item.post.hasCover ? publicImage('/h5/stories/'+item.post.id+'/cover') : '',
-        name:item.post.author, amount:'', detail:item.post.sceneCount+' 幕'}
+        name:item.post.storeName || item.post.author, amount:'', detail:item.post.sceneCount+' 幕'}
   }
 }
 
@@ -79,7 +80,8 @@ function when(value: string) {
           <text class="post-title">{{ entry.post.title }}</text>
         </button>
         <view class="post-footer">
-          <view v-if="entry.tile.name" class="post-author">
+          <StoreLink v-if="entry.post.storeId" :store-id="entry.post.storeId" :name="entry.tile.name" />
+          <view v-else-if="entry.tile.name" class="post-author">
             <UiIcon :name="entry.kind==='story' ? 'post-author' : 'location'" :size="11" />
             <text>{{ entry.tile.name }}</text>
           </view>
@@ -114,6 +116,9 @@ function when(value: string) {
             <text>{{ entry.post.likes }}</text>
           </button>
         </view>
+        <view v-if="entry.post.storeId" class="post-store">
+          <StoreLink :store-id="entry.post.storeId" :name="entry.post.storeName" />
+        </view>
         <text v-if="showPetType" class="post-type">{{ postPetTypeLabels[entry.post.petType || entry.post.species] }}{{ showBreed && entry.post.breed ? ' · ' + entry.post.breed : '' }}</text>
         <view v-if="showArea && entry.post.area" class="post-area">
           <UiIcon name="post-location" :size="11" />
@@ -126,6 +131,7 @@ function when(value: string) {
 
 <style src="../../../shared/recommendation-label.css"></style>
 <style scoped>
+.post-store { padding: 0 9px; }
 .post-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .post { min-width: 0; overflow: hidden; border: 1px solid #ebe8e1; border-radius: 13px; background: #fff; }
 .post-open {

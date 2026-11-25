@@ -7,6 +7,7 @@ import { serviceRegions } from '../../../../shared/h5-service-regions.mjs'
 import BrowseToolbar from '../../components/BrowseToolbar.vue'
 import ChoiceField from '../../components/ChoiceField.vue'
 import JobList from '../../components/JobList.vue'
+import StoreLink from '../../components/StoreLink.vue'
 import LoadState from '../../components/LoadState.vue'
 import UiIcon from '../../components/UiIcon.vue'
 import { api, publicImage } from '../../lib/client'
@@ -100,7 +101,7 @@ function previewImage(current: string) {
         <text class="job-description">{{ job.description }}</text>
       </view>
       <view class="card job-detail">
-        <text class="heading">{{ job.storeName }}</text>
+        <StoreLink :store-id="job.storeId" :name="job.storeName" />
         <view class="job-detail-address">
           <UiIcon name="location" :size="15" />
           <text>{{ [jobCityLabel(job.cityCode),job.address].filter(Boolean).join(' · ') }}</text>
