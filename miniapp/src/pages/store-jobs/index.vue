@@ -3,7 +3,6 @@ import { computed, reactive, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { servicePhone } from '../../../../shared/h5-discovery.mjs'
 import { employmentTypes, jobCategories, jobCategoryLabel, jobCategoryMaxLength, jobCityLabel, jobStatuses, type StoreJob } from '../../../../shared/h5-jobs.mjs'
-import ChoiceField from '../../components/ChoiceField.vue'
 import LoadState from '../../components/LoadState.vue'
 import LoginCard from '../../components/LoginCard.vue'
 import PostPhotoPicker from '../../components/PostPhotoPicker.vue'
@@ -165,7 +164,13 @@ async function more() {
           <view class="store-job-form-grid">
             <view>
               <text class="label">用工类型</text>
-              <ChoiceField v-model="form.employmentType" :options="typeOptions" placeholder="请选择" :disabled="busy" />
+              <view class="employment-options" role="group" aria-label="用工类型">
+                <button v-for="option in typeOptions" :id="'store-job-type-'+option.id" :key="option.id"
+                  :class="['employment-option', { selected: form.employmentType === option.id }]"
+                  :aria-pressed="form.employmentType === option.id" :disabled="busy" @tap="form.employmentType = option.id">
+                  {{ option.label }}
+                </button>
+              </view>
             </view>
             <view>
               <label for="store-job-salary" class="label">薪资待遇</label>
@@ -220,6 +225,27 @@ async function more() {
 .store-job-form > .label:first-of-type { margin-top: 0; }
 .store-job-form .label { color: #4d4434; }
 .store-job-form-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
+.employment-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  align-items: stretch;
+  gap: 3px;
+  height: 39px;
+  padding: 3px;
+  border-radius: 9px;
+  background: #f4f1e9;
+}
+.employment-option {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+}
+.employment-option.selected { background: #ffed9d; color: var(--gold-ink); }
 .category-entry {
   display: flex;
   align-items: center;
