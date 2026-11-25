@@ -1,33 +1,49 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import type { H5Post, H5Social } from '../../../src/h5/types'
-import { postPetTypeLabels, postPetTypes } from '../../../shared/h5-discovery.mjs'
+import type { StoreJob } from '../../../shared/h5-jobs.mjs'
 import { api, go, message, toast, user } from '../lib/client'
-import ChoiceField from './ChoiceField.vue'
 import PostGrid from './PostGrid.vue'
 
-const props = withDefaults(defineProps<{ active: boolean; query?: string; filterable?: boolean; reload?: number }>(), { query: '' })
+const props = withDefaults(defineProps<{
+  active: boolean; query?: string; petType?: string; includeJobs?: boolean; reload?: number
+}>(), { query: '' })
 const emit = defineEmits<{ loaded: [] }>()
-const petType = ref('')
-const breed = ref('')
-const breeds = ref<string[]>([])
-const types = [{ id: '', label: '全部宠物' }, ...postPetTypes.map(id => ({id, label: postPetTypeLabels[id]}))]
-const breedOptions = computed(() => [
-  {id: '', label: '全部品种'}, ...[...new Set([breed.value, ...breeds.value])].filter(Boolean).map(id => ({id,label:id})),
-])
+const showJobs = computed(() => props.includeJobs && !props.petType)
 const filters = computed(() => [
   '&q=' + encodeURIComponent(props.query),
-  petType.value && '&petType=' + encodeURIComponent(petType.value),
-  breed.value && '&breed=' + encodeURIComponent(breed.value),
+  props.petType && '&petType=' + encodeURIComponent(props.petType),
 ].join(''))
 const posts = ref<H5Post[]>([])
+const jobs = ref<StoreJob[]>([])
 const liked = ref<string[]>([])
 const loading = ref(false)
 const error = ref('')
 const page = ref(1)
-const more = ref(false)
+const morePosts = ref(false)
+const moreJobs = ref(false)
+const more = computed(() => morePosts.value || moreJobs.value)
+// Wait for both pages to cover a timestamp before showing it in the combined feed.
+const cutoff = computed(() => {
+  if (!showJobs.value) return -Infinity
+  const postTime = morePosts.value ? Date.parse(posts.value[posts.value.length - 1].createdAt) : -Infinity
+  const jobTime = moreJobs.value ? Date.parse(jobs.value[jobs.value.length - 1].publishedAt ?? '') : -Infinity
+  return Math.max(postTime, jobTime)
+})
+const visiblePosts = computed(() => cutoff.value === -Infinity
+  ? posts.value
+  : posts.value.filter(post => Date.parse(post.createdAt) >= cutoff.value))
+const visibleJobs = computed(() => showJobs.value
+  ? jobs.value.filter(job => job.publishedAt && Date.parse(job.publishedAt) >= cutoff.value)
+  : [])
 let revision = 0
 let loadedFilters: string | undefined
+
+function appendItems<T extends {id:string}>(current: T[], next: T[]) {
+  const ids = new Set(current.map(item => item.id))
+  return [...current, ...next.filter(item => !ids.has(item.id))]
+}
+
 async function load(append = false) {
   const version = ++revision
   error.value = ''
@@ -35,13 +51,23 @@ async function load(append = false) {
   const nextPage = append ? page.value + 1 : 1
   const query = filters.value
   try {
-    const result = await api<{ posts: H5Post[]; hasMore: boolean }>(
-      '/h5/posts?sort=latest&page=' + nextPage + query,
-    )
+    const [social, recruiting] = await Promise.all([
+      !append || morePosts.value
+        ? api<{ posts: H5Post[]; hasMore: boolean }>('/h5/posts?sort=latest&page=' + nextPage + query)
+        : undefined,
+      showJobs.value && (!append || moreJobs.value)
+        ? api<{ items: StoreJob[]; hasMore: boolean }>('/h5/jobs?page=' + nextPage + query)
+        : undefined,
+    ])
     if (version !== revision) return
-    posts.value = append ? posts.value.concat(result.posts.filter(post => !posts.value.some(item => item.id === post.id)))
-      : result.posts
-    more.value = result.hasMore
+    if (social) {
+      posts.value = append ? appendItems(posts.value,social.posts) : social.posts
+      morePosts.value = social.hasMore
+    }
+    if (recruiting) {
+      jobs.value = append ? appendItems(jobs.value,recruiting.items) : recruiting.items
+      moreJobs.value = recruiting.hasMore
+    }
     page.value = nextPage
     loadedFilters = query
   } catch (cause) {
@@ -61,26 +87,18 @@ watch([() => props.active, filters, () => props.reload], ([active,query]) => {
   }
   if (query !== loadedFilters) {
     posts.value = []
-    more.value = false
+    jobs.value = []
+    morePosts.value = false
+    moreJobs.value = false
   }
   void load()
 }, { immediate: true })
 onUnmounted(() => { revision++ })
 
 watch(() => props.active, (active, _, onCleanup) => {
-  if (!active || !props.filterable) return
+  if (!active || !props.includeJobs) return
   const timer = setInterval(() => { if (!loading.value) void load() }, 5 * 60 * 1000)
   onCleanup(() => clearInterval(timer))
-}, { immediate: true })
-
-watch([() => props.active, petType, () => props.reload], async ([active, type], _, onCleanup) => {
-  if (!active || !props.filterable) return
-  let current = true
-  onCleanup(() => { current = false })
-  try {
-    const result = await api<{ breeds: string[] }>('/h5/posts/breeds' + (type ? '?petType=' + encodeURIComponent(type) : ''))
-    if (current) breeds.value = result.breeds
-  } catch { /* Text search remains available. */ }
 }, { immediate: true })
 
 watch([() => props.active, () => user.value?.id], async ([active, owner], _, onCleanup) => {
@@ -94,11 +112,6 @@ watch([() => props.active, () => user.value?.id], async ([active, owner], _, onC
   } catch { /* Feed reading does not require reactions. */ }
 }, { immediate: true })
 
-function changeType(value: string) {
-  petType.value = value
-  breed.value = ''
-  breeds.value = []
-}
 function view(post: H5Post) {
   go('feed', { id: post.id })
 }
@@ -124,25 +137,21 @@ async function like(post: H5Post) {
 
 <template>
   <view class="feed-section">
-    <view v-if="filterable" class="feed-choices">
-      <ChoiceField :model-value="petType" :options="types" @update:model-value="changeType" />
-      <ChoiceField v-model="breed" :options="breedOptions" />
-    </view>
     <view v-if="error" class="card empty-card" role="status">
       <text>{{ error }}</text>
       <button class="text-button" @tap="load()">重新加载</button>
     </view>
-    <PostGrid v-else-if="posts.length" :posts="posts" :liked="liked" show-pet-type reactions @view="view" @like="like" />
+    <PostGrid v-else-if="visiblePosts.length || visibleJobs.length" :posts="visiblePosts" :jobs="visibleJobs"
+      :liked="liked" :show-breed="!includeJobs" show-pet-type reactions @view="view" @like="like" />
     <view v-else class="card empty-card" role="status">
-      <text>{{ loading ? '正在加载帖子…' : query || petType || breed ? '没有匹配的帖子' : '还没有发布的帖子' }}</text>
+      <text>{{ loading ? '正在加载帖子…' : query || petType ? '没有匹配的帖子' : '还没有发布的帖子' }}</text>
     </view>
     <button v-if="more && !error" class="more-posts" :disabled="loading" @tap="load(true)">
-      {{ loading ? '加载中…' : '加载更多动态' }}
+      {{ loading ? '加载中…' : '加载更多帖子' }}
     </button>
   </view>
 </template>
 
 <style scoped>
-.feed-choices { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-bottom: 10px; }
 .more-posts { width: 100%; margin-top: 12px; }
 </style>

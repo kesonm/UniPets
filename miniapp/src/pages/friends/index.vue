@@ -1,36 +1,22 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { ref } from 'vue'
 import { onHide, onPullDownRefresh, onShow } from '@dcloudio/uni-app'
+import { postPetTypeLabels, postPetTypes } from '../../../../shared/h5-discovery.mjs'
+import ChoiceField from '../../components/ChoiceField.vue'
 import FeedSection from '../../components/FeedSection.vue'
-import JobList from '../../components/JobList.vue'
 import UiIcon from '../../components/UiIcon.vue'
 import { go } from '../../lib/client'
-import { showFriendsFeed } from '../../lib/home'
-import { browseDistrict } from '../../lib/location'
 import { useTabPage } from '../../lib/tab-page'
-
-const types = [{id:'social',label:'社交帖'},{id:'jobs',label:'招聘帖'}] as const
-type PostType = (typeof types)[number]['id']
 
 const tabLayout = useTabPage('pages/friends/index')
 const active = ref(false)
-const type = ref<PostType>('social')
-const searches = reactive({
-  social: {input:'',query:''},
-  jobs: {input:'',query:''},
-})
-const currentSearch = computed(() => searches[type.value])
+const input = ref('')
+const query = ref('')
+const petType = ref('')
+const petTypes = [{id:'',label:'全部宠物'}, ...postPetTypes.map(id => ({id,label:postPetTypeLabels[id]}))]
 const reload = ref(0)
-const searchLabel = computed(() => type.value === 'social' ? '搜索帖子或宠物' : '搜索岗位或门店')
-const jobFilters = computed(() => ({q:searches.jobs.query,district:browseDistrict.value?.id}))
 
-onShow(() => {
-  if (showFriendsFeed.value) {
-    type.value = 'social'
-    showFriendsFeed.value = false
-  }
-  active.value = true
-})
+onShow(() => { active.value = true })
 onHide(() => { active.value = false; endRefresh() })
 onPullDownRefresh(() => { reload.value++ })
 
@@ -38,17 +24,10 @@ function endRefresh() {
   uni.stopPullDownRefresh()
 }
 
-function selectType(next: PostType) {
-  if (type.value === next) return
-  endRefresh()
-  type.value = next
-}
-
 function search() {
-  const field = currentSearch.value
-  const keyword = field.input.trim()
-  if (field.query === keyword) reload.value++
-  else field.query = keyword
+  const keyword = input.value.trim()
+  if (query.value === keyword) reload.value++
+  else query.value = keyword
 }
 </script>
 
@@ -56,21 +35,19 @@ function search() {
   <view class="screen tab-screen" :style="tabLayout">
     <view class="tab-leading friends-search">
       <UiIcon name="search" :size="15" />
-      <input id="friends-search" v-model="currentSearch.input" :always-embed="true" maxlength="60" :placeholder="searchLabel" :aria-label="searchLabel"
+      <input id="friends-search" v-model="input" :always-embed="true" maxlength="60" placeholder="搜索帖子、宠物或岗位" aria-label="搜索帖子、宠物或岗位"
         confirm-type="search" @confirm="search" />
       <button id="friends-submit-search" class="friends-search-button" @tap="search">搜索</button>
     </view>
     <view class="friends-toolbar">
-      <view class="friends-tabs" aria-label="帖子分类">
-        <button v-for="item in types" :key="item.id" :id="'friends-'+item.id" :class="{active:type===item.id}"
-          :aria-pressed="type===item.id" @tap="selectType(item.id)">{{ item.label }}</button>
+      <view class="friends-pets">
+        <ChoiceField v-model="petType" :options="petTypes" />
       </view>
-      <button v-if="type==='social'" id="friends-publish" class="text-button friends-publish" @tap="go('feed',{mode:'write'})">
+      <button id="friends-publish" class="text-button friends-publish" @tap="go('feed',{mode:'write'})">
         <UiIcon name="circle-plus" :size="14" />发布帖子
       </button>
     </view>
-    <FeedSection v-show="type==='social'" :active="active && type==='social'" :query="searches.social.query" :reload="reload" filterable @loaded="endRefresh" />
-    <JobList v-show="type==='jobs'" :active="active && type==='jobs'" :filters="jobFilters" :reload="reload" @loaded="endRefresh" />
+    <FeedSection :active="active" :query="query" :pet-type="petType" :reload="reload" include-jobs @loaded="endRefresh" />
   </view>
 </template>
 
@@ -111,25 +88,6 @@ function search() {
   gap: 8px;
   margin: 10px 0;
 }
-.friends-tabs {
-  display: flex;
-  flex: none;
-  gap: 3px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--paper);
-}
-.friends-tabs button {
-  min-width: 74px;
-  min-height: 34px;
-  padding: 5px 10px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 13px;
-}
-.friends-tabs button.active { background: #ffed9a; color: #4f3709; }
+.friends-pets { flex: 1; max-width: 180px; }
 .friends-publish { flex: none; min-height: 36px; white-space: nowrap; }
 </style>

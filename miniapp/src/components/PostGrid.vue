@@ -1,14 +1,26 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import type { StoreJob } from '../../../shared/h5-jobs.mjs'
 import type { H5Post } from '../../../src/h5/types'
 import { areaLabel } from '../../../src/h5/business'
 import { postPetTypeLabels } from '../../../shared/h5-discovery.mjs'
 import { publicImage } from '../lib/client'
 import UiIcon from './UiIcon.vue'
+import JobCard from './JobCard.vue'
 
-withDefaults(defineProps<{ posts: readonly H5Post[]; liked?: string[]; showArea?: boolean; showPetType?: boolean; reactions?: boolean }>(), {
+const props = withDefaults(defineProps<{ posts: readonly H5Post[]; jobs?: readonly StoreJob[]; showBreed?: boolean; liked?: string[]; showArea?: boolean; showPetType?: boolean; reactions?: boolean }>(), {
   liked: () => [],
+  jobs: () => [],
+  showBreed: true,
 })
 const emit = defineEmits<{ view: [post: H5Post]; like: [post: H5Post] }>()
+
+const entries = computed(() => {
+  const posts = props.posts.map(post => ({kind:'post' as const, id:post.id, date:post.createdAt, post}))
+  const jobs = props.jobs.map(job => ({kind:'job' as const, id:job.id, date:job.publishedAt ?? '', job}))
+  if (!jobs.length) return posts
+  return [...posts,...jobs].sort((a,b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
+})
 
 function when(value: string) {
   const date = new Date(value)
@@ -23,39 +35,42 @@ function when(value: string) {
 
 <template>
   <view class="post-grid">
-    <view v-for="post in posts" :key="post.id" class="post">
-      <button class="post-open" :aria-label="'查看动态 ' + post.title" @tap="emit('view', post)">
-        <view class="post-cover">
-          <image v-if="post.exampleImage" :src="'/static/' + post.id + '.webp'" mode="aspectFill" />
-          <image v-else-if="post.hasImage" :src="publicImage('/h5/posts/' + post.id + '/image')" mode="aspectFill" lazy-load />
-          <UiIcon v-else name="picture" :size="26" />
-          <text v-if="post.exampleImage" class="post-example">示例动态</text>
-          <text v-else-if="post.hidden" class="post-example">已隐藏</text>
-        </view>
-        <text class="post-title">{{ post.title }}</text>
-      </button>
-      <view class="post-footer">
-        <view class="post-author">
-          <UiIcon name="post-author" :size="11" />
-          <text>{{ post.petName }}<text v-if="!post.exampleImage" class="post-date">{{ when(post.createdAt) }}</text></text>
-        </view>
-        <button
-          v-if="reactions && !post.exampleImage"
-          class="post-like"
-          :aria-label="'点赞 ' + post.title"
-          :aria-pressed="liked.includes(post.id)"
-          @tap="emit('like', post)"
-        >
-          <UiIcon :name="liked.includes(post.id) ? 'star-active' : 'star'" :size="12" />
-          <text>{{ post.likes }}</text>
+    <template v-for="entry in entries" :key="entry.kind + '-' + entry.id">
+      <JobCard v-if="entry.kind==='job'" :job="entry.job" compact />
+      <view v-else class="post">
+        <button class="post-open" :aria-label="'查看动态 ' + entry.post.title" @tap="emit('view', entry.post)">
+          <view class="post-cover">
+            <image v-if="entry.post.exampleImage" :src="'/static/' + entry.post.id + '.webp'" mode="aspectFill" />
+            <image v-else-if="entry.post.hasImage" :src="publicImage('/h5/posts/' + entry.post.id + '/image')" mode="aspectFill" lazy-load />
+            <UiIcon v-else name="picture" :size="26" />
+            <text v-if="entry.post.exampleImage" class="post-example">示例动态</text>
+            <text v-else-if="entry.post.hidden" class="post-example">已隐藏</text>
+          </view>
+          <text class="post-title">{{ entry.post.title }}</text>
         </button>
+        <view class="post-footer">
+          <view class="post-author">
+            <UiIcon name="post-author" :size="11" />
+            <text>{{ entry.post.petName }}<text v-if="!entry.post.exampleImage" class="post-date">{{ when(entry.post.createdAt) }}</text></text>
+          </view>
+          <button
+            v-if="reactions && !entry.post.exampleImage"
+            class="post-like"
+            :aria-label="'点赞 ' + entry.post.title"
+            :aria-pressed="liked.includes(entry.post.id)"
+            @tap="emit('like', entry.post)"
+          >
+            <UiIcon :name="liked.includes(entry.post.id) ? 'star-active' : 'star'" :size="12" />
+            <text>{{ entry.post.likes }}</text>
+          </button>
+        </view>
+        <text v-if="showPetType" class="post-type">{{ postPetTypeLabels[entry.post.petType || entry.post.species] }}{{ showBreed && entry.post.breed ? ' · ' + entry.post.breed : '' }}</text>
+        <view v-if="showArea && entry.post.area" class="post-area">
+          <UiIcon name="post-location" :size="11" />
+          <text>{{ areaLabel(entry.post.area, entry.post.district) }}</text>
+        </view>
       </view>
-      <text v-if="showPetType" class="post-type">{{ postPetTypeLabels[post.petType || post.species] }}{{ post.breed ? ' · ' + post.breed : '' }}</text>
-      <view v-if="showArea && post.area" class="post-area">
-        <UiIcon name="post-location" :size="11" />
-        <text>{{ areaLabel(post.area, post.district) }}</text>
-      </view>
-    </view>
+    </template>
   </view>
 </template>
 

@@ -5,7 +5,7 @@ import type { Listing, StorySummary } from '../../../../src/h5/business'
 import type { ServicePost } from '../../../../src/h5/types'
 import { homeEntries, homeSearchKinds, homeSlides } from '../../../../src/h5/home'
 import { api, go, message } from '../../lib/client'
-import { homeImage, showFriendsFeed } from '../../lib/home'
+import { homeImage } from '../../lib/home'
 import { locateIfAuthorized, locatingDistrict } from '../../lib/district'
 import { browseDistrict, openMapPicker, refreshBrowseDistrict, saveBrowseLocation, selectedLocation } from '../../lib/location'
 import { useTabPage } from '../../lib/tab-page'
@@ -44,7 +44,6 @@ onShow(() => {
 onHide(() => { active.value = false })
 
 function openEntry(id: Destination) {
-  if (id === 'friends') showFriendsFeed.value = true
   if (id === 'friends' || id === 'jobs' || id === 'immortality' || id === 'services') go(id)
   else go('directory', { module: id })
 }
