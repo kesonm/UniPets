@@ -7,14 +7,17 @@ import { homeEntries, homeSearchKinds, homeSlides } from '../../../../src/h5/hom
 import { api, go, message } from '../../lib/client'
 import { homeImage, showFriendsFeed } from '../../lib/home'
 import { locateIfAuthorized, locatingDistrict } from '../../lib/district'
-import { browseDistrict, changeBrowseLocation, selectedLocation } from '../../lib/location'
+import { browseDistrict, openMapPicker, refreshBrowseDistrict, saveBrowseLocation, selectedLocation } from '../../lib/location'
 import { useTabPage } from '../../lib/tab-page'
 import FeedSection from '../../components/FeedSection.vue'
 import HomeRecommendations from '../../components/HomeRecommendations.vue'
 import ShopShelf from '../../components/ShopShelf.vue'
 import UiIcon from '../../components/UiIcon.vue'
 
-type Destination = (typeof homeEntries)[number]['id'] | (typeof homeSlides)[number]['action']
+const entries = homeEntries.map(entry => entry.id === 'stories'
+  ? { id: 'jobs', label: '宠物人才就业', tone: entry.tone } as const
+  : entry)
+type Destination = (typeof entries)[number]['id'] | (typeof homeSlides)[number]['action']
 type SearchKind = (typeof homeSearchKinds)[number]['id']
 
 const tabLayout = useTabPage('pages/home/index')
@@ -36,13 +39,18 @@ onShow(() => {
   if (checkedLocation) return
   checkedLocation = true
   if (selectedLocation.value === undefined) void locateIfAuthorized()
+  else void refreshBrowseDistrict()
 })
 onHide(() => { active.value = false })
 
 function openEntry(id: Destination) {
   if (id === 'friends') showFriendsFeed.value = true
-  if (id === 'friends' || id === 'stories' || id === 'immortality' || id === 'services') go(id)
+  if (id === 'friends' || id === 'jobs' || id === 'immortality' || id === 'services') go(id)
   else go('directory', { module: id })
+}
+
+function chooseHomeLocation() {
+  return openMapPicker(saveBrowseLocation, selectedLocation.value)
 }
 
 function search() {
@@ -89,7 +97,7 @@ watch([query, kind, () => browseDistrict.value?.id, retry], async ([term, target
   <view class="market-home tab-screen" :style="tabLayout">
     <view class="market-top">
       <view class="tab-leading market-controls">
-        <button id="home-location" class="market-location" :aria-label="'地图选位置 ' + (browseDistrict?.name || '')" @tap="changeBrowseLocation">
+        <button id="home-location" class="market-location" :aria-label="'地图选位置 ' + (browseDistrict?.name || '')" @tap="chooseHomeLocation">
           <UiIcon name="location" :size="13" />
           <text>{{ locatingDistrict ? '定位中' : browseDistrict?.name || '定位' }}</text>
         </button>
@@ -104,7 +112,7 @@ watch([query, kind, () => browseDistrict.value?.id, retry], async ([term, target
     <template v-if="!query">
       <view class="market-entrances-wrap">
         <view class="market-entrances" aria-label="宠物服务入口">
-          <button v-for="entry in homeEntries" :key="entry.id" :id="'entry-' + entry.id" class="market-entry" @tap="openEntry(entry.id)">
+          <button v-for="entry in entries" :key="entry.id" :id="'entry-' + entry.id" class="market-entry" @tap="openEntry(entry.id)">
             <view :class="['market-entry-icon', entry.tone]"><UiIcon :name="'entry-' + entry.id" :size="21" /></view>
             <text>{{ entry.label }}</text>
           </button>
@@ -150,6 +158,11 @@ watch([query, kind, () => browseDistrict.value?.id, retry], async ([term, target
 
     <view v-if="!query" class="market-content">
       <HomeRecommendations :active="active" />
+      <button id="entry-stories" class="stories-link" @tap="go('stories')">
+        <view class="stories-link-icon"><UiIcon name="entry-stories" :size="18" /></view>
+        <text>宠物短剧漫剧</text>
+        <UiIcon name="right" :size="12" />
+      </button>
     </view>
     <view v-else-if="kind === 'feed'" class="market-content">
       <FeedSection :active="active" :query="query" />
@@ -185,6 +198,28 @@ watch([query, kind, () => browseDistrict.value?.id, retry], async ([term, target
 
 <style scoped>
 .market-home { max-width: 500px; margin: auto; }
+.stories-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 12px 0 4px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--paper);
+  text-align: left;
+}
+.stories-link text { flex: 1; }
+.stories-link-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: #e9ddfc;
+}
 .market-top {
   padding: var(--tab-start, 8px) 14px 5px;
   background: #ffe34e;

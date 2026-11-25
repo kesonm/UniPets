@@ -22,12 +22,13 @@ import { h5OperationsRouter } from './h5-operations.js'
 import { h5ServicePostsRouter, servicePosts } from './h5-service-posts.js'
 import { h5StoreBindingRouter } from './h5-store-binding.js'
 import { h5MyContentRouter } from './h5-my-content.js'
+import { h5JobsRouter } from './h5-jobs.js'
 import { recommendedPosts, type PublicPost } from './h5-recommendations.js'
 import { districtAreaIds, districtInput, districtRouter, knownDistrictInput, withDistrict } from './districts.js'
 
 export const h5Router = Router()
 h5Router.use('/operations',h5OperationsRouter)
-h5Router.use(districtRouter,h5ServicePostsRouter,h5StoreBindingRouter,h5MyContentRouter,
+h5Router.use(districtRouter,h5ServicePostsRouter,h5StoreBindingRouter,h5MyContentRouter,h5JobsRouter,
   h5ProgramsRouter,h5DirectoryRouter,h5OrdersRouter,h5PetRecordsRouter,h5StoriesRouter,h5SocialPagesRouter)
 const uuid = z.string().uuid()
 const area = z.string().refine(id => h5Areas.some(item => item.id === id), '请选择已有商圈')

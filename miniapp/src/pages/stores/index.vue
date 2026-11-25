@@ -162,6 +162,7 @@ function publish() {
           <view class="store-card-actions">
             <button class="small" :disabled="busy || scanning" @tap="editStore(store)">编辑门店</button>
             <button class="small" :disabled="!store.enabled || !store.ready" @tap="go('stores',{storeId:store.id})">发服务帖</button>
+            <button :id="'open-store-jobs-'+store.id" class="small" :disabled="busy || scanning" @tap="go('store-jobs',{storeId:store.id})">门店招聘</button>
           </view>
         </view>
         <view v-if="!loading && !error && !stores.length" class="card store-empty">

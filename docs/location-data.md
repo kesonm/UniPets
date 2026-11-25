@@ -10,6 +10,7 @@
 
 - 边界源是 geoBoundaries CHN ADM3，版本 `9469f09`，对应的 OpenStreetMap 数据标注为 2017 年。项目中的边界及派生边界数据采用 ODbL 1.0。© OpenStreetMap 贡献者。[数据元信息](https://www.geoboundaries.org/api/current/gbOpen/CHN/ADM3/) · [OpenStreetMap 版权](https://www.openstreetmap.org/copyright) · [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/)
 - 区县中文名及标识来自 GeoNames 的 `CN.zip`，采用 CC BY 4.0，名称数据采样于 2026-11-24。[GeoNames 数据](https://www.geonames.org/export/) · [许可说明](https://download.geonames.org/export/dump/readme.txt)
+- 2026-11-25 更新南昌市红谷滩区和新建区。采用 OpenStreetMap 当日获取的 WGS84 边界，经简化和量化后裁掉与新边界重叠的旧几何。新建区沿用编号 `1788795`，红谷滩区使用 `cn-360113`。© OpenStreetMap 贡献者，适用 ODbL 1.0。[红谷滩区边界](https://www.openstreetmap.org/relation/3474630) · [新建区边界](https://www.openstreetmap.org/relation/3170064) · [南昌市区划调整公告](https://www.nc.gov.cn/ncszf/ttxw/201912/313e0fc22c54427b9aa2a14626c5478b.shtml)
 
 ### 更新区划文件
 
@@ -19,7 +20,7 @@
 python3 scripts/build-district-data.py adm3.json CN.zip server/data/china-districts.json.gz
 ```
 
-已有门店沿用关联的区县编号。更新区划文件时应核对编号和旧商圈映射。
+已有门店沿用关联的区县编号。更新区划文件时应核对编号、旧商圈映射和上面记录的边界修订。小程序重新打开首页时会用保存的坐标和区县边界重新识别浏览位置。
 
 ### 服务筛选的省份和城市
 

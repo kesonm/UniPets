@@ -58,6 +58,13 @@
       }
     },
     {
+      "path": "pages/store-jobs/index",
+      "style": {
+        "navigationBarTitleText": "门店招聘",
+        "navigationBarBackgroundColor": "#f5f4f1"
+      }
+    },
+    {
       "path": "pages/pet-edit/index",
       "style": {
         "navigationBarTitleText": "宠物档案"
@@ -78,7 +85,7 @@
     {
       "path": "pages/stories/index",
       "style": {
-        "navigationBarTitleText": "宠物故事"
+        "navigationBarTitleText": "宠物短剧漫剧"
       }
     },
     {
@@ -95,9 +102,9 @@
       }
     },
     {
-      "path": "pages/location-map/index",
+      "path": "pages/jobs/index",
       "style": {
-        "navigationBarTitleText": "选择位置",
+        "navigationBarTitleText": "宠物人才就业",
         "navigationBarBackgroundColor": "#f5f4f1"
       }
     },

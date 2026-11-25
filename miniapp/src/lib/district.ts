@@ -47,17 +47,20 @@ export async function chooseNativeLocation(initial: ServiceCoordinates | null | 
   }
 }
 
+export async function resolveDistrictAt({latitude,longitude}: ServiceCoordinates) {
+  const x = Math.floor(longitude), y = Math.floor(latitude)
+  if (cached?.x !== x || cached.y !== y) {
+    const {boundaries} = await api<{boundaries:DistrictBoundary[]}>('/h5/catalog/district-boundaries?x='+x+'&y='+y+'&v=2')
+    cached = {x,y,boundaries}
+  }
+  return districtAt(latitude,longitude,cached.boundaries)
+}
+
 export async function locateDistrict(interactive = true): Promise<void> {
   if (locatingDistrict.value) return
   locatingDistrict.value = true
   try {
-    const { latitude, longitude } = await deviceCoordinates()
-    const x = Math.floor(longitude), y = Math.floor(latitude)
-    if (cached?.x !== x || cached.y !== y) {
-      const { boundaries } = await api<{ boundaries: DistrictBoundary[] }>('/h5/catalog/district-boundaries?x=' + x + '&y=' + y)
-      cached = { x, y, boundaries }
-    }
-    const found = districtAt(latitude, longitude, cached.boundaries)
+    const found = await resolveDistrictAt(await deviceCoordinates())
     if (!found) {
       district.value = undefined
       uni.removeStorageSync(key)

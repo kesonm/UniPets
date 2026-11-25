@@ -126,7 +126,7 @@ export function canReview(row: Content) {
 export function recordAction(row: AdminRecord) {
   if ('enabled' in row && !('isAdmin' in row && row.isAdmin)) {
     const title = 'username' in row ? '账号' : '门店'
-    const notice = title === '账号' ? '账号的现有登录会话会立即失效。' : '关联商品和服务会暂停展示，已有订单和预约会保留。'
+    const notice = title === '账号' ? '账号的现有登录会话会立即失效。' : '关联商品、服务和招聘岗位会暂停展示，已有订单和预约会保留。'
     return {label:row.enabled ? '停用' : '启用',body:{enabled:!row.enabled},notice:row.enabled ? notice : ''}
   }
   if ('storeId' in row) return {label:row.published ? '下架' : '上架',body:{published:!row.published},

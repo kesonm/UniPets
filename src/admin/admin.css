@@ -142,6 +142,7 @@
 .admin-editor label { display: grid; gap: 6px; color: #444d42; font-size: 13px; font-weight: 620; }
 .admin-editor textarea { padding-block: 9px; resize: vertical; }
 .admin-editor-pair { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px 12px; }
+.admin-store-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
 .admin-store-workspace {
   --store-panel-height: clamp(20rem,65dvh,42rem);
   display: grid; grid-template-columns: minmax(0,1fr); gap: 16px; align-items: start;
@@ -203,7 +204,7 @@
     display: grid; grid-template-rows: auto minmax(0,1fr); height: 100dvh; min-height: 34rem;
   }
   .admin-workspace-stores > .admin-main {
-    display: grid; grid-template-rows: auto minmax(0,1fr); width: 100%; min-height: 0; padding-bottom: 32px;
+    display: grid; grid-template-rows: auto auto minmax(0,1fr); width: 100%; min-height: 0; padding-bottom: 32px;
   }
   .admin-store-workspace {
     grid-template-columns: minmax(0,1fr) 320px; grid-template-rows: minmax(0,1fr); min-height: 0; max-height: 42rem;
