@@ -95,7 +95,7 @@ onBeforeUnmount(() => {
       <button class="admin-button" type="button" :disabled="loading" @click="refresh">重试</button>
     </div>
     <p v-else-if="!codes.length" class="admin-muted" role="status">{{ loading ? '正在读取绑定码…' : '暂无可用绑定码' }}</p>
-    <ul v-else class="admin-store-codes-grid">
+    <ul v-else class="admin-store-codes-grid" tabindex="0" aria-label="可用绑定码">
       <li v-for="item in codes" :key="item.slot" class="admin-store-code">
         <button class="admin-store-code-qr" type="button" :aria-label="`放大第 ${item.slot} 个绑定码的二维码`"
           :disabled="refreshingSlot === item.slot" @click="qr=item">

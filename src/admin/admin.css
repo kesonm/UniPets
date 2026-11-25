@@ -142,13 +142,21 @@
 .admin-editor label { display: grid; gap: 6px; color: #444d42; font-size: 13px; font-weight: 620; }
 .admin-editor textarea { padding-block: 9px; resize: vertical; }
 .admin-editor-pair { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px 12px; }
-.admin-store-workspace { display: grid; grid-template-columns: minmax(0,1fr); gap: 16px; align-items: start; }
-.admin-store-codes { min-width: 0; padding: 18px; }
-.admin-store-codes-header { padding-bottom: 12px; border-bottom: 1px solid var(--admin-line); }
+.admin-store-workspace {
+  --store-panel-height: clamp(20rem,65dvh,42rem);
+  display: grid; grid-template-columns: minmax(0,1fr); gap: 16px; align-items: start;
+}
+.admin-store-codes, .admin-bound-stores { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.admin-store-codes { height: var(--store-panel-height); padding: 18px; }
+.admin-store-codes-header { flex: none; padding-bottom: 12px; border-bottom: 1px solid var(--admin-line); }
 .admin-store-codes-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .admin-store-workspace h2 { margin: 0; font-size: 17px; font-weight: 700; }
 .admin-store-codes p { margin: 4px 0 0; font-size: 12px; }
-.admin-store-codes-grid { padding: 0; margin: 0; list-style: none; }
+.admin-store-codes-grid {
+  flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable;
+  padding: 0 4px 4px; margin: 0 -4px; list-style: none;
+}
+.admin-store-codes-grid:focus-visible { outline: 2px solid var(--admin-focus); outline-offset: -2px; }
 .admin-store-code { display: grid; grid-template-columns: 74px minmax(0,1fr); align-items: center; gap: 12px; padding: 9px 0; }
 .admin-store-code + .admin-store-code { border-top: 1px solid var(--admin-line); }
 .admin-store-code:last-child { padding-bottom: 0; }
@@ -160,11 +168,16 @@
 .admin-store-code-actions .admin-button { min-height: 29px; padding-inline: 8px; border-radius: 6px; font-size: 12px; }
 .admin-store-code-actions .el-icon { font-size: 13px; }
 .admin-store-codes-error { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
-.admin-bound-stores { min-width: 0; }
+.admin-bound-stores { max-height: var(--store-panel-height); }
+.admin-bound-stores > :is(.admin-bound-stores-header,.admin-toolbar,.admin-pagination) { flex: none; }
+.admin-bound-stores .admin-table-scroll { min-height: 0; border-top: 1px solid var(--admin-line); }
+.admin-bound-stores .admin-table-scroll th {
+  position: sticky; top: 0; z-index: 1; border: 0; box-shadow: inset 0 -1px var(--admin-line);
+}
 .admin-bound-stores-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px 12px; }
 .admin-bound-stores .admin-toolbar { flex-wrap: wrap; padding-top: 0; }
 .admin-bound-stores .admin-search { flex: 1; width: auto; max-width: 410px; }
-.admin-bound-stores .admin-empty { border-top: 1px solid var(--admin-line); gap: 7px; }
+.admin-bound-stores .admin-empty { min-height: 0; padding-block: 26px; border-top: 1px solid var(--admin-line); gap: 7px; }
 .admin-bound-stores .admin-empty > p { font-weight: 650; color: var(--admin-ink); }
 .admin-bound-stores .admin-empty > small { font-size: 12px; }
 .admin-binding-qr { display: block; width: min(212px,100%); aspect-ratio: 1; object-fit: contain; margin-inline: auto; }
@@ -186,7 +199,18 @@
 .admin-confirm { max-width: calc(100% - 24px); }
 
 @media (min-width: 1280px) {
-  .admin-store-workspace { grid-template-columns: minmax(0,1fr) 320px; }
+  .admin-workspace-stores {
+    display: grid; grid-template-rows: auto minmax(0,1fr); height: 100dvh; min-height: 34rem;
+  }
+  .admin-workspace-stores > .admin-main {
+    display: grid; grid-template-rows: auto minmax(0,1fr); width: 100%; min-height: 0; padding-bottom: 32px;
+  }
+  .admin-store-workspace {
+    grid-template-columns: minmax(0,1fr) 320px; grid-template-rows: minmax(0,1fr); min-height: 0; max-height: 42rem;
+  }
+  .admin-store-codes { height: 100%; }
+  .admin-bound-stores { max-height: 100%; }
+  .admin-bound-stores .admin-table-scroll, .admin-store-codes-grid { overscroll-behavior-y: contain; }
 }
 @media (max-width: 930px) {
   .admin-shell { grid-template-columns: 175px minmax(0, 1fr); }

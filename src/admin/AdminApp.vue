@@ -27,6 +27,7 @@ const search = ref('')
 const keyword = ref('')
 const state = ref('')
 const page = ref(1)
+const tableScroll = ref<HTMLElement>()
 const hasMore = ref(false)
 const working = ref('')
 const drawer = ref<{record?:AdminRecord}|null>(null)
@@ -85,6 +86,10 @@ function movePage(offset: number) {
   page.value += offset
   void load()
 }
+
+watch([keyword,state,page],() => {
+  if (isStores.value && tableScroll.value) tableScroll.value.scrollTop = 0
+})
 
 function navigate() {
   active.value = fromHash()
@@ -221,7 +226,7 @@ onBeforeUnmount(() => {
       </nav>
     </aside>
 
-    <div class="admin-workspace">
+    <div class="admin-workspace" :class="{'admin-workspace-stores':isStores}">
       <header class="admin-topbar">
         <button class="admin-button admin-nav-toggle admin-icon-button" type="button" aria-label="管理菜单"
           aria-controls="admin-navigation" :aria-expanded="navigationOpen" @click="navigationOpen=!navigationOpen"><el-icon><Menu /></el-icon></button>
@@ -260,7 +265,7 @@ onBeforeUnmount(() => {
               <button v-if="!isStores" class="admin-button admin-icon-button admin-reload" type="button" title="刷新" aria-label="刷新" :disabled="loading"
                 @click="load"><el-icon><Refresh /></el-icon></button>
             </form>
-            <div v-if="!isStores || rows.length" class="admin-table-scroll" tabindex="0" :aria-label="listTitle">
+            <div v-if="!isStores || rows.length" ref="tableScroll" class="admin-table-scroll" tabindex="0" :aria-label="listTitle">
               <table>
                 <thead><tr><th v-for="column in active.columns" :key="column" scope="col">{{ column }}</th><th scope="col">操作</th></tr></thead>
                 <tbody v-if="rows.length">
