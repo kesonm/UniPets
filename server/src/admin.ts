@@ -99,7 +99,7 @@ const bindingCodeSlot = z.coerce.number().int().min(1).max(10)
 adminRouter.get('/stores',list(storeList))
 adminRouter.get('/stores/bound',list({...storeList,scope:'owner_user_id IS NOT NULL'}))
 adminRouter.get('/stores/jobs',list({
-  select:storeJobFields, from:storeJobsFrom, search:'j.title,s.name,s.address', order:"(j.status='pending') DESC,j.created_at DESC,j.id DESC",
+  select:storeJobFields, from:storeJobsFrom, search:'j.title,j.custom_category,s.name,s.address', order:"(j.status='pending') DESC,j.created_at DESC,j.id DESC",
   states:{pending:"j.status='pending'",published:"j.status='published'",rejected:"j.status='rejected'",closed:"j.status='closed'"},
 }))
 adminRouter.get('/stores/jobs/:id/images/:position', async (req,res) => {

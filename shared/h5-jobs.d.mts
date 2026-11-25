@@ -5,6 +5,8 @@ export const jobStatuses: Readonly<Record<'pending' | 'published' | 'rejected' |
 export type JobCategory = keyof typeof jobCategories
 export type EmploymentType = keyof typeof employmentTypes
 export type JobStatus = keyof typeof jobStatuses
+export const jobCategoryMaxLength: number
+export function jobCategoryLabel(job: Pick<StoreJob, 'category' | 'customCategory'>): string
 export function jobCityLabel(code: string | null): string
 
 export interface StoreJob {
@@ -16,6 +18,7 @@ export interface StoreJob {
   phone: string
   title: string
   category: JobCategory
+  customCategory?: string | null
   employmentType: EmploymentType
   salary: string
   description: string

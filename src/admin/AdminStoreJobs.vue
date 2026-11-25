@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { ArrowLeft, ArrowRight, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { employmentTypes, jobCategories, jobCityLabel, jobStatuses, type JobStatus, type StoreJob } from '../../shared/h5-jobs.mjs'
+import { employmentTypes, jobCategoryLabel, jobCityLabel, jobStatuses, type JobStatus, type StoreJob } from '../../shared/h5-jobs.mjs'
 import { api, apiUrl } from '../lib/api'
 
 const endpoint = '/admin/stores/jobs'
@@ -93,7 +93,7 @@ onBeforeUnmount(() => { active = false; revision++ })
     <form class="admin-toolbar" role="search" @submit.prevent="findJobs">
       <div class="admin-search">
         <el-icon aria-hidden="true"><Search /></el-icon>
-        <input v-model="search" type="search" maxlength="120" aria-label="搜索岗位、门店或地址" placeholder="搜索岗位、门店或地址"
+        <input v-model="search" type="search" maxlength="120" aria-label="搜索岗位、类别、门店或地址" placeholder="搜索岗位、类别、门店或地址"
           @search="!search && keyword && findJobs()">
       </div>
       <select v-model="filter" aria-label="岗位状态" @change="findJobs">
@@ -107,7 +107,7 @@ onBeforeUnmount(() => { active = false; revision++ })
         <thead><tr><th>岗位</th><th>门店</th><th>城市</th><th>薪资</th><th>状态</th><th>操作</th></tr></thead>
         <tbody>
           <tr v-for="job in items" :key="job.id">
-            <td><strong>{{ job.title }}</strong><small>{{ jobCategories[job.category] }} · {{ employmentTypes[job.employmentType] }}</small></td>
+            <td><strong>{{ job.title }}</strong><small>{{ jobCategoryLabel(job) }} · {{ employmentTypes[job.employmentType] }}</small></td>
             <td>{{ job.storeName }}</td>
             <td>{{ jobCityLabel(job.cityCode) || '—' }}</td>
             <td>{{ job.salary }}</td>
@@ -142,7 +142,7 @@ onBeforeUnmount(() => { active = false; revision++ })
   <el-dialog :model-value="Boolean(detail)" title="岗位详情" width="min(540px, 94vw)" @update:model-value="(open: boolean) => { if (!open) detail=undefined }">
     <div v-if="detail" class="admin-job-detail">
       <h3>{{ detail.title }}</h3>
-      <p>{{ jobCategories[detail.category] }} · {{ employmentTypes[detail.employmentType] }} · {{ detail.salary }}</p>
+      <p>{{ jobCategoryLabel(detail) }} · {{ employmentTypes[detail.employmentType] }} · {{ detail.salary }}</p>
       <p>{{ detail.storeName }} · {{ detail.address }} · {{ detail.phone }}</p>
       <div v-if="detail.imageCount" class="admin-job-images">
         <a v-for="position in detail.imageCount" :key="position" :href="apiUrl(endpoint+'/'+detail.id+'/images/'+position)" target="_blank" rel="noopener">

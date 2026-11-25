@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import type { H5Post, Recommendation } from '../../../src/h5/types'
 import { areaLabel } from '../../../src/h5/business'
 import { postPetTypeLabels, serviceCategories } from '../../../shared/h5-discovery.mjs'
-import { jobCategories } from '../../../shared/h5-jobs.mjs'
+import { jobCategoryLabel } from '../../../shared/h5-jobs.mjs'
 import { defaultRecommendationLabels, type RecommendationLabels } from '../../../shared/h5-recommendation-labels.mjs'
 import { money } from '../lib/cart'
 import { go, productCover, publicImage, servicePostImage } from '../lib/client'
@@ -38,7 +38,7 @@ function recommendationTile(item: OtherRecommendation) {
         detail:item.post.stock === 0 ? '暂无库存' : ''}
     case 'job':
       return {image:item.post.imageCount ? publicImage('/h5/jobs/'+item.post.id+'/images/1') : '',
-        name:item.post.storeName, amount:item.post.salary, detail:jobCategories[item.post.category]}
+        name:item.post.storeName, amount:item.post.salary, detail:jobCategoryLabel(item.post)}
     case 'story':
       return {image:item.post.hasCover ? publicImage('/h5/stories/'+item.post.id+'/cover') : '',
         name:item.post.author, amount:'', detail:item.post.sceneCount+' 幕'}

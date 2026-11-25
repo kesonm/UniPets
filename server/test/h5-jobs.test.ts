@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import test from 'node:test'
 import sharp from 'sharp'
+import { jobCategoryLabel } from '../../shared/h5-jobs.mjs'
 import { createApp } from '../src/app.js'
 import { config } from '../src/config.js'
 import { db } from '../src/db.js'
@@ -71,6 +72,7 @@ test('only approved openings at active stores appear in the job directory', {tim
     const pending = await request(mine,'GET',undefined,owner.cookie)
     assert.equal(pending.data.items[0].status,'pending')
     assert.equal(pending.data.items[0].imageCount,3)
+    assert.equal(jobCategoryLabel(pending.data.items[0]),'宠物美容')
     const publicPhoto = '/h5/jobs/'+id+'/images/1'
     const ownerPhoto = mine+'/'+id+'/images/2'
     const adminPhoto = '/admin/stores/jobs/'+id+'/images/3'
@@ -115,6 +117,25 @@ test('only approved openings at active stores appear in the job directory', {tim
     assert.ok(!(await ids('?category=care')).includes(id))
     assert.ok(!(await ids('?type=part-time')).includes(id))
     assert.equal((await request('/h5/jobs?category=unknown')).status,400)
+
+    const customCategory = '宠物摄影 '+suffix
+    for (const invalid of [' ', '字'.repeat(25), '摄影\n助理']) {
+      assert.equal((await request(mine,'POST',{...form,category:'other',customCategory:invalid},owner.cookie)).status,400)
+    }
+    assert.equal((await request(mine,'POST',{...form,customCategory},owner.cookie)).status,400)
+    const custom = await request(mine,'POST',{...form,category:'other',customCategory:' '+customCategory+' '},owner.cookie)
+    assert.equal(custom.status,201)
+    const customId = custom.data.id
+    const customQuery = '?q='+encodeURIComponent(customCategory)
+    const customPending = (await admin('/jobs'+customQuery+'&state=pending')).data.items
+    assert.equal(customPending.length,1)
+    assert.equal(customPending[0].id,customId)
+    assert.equal(jobCategoryLabel(customPending[0]),customCategory)
+    assert.equal((await request(mine,'GET',undefined,owner.cookie)).data.items.find((job: {id:string}) => job.id===customId).customCategory,customCategory)
+    assert.deepEqual(await ids(customQuery),[])
+    assert.equal((await admin('/jobs/'+customId,'PATCH',{status:'published'})).status,200)
+    assert.deepEqual(await ids(customQuery+'&category=other'),[customId])
+    assert.equal(jobCategoryLabel((await request('/h5/jobs/'+customId)).data.job),customCategory)
 
     const demo = await request(mine,'POST',{...form,title:'内部演示 '+suffix,images:[cover],internalDemo:true},owner.cookie)
     assert.equal(demo.status,201)

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { onHide, onLoad, onShow } from '@dcloudio/uni-app'
 import { servicePhone } from '../../../../shared/h5-discovery.mjs'
-import { employmentTypes, jobCategories, jobCityLabel, type StoreJob } from '../../../../shared/h5-jobs.mjs'
+import { employmentTypes, jobCategories, jobCategoryLabel, jobCityLabel, type StoreJob } from '../../../../shared/h5-jobs.mjs'
 import { serviceRegions } from '../../../../shared/h5-service-regions.mjs'
 import BrowseToolbar from '../../components/BrowseToolbar.vue'
 import ChoiceField from '../../components/ChoiceField.vue'
@@ -72,7 +72,7 @@ function previewImage(current: string) {
 
 <template>
   <view class="screen menu-screen" :style="layout">
-    <BrowseToolbar v-if="!id" v-model="input" placeholder="搜索岗位或门店" @search="query = input.trim()" />
+    <BrowseToolbar v-if="!id" v-model="input" placeholder="搜索岗位、类别或门店" @search="query = input.trim()" />
     <BrowseToolbar v-else title="岗位详情" />
     <view v-if="!id" class="browse-filters">
       <picker mode="multiSelector" :range="cityColumns" range-key="label" :value="cityDraft" aria-label="按城市筛选"
@@ -91,7 +91,7 @@ function previewImage(current: string) {
           <text class="job-salary">{{ job.salary }}</text>
         </view>
         <view class="job-meta">
-          <text>{{ jobCategories[job.category] }}</text><text>{{ employmentTypes[job.employmentType] }}</text>
+          <text>{{ jobCategoryLabel(job) }}</text><text>{{ employmentTypes[job.employmentType] }}</text>
         </view>
         <view v-if="images.length" class="job-detail-images">
           <image v-for="url in images" :key="url" :src="url" mode="aspectFill" @tap="previewImage(url)" />

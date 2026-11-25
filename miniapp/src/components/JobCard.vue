@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { employmentTypes, jobCategories, jobCityLabel, type StoreJob } from '../../../shared/h5-jobs.mjs'
+import { employmentTypes, jobCategoryLabel, jobCityLabel, type StoreJob } from '../../../shared/h5-jobs.mjs'
 import { go, publicImage } from '../lib/client'
 import UiIcon from './UiIcon.vue'
 
@@ -14,7 +14,7 @@ defineProps<{job:StoreJob}>()
       <text class="browse-card-title">{{ job.title }}</text>
       <text class="job-salary">{{ job.salary }}</text>
       <text class="browse-card-meta">{{ [job.storeName, jobCityLabel(job.cityCode)].filter(Boolean).join(' · ') }}</text>
-      <text class="browse-card-meta">{{ [jobCategories[job.category], employmentTypes[job.employmentType]].filter(Boolean).join(' · ') }}</text>
+      <text class="browse-card-meta">{{ [jobCategoryLabel(job), employmentTypes[job.employmentType]].filter(Boolean).join(' · ') }}</text>
     </view>
   </button>
 </template>

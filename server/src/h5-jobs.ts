@@ -3,7 +3,7 @@ import { Router } from 'express'
 import type { ResultSetHeader } from 'mysql2/promise'
 import { z } from 'zod'
 import { servicePhone } from '../../shared/h5-discovery.mjs'
-import { employmentTypes, jobCategories, type EmploymentType, type JobCategory, type JobStatus, type StoreJob } from '../../shared/h5-jobs.mjs'
+import { employmentTypes, jobCategories, jobCategoryMaxLength, type EmploymentType, type JobCategory, type JobStatus, type StoreJob } from '../../shared/h5-jobs.mjs'
 import { requireAuth } from './auth.js'
 import { db, rows, transaction } from './db.js'
 import { districtById, districtInput, serviceCityInput } from './districts.js'
@@ -28,15 +28,19 @@ const listInput = z.object({
 const jobInput = z.object({
   title: z.string().trim().min(1,'请填写岗位名称').max(80),
   category: categoryInput,
+  customCategory: z.string().trim().min(1,'请填写岗位类别').max(jobCategoryMaxLength)
+    .regex(/^[^\p{Cc}\p{Zl}\p{Zp}]+$/u,'岗位类别需填写为单行文字').optional(),
   employmentType: typeInput,
   salary: z.string().trim().min(1,'请填写薪资').max(40),
   description: z.string().trim().min(1,'请填写岗位职责和要求').max(2000),
   images: postImagesInput,
   internalDemo: z.boolean().default(false),
-}).strict()
+}).strict().refine(job => job.customCategory === undefined || job.category === 'other', {
+  path:['customCategory'], message:'请选择其他岗位后再填写自定义类别',
+})
 
 export const storeJobsFrom = 'h5_store_jobs j JOIN h5_stores s ON s.id=j.store_id'
-export const storeJobFields = `j.id,j.store_id AS storeId,j.title,j.category,j.employment_type AS employmentType,
+export const storeJobFields = `j.id,j.store_id AS storeId,j.title,j.category,j.custom_category AS customCategory,j.employment_type AS employmentType,
   j.salary,j.description,j.status,j.created_at AS createdAt,j.published_at AS publishedAt,
   j.internal_demo AS internalDemo,(SELECT COUNT(*) FROM h5_store_job_images ji WHERE ji.job_id=j.id) AS imageCount,
   s.name AS storeName,s.city_code AS cityCode,s.address,s.phone`
@@ -61,7 +65,7 @@ h5JobsRouter.get(route, async (req,res) => {
     }
   }
   if (filter.q) {
-    conditions.push("LOCATE(?,CONCAT_WS(' ',j.title,s.name,j.description))>0")
+    conditions.push("LOCATE(?,CONCAT_WS(' ',j.title,s.name,j.description,j.custom_category))>0")
     values.push(filter.q)
   }
   const nearbyCity = filter.city ? undefined : districtById(filter.district)?.serviceCityCode
@@ -125,9 +129,9 @@ h5JobsRouter.post(merchant, requireAuth, async (req,res) => {
   const images = await Promise.all(job.images.map(readPostImage))
   await transaction(async conn => {
     const [created] = await conn.execute<ResultSetHeader>(`INSERT INTO h5_store_jobs
-      (id,store_id,title,category,employment_type,salary,description,internal_demo)
-      SELECT ?,id,?,?,?,?,?,? FROM h5_stores WHERE id=? AND owner_user_id=? AND enabled=TRUE`,
-    [id,job.title,job.category,job.employmentType,job.salary,job.description,job.internalDemo,storeId,req.user.id])
+      (id,store_id,title,category,custom_category,employment_type,salary,description,internal_demo)
+      SELECT ?,id,?,?,?,?,?,?,? FROM h5_stores WHERE id=? AND owner_user_id=? AND enabled=TRUE`,
+    [id,job.title,job.category,job.customCategory ?? null,job.employmentType,job.salary,job.description,job.internalDemo,storeId,req.user.id])
     if (!created.affectedRows) throw new HttpError(409,'门店状态已变更，请刷新后重试')
     for (const [index,image] of images.entries()) {
       await conn.execute('INSERT INTO h5_store_job_images (job_id,position,image) VALUES (?,?,?)',[id,index+1,image])

@@ -21,6 +21,12 @@ export const jobStatuses = {
   closed: '已关闭',
 }
 
+export const jobCategoryMaxLength = 24
+
+export function jobCategoryLabel(job) {
+  return job.customCategory || jobCategories[job.category]
+}
+
 const cities = new Map(serviceRegions.flatMap(region => region.cities.length ? region.cities : [region])
   .map(city => [city.id, city.label]))
 
