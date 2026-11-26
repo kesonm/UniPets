@@ -111,7 +111,7 @@ watch(active,() => {
   state.value = ''
   filterRecords()
 })
-watch(active,section => { document.title = section.title+' · 宠云管理后台' },{immediate:true})
+watch(active,section => { document.title = section.title+' · 拼宠宠管理后台' },{immediate:true})
 
 async function login() {
   if (sessionBusy.value) return
@@ -209,7 +209,7 @@ onBeforeUnmount(() => {
   <main v-else-if="!user" class="admin-login">
     <form class="admin-login-card" @submit.prevent="login">
       <span class="admin-logo admin-login-logo"><img :src="logo" alt=""></span>
-      <h1>宠云管理后台</h1>
+      <h1>拼宠宠管理后台</h1>
       <label for="admin-username">管理员账号</label>
       <input id="admin-username" v-model.trim="username" autocomplete="username" maxlength="32" required>
       <label for="admin-password">密码</label>
@@ -222,7 +222,7 @@ onBeforeUnmount(() => {
     <aside class="admin-sidebar" :class="{'admin-nav-open':navigationOpen}">
       <div class="admin-brand">
         <span class="admin-logo"><img :src="logo" alt=""></span>
-        <span><strong>宠云</strong><small>管理后台</small></span>
+        <span><strong>拼宠宠</strong><small>管理后台</small></span>
       </div>
       <nav id="admin-navigation" aria-label="管理模块">
         <a v-for="section in sections" :key="section.id" :href="'#'+section.id"
