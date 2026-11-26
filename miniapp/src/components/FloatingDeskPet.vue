@@ -17,6 +17,7 @@ const TAB_ROUTES = new Set([
 
 const active = ref(true)
 const dragging = ref(false)
+const windowWidth = ref(uni.getWindowInfo?.().windowWidth || 375)
 const stageRef = ref<InstanceType<typeof DeskPetStage> | null>(null)
 
 function readBounds() {
@@ -53,6 +54,19 @@ const pos = ref(clamp(deskPetPosition.value ?? defaultPos()))
 
 const visible = computed(() => deskPetEnabled.value)
 const bubbleBelow = computed(() => pos.value.y < 150)
+const bubbleWidth = computed(() => {
+  const length = Array.from(companionBubble.value).length
+  return Math.min(240, Math.max(96, Math.round(length * 12.5 + 24)))
+})
+// Keep the bubble inside the viewport when the pet is dragged near an edge.
+const bubbleLeft = computed(() => {
+  const half = bubbleWidth.value / 2
+  const center = pos.value.x + PET_SIZE / 2
+  const minCenter = MARGIN_X + half
+  const maxCenter = Math.max(minCenter, windowWidth.value - MARGIN_X - half)
+  const clamped = Math.min(Math.max(center, minCenter), maxCenter)
+  return clamped - pos.value.x - half
+})
 const wrapStyle = computed(() => ({
   width: PET_SIZE + 'px',
   height: PET_SIZE + 'px',
@@ -113,6 +127,7 @@ onHide(() => {
   dragging.value = false
 })
 onResize(() => {
+  windowWidth.value = uni.getWindowInfo?.().windowWidth || windowWidth.value
   syncPosition()
 })
 watch(
@@ -136,7 +151,7 @@ watch(
     @touchend="onTouchEnd"
     @touchcancel="onTouchEnd"
   >
-    <view v-if="companionBubble" class="desk-pet-bubble" :class="{ below: bubbleBelow }" role="status" aria-live="polite">{{ companionBubble }}</view>
+    <view v-if="companionBubble" class="desk-pet-bubble" :class="{ below: bubbleBelow }" :style="{ width: bubbleWidth + 'px', left: bubbleLeft + 'px' }" role="status" aria-live="polite">{{ companionBubble }}</view>
     <view class="desk-pet-shadow" />
     <DeskPetStage ref="stageRef" :pet="currentDeskPet" :size="PET_SIZE" :paused="!active" />
   </view>
@@ -172,7 +187,7 @@ watch(
 .desk-pet-bubble {
   position: absolute;
   bottom: calc(100% - 2px);
-  left: 50%;
+  left: 0;
   max-width: 240px;
   padding: 5px 10px;
   border: 1px solid #f0d77d;
@@ -185,7 +200,7 @@ watch(
   text-align: center;
   white-space: normal;
   overflow-wrap: anywhere;
-  transform: translateX(-50%);
+  word-break: break-word;
   box-shadow: 0 3px 10px rgba(56, 40, 12, 0.14);
   pointer-events: none;
 }
