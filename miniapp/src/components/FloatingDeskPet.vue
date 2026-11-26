@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, getCurrentInstance, ref, watch } from 'vue'
 import { onHide, onResize, onShow } from '@dcloudio/uni-app'
 import { companionAction, companionBubble, tapCompanion } from '../lib/companion'
 import { currentDeskPet, deskPetEnabled, deskPetPosition, saveDeskPetPosition } from '../lib/desk-pet'
 import DeskPetStage from './DeskPetStage.vue'
 
+const props = defineProps<{ dock?: boolean }>()
+const host = getCurrentInstance()?.proxy
 const PET_SIZE = 84
 const MARGIN_X = 8
 const TAB_ROUTES = new Set([
@@ -17,6 +19,7 @@ const TAB_ROUTES = new Set([
 
 const active = ref(true)
 const dragging = ref(false)
+const releasedFromDock = ref(false)
 const windowWidth = ref(uni.getWindowInfo?.().windowWidth || 375)
 const stageRef = ref<InstanceType<typeof DeskPetStage> | null>(null)
 
@@ -53,7 +56,8 @@ function defaultPos() {
 const pos = ref(clamp(deskPetPosition.value ?? defaultPos()))
 
 const visible = computed(() => deskPetEnabled.value)
-const bubbleBelow = computed(() => pos.value.y < 150)
+const docked = computed(() => props.dock && !releasedFromDock.value)
+const bubbleBelow = computed(() => !docked.value && pos.value.y < 150)
 const bubbleWidth = computed(() => {
   const length = Array.from(companionBubble.value).length
   return Math.min(240, Math.max(96, Math.round(length * 12.5 + 24)))
@@ -70,7 +74,7 @@ const bubbleLeft = computed(() => {
 const wrapStyle = computed(() => ({
   width: PET_SIZE + 'px',
   height: PET_SIZE + 'px',
-  transform: `translate3d(${pos.value.x}px, ${pos.value.y}px, 0)`,
+  transform: docked.value ? 'none' : `translate3d(${pos.value.x}px, ${pos.value.y}px, 0)`,
 }))
 
 let startTouchX = 0
@@ -92,6 +96,17 @@ function onTouchStart(event: TouchEvent) {
   startTouchY = touch.clientY
   startPosX = pos.value.x
   startPosY = pos.value.y
+  if (docked.value) {
+    // Start a drag from the card's visible position, including after the page has scrolled.
+    startPosX = touch.clientX - PET_SIZE / 2
+    startPosY = touch.clientY - PET_SIZE / 2
+    if (host) uni.createSelectorQuery().in(host).select('.floating-desk-pet').boundingClientRect(rect => {
+      if (dragging.value && docked.value && rect && !Array.isArray(rect)) {
+        startPosX = rect.left ?? startPosX
+        startPosY = rect.top ?? startPosY
+      }
+    }).exec()
+  }
 }
 
 function onTouchMove(event: TouchEvent) {
@@ -100,7 +115,9 @@ function onTouchMove(event: TouchEvent) {
   if (!touch) return
   const dx = touch.clientX - startTouchX
   const dy = touch.clientY - startTouchY
-  if (!moved && Math.hypot(dx, dy) >= 6) moved = true
+  if (!moved && Math.hypot(dx, dy) < 6) return
+  moved = true
+  if (docked.value) releasedFromDock.value = true
   pos.value = clamp({ x: startPosX + dx, y: startPosY + dy })
 }
 
@@ -120,6 +137,7 @@ watch(deskPetPosition, (next) => {
 
 onShow(() => {
   active.value = true
+  releasedFromDock.value = false
   syncPosition()
 })
 onHide(() => {
@@ -143,7 +161,7 @@ watch(
   <view
     v-if="visible"
     class="floating-desk-pet"
-    :class="{ dragging }"
+    :class="{ dragging, docked }"
     :style="wrapStyle"
     aria-label="悬浮桌宠，可拖动"
     @touchstart="onTouchStart"
@@ -151,7 +169,7 @@ watch(
     @touchend="onTouchEnd"
     @touchcancel="onTouchEnd"
   >
-    <view v-if="companionBubble" class="desk-pet-bubble" :class="{ below: bubbleBelow }" :style="{ width: bubbleWidth + 'px', left: bubbleLeft + 'px' }" role="status" aria-live="polite">{{ companionBubble }}</view>
+    <view v-if="companionBubble" class="desk-pet-bubble" :class="{ below: bubbleBelow }" :style="{ width: bubbleWidth + 'px', left: docked ? 'auto' : bubbleLeft + 'px' }" role="status" aria-live="polite">{{ companionBubble }}</view>
     <view class="desk-pet-shadow" />
     <DeskPetStage ref="stageRef" :pet="currentDeskPet" :size="PET_SIZE" :paused="!active" />
   </view>
@@ -166,10 +184,13 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: auto;
   touch-action: none;
   user-select: none;
   will-change: transform;
 }
+.floating-desk-pet.docked { position: relative; }
+.floating-desk-pet.docked .desk-pet-bubble { right: 0; }
 .floating-desk-pet.dragging {
   opacity: 0.94;
 }
