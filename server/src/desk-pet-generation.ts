@@ -4,11 +4,12 @@ import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import type { ResultSetHeader } from 'mysql2/promise'
+import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 import sharp from 'sharp'
-import { discardAsset, ownedAsset, ownedPet, saveDeskSprite, storagePath } from './assets.js'
+import { discardAsset, ownedAsset, ownedPet, removeFile, saveDeskSprite, storagePath } from './assets.js'
+import { customDeskPetId, defaultDeskPetId } from '../../shared/desk-pets.mjs'
 import { config, projectRoot } from './config.js'
-import { db, rows } from './db.js'
+import { db, rows, transaction } from './db.js'
 import { HttpError } from './errors.js'
 
 const execFileAsync = promisify(execFile)
@@ -127,6 +128,46 @@ export async function getPetDeskSpec(userId: string, petId: string) {
     generationId: row.id,
     actions: actionsFor(row),
   }
+}
+
+export async function deleteDeskPetGeneration(userId: string, id: string) {
+  const files = await transaction(async conn => {
+    const [targets] = await conn.execute<(RowDataPacket & { petId:string })[]>(
+      'SELECT pet_id AS petId FROM desk_pet_generations WHERE id=? AND user_id=? FOR UPDATE', [id, userId])
+    const target = targets[0]
+    if (!target) throw new HttpError(404, '桌宠生成记录不存在')
+    const [records] = await conn.execute<(RowDataPacket & {
+      status:string; breatheAssetId:string|null; lickAssetId:string|null
+    })[]>(`SELECT status,breathe_asset_id AS breatheAssetId,lick_asset_id AS lickAssetId
+      FROM desk_pet_generations WHERE user_id=? AND pet_id=? FOR UPDATE`, [userId, target.petId])
+    if (records.some(record => record.status === 'queued' || record.status === 'running')) {
+      throw new HttpError(409, '桌宠正在生成，暂时不能删除')
+    }
+    const [profiles] = await conn.execute<(RowDataPacket & { petId:string })[]>(
+      'SELECT miniapp_pet_id AS petId FROM desktop_profiles WHERE user_id=? FOR UPDATE', [userId])
+    if (profiles[0]?.petId === customDeskPetId(target.petId)) {
+      await conn.execute('UPDATE desktop_profiles SET miniapp_pet_id=? WHERE user_id=?', [defaultDeskPetId, userId])
+    }
+    const assets: { fileKey:string; videoKey:string|null }[] = []
+    const assetIds = new Set<string>()
+    for (const record of records) {
+      if (record.breatheAssetId) assetIds.add(record.breatheAssetId)
+      if (record.lickAssetId) assetIds.add(record.lickAssetId)
+    }
+    for (const assetId of assetIds) {
+      const [assetRecords] = await conn.execute<(RowDataPacket & { fileKey:string; videoKey:string|null })[]>(
+        'SELECT file_key AS fileKey,source_video_key AS videoKey FROM assets WHERE id=? AND user_id=? FOR UPDATE',
+        [assetId, userId])
+      const asset = assetRecords[0]
+      if (!asset) continue
+      await conn.execute('DELETE FROM assets WHERE id=? AND user_id=?', [assetId, userId])
+      assets.push(asset)
+    }
+    await conn.execute('DELETE FROM desk_pet_generations WHERE user_id=? AND pet_id=?', [userId, target.petId])
+    return assets
+  })
+  await Promise.all(files.map(file => removeFile(file.fileKey, file.videoKey)))
+  return { ok: true }
 }
 
 export async function listDeskPetProfiles(userId: string) {

@@ -208,6 +208,10 @@ test('WeChat code exchange, concurrent registration and private pet sessions', a
     assert.match(companion.data.message.id, /^cat-/)
     assert.equal(typeof companion.data.nextIntervalMs, 'number')
     assert.equal((await request('/companion/next', 'POST', { petId: 'unknown', scene: 'open' }, again.data.token)).status, 400)
+    assert.equal(
+      (await request('/desktop/miniapp/generations/00000000-0000-0000-0000-000000000000', 'DELETE', {}, again.data.token)).status,
+      404,
+    )
     assert.equal((await request('/pets/' + id, 'DELETE', {}, again.data.token)).status, 200)
     assert.equal(
       (await request('/dashboard', 'GET', undefined, again.data.token)).data.generationEnabled,

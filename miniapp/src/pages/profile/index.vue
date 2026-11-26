@@ -9,7 +9,7 @@ import PetImage from '../../components/PetImage.vue'
 import UiIcon from '../../components/UiIcon.vue'
 import { api, confirm, go, logout, message, openPrivacyGuide, speciesNames, toast, updateUser, user } from '../../lib/client'
 import {
-  currentDeskPet, deskPetCapabilities, deskPetCatalog, deskPetEnabled, deskPetId,
+  currentDeskPet, deleteDeskPetGeneration, deskPetCapabilities, deskPetCatalog, deskPetEnabled, deskPetId,
   getDeskPetGeneration, listDeskPetProfiles, saveDeskPet, startDeskPetGeneration, syncDeskPet,
   type DeskPetGeneration, type DeskPetProfile,
 } from '../../lib/desk-pet'
@@ -53,6 +53,7 @@ const generationStep = computed(() => (generation.value ? stageSteps[generation.
 const generationPercent = computed(() => (generation.value ? stagePercent[generation.value.stage] ?? 6 : 0))
 const generationStageText = computed(() => (generation.value ? stageLabels[generation.value.stage] || '正在生成…' : ''))
 const canAddPet = computed(() => myPets.value.length < 3)
+const generatedPets = computed(() => myPets.value.filter(pet => pet.deskPet?.status === 'completed'))
 
 function clearPoll() {
   if (pollTimer) clearTimeout(pollTimer)
@@ -184,6 +185,19 @@ function deskStatusClass(pet: DeskPetProfile) {
   if (status === 'running' || status === 'queued') return 'busy'
   if (status === 'failed') return 'generate'
   return pet.avatarAssetId ? 'generate' : 'muted'
+}
+
+function removeGeneratedDeskPet(pet: DeskPetProfile) {
+  const job = pet.deskPet
+  if (!job || job.status !== 'completed') return
+  if (savingDeskPet.value || busy.value || signingOut.value || generationBusy.value) return
+  return runDeskPet(async () => {
+    if (!await confirm('删除桌宠动作', `删除「${pet.name}」的桌宠动作？宠物档案和照片会保留。`)) return
+    await deleteDeskPetGeneration(job.id)
+    await syncDeskPet()
+    await loadMyPetDeskOptions()
+    if (active) toast('桌宠动作已删除')
+  })
 }
 
 function pickPet(pet: DeskPetProfile) {
@@ -453,6 +467,30 @@ function signOut() {
             {{ deskPetId === item.id ? '使用中' : item.id === defaultDeskPetId ? '默认' : '可选' }}
           </text>
         </button>
+
+        <view
+          v-for="pet in generatedPets"
+          :id="'select-generated-pet-' + pet.id"
+          :key="'generated-' + pet.id"
+          :class="['desk-pet-tile', 'desk-pet-tile-custom', { selected: deskPetId === customDeskPetId(pet.id) }]"
+          :aria-pressed="deskPetId === customDeskPetId(pet.id)"
+          role="button"
+          @tap="pickPet(pet)"
+        >
+          <button
+            class="desk-pet-delete"
+            :disabled="savingDeskPet || busy || signingOut"
+            aria-label="删除桌宠动作"
+            @tap.stop="removeGeneratedDeskPet(pet)"
+          >×</button>
+          <view class="desk-pet-tile-avatar user-pet">
+            <PetImage :asset-id="pet.avatarAssetId" :size="48" :previewable="false" />
+          </view>
+          <text class="desk-pet-tile-name">{{ pet.name }}</text>
+          <text :class="['desk-pet-tile-pill', deskPetId === customDeskPetId(pet.id) ? 'active' : 'ready']">
+            {{ deskPetId === customDeskPetId(pet.id) ? '使用中' : '可切换' }}
+          </text>
+        </view>
 
         <button
           id="add-pet-for-desk-pet"
@@ -760,6 +798,27 @@ function signOut() {
   border-style: dashed;
   border-color: #dfd4b6;
   background: #fdfbf5;
+}
+.desk-pet-tile-custom { position: relative; }
+.desk-pet-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #fff0ee;
+  color: #a03b2d;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
 }
 .desk-pet-tile-avatar {
   display: flex;

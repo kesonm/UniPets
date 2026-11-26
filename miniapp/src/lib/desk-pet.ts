@@ -180,6 +180,10 @@ export async function getDeskPetGeneration(id: string) {
   return result.generation
 }
 
+export async function deleteDeskPetGeneration(id: string) {
+  await api<{ ok: boolean }>('/desktop/miniapp/generations/' + encodeURIComponent(id), 'DELETE', {}, 10000)
+}
+
 export async function syncDeskPet() {
   const version = ++syncVersion
   const ownerId = user.value?.id

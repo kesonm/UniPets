@@ -8,7 +8,7 @@ import { db, rows, transaction } from './db.js'
 import { config } from './config.js'
 import { HttpError } from './errors.js'
 import { assetSelect, ownedAsset, ownedPet, removeFile, saveImage, storagePath, type Asset } from './assets.js'
-import { createDeskPetGeneration, deskPetCapabilities, getDeskPetGeneration, getPetDeskSpec, listDeskPetProfiles } from './desk-pet-generation.js'
+import { createDeskPetGeneration, deleteDeskPetGeneration, deskPetCapabilities, getDeskPetGeneration, getPetDeskSpec, listDeskPetProfiles } from './desk-pet-generation.js'
 // import { generationRouter } from './generation-routes.js'
 import { checkVideoTools, supportsMotionVideo, VIDEO_FPS } from './video.js'
 import { supportsForegroundRemoval } from './foreground.js'
@@ -324,6 +324,9 @@ apiRouter.post('/desktop/miniapp/generations', async (req, res) => {
 })
 apiRouter.get('/desktop/miniapp/generations/:id', async (req, res) => {
   res.json({ generation: await getDeskPetGeneration(req.user.id, uuid.parse(req.params.id)) })
+})
+apiRouter.delete('/desktop/miniapp/generations/:id', async (req, res) => {
+  res.json(await deleteDeskPetGeneration(req.user.id, uuid.parse(req.params.id)))
 })
 apiRouter.get('/desktop/miniapp', async (req, res) => {
   const [profile] = await rows<{ petId: string; enabled: number }>(
