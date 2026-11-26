@@ -12,7 +12,7 @@ import AdminStoreJobs from './AdminStoreJobs.vue'
 import { canReview, detailTitle, recordAction, sections, tableCells, type AdminRecord } from './admin'
 import './admin.css'
 
-const logo = import.meta.env.BASE_URL + 'assets/brand-mark.png'
+const logo = import.meta.env.BASE_URL + 'assets/brand-mark.png?v=20261126'
 const fromHash = () => sections.find(section => location.hash === '#'+section.id) ?? sections[0]
 const active = ref(fromHash())
 const user = ref<User|null>(null)
