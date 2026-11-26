@@ -44,22 +44,25 @@ async function signIn(event: Event) {
             @chooseavatar="chooseAvatar"
           >
             <text class="login-field-label">头像</text>
-            <AccountAvatar :size="46" :preview="avatar" />
-            <text class="sub login-field-sub">{{ avatar ? '更换头像' : '选择微信头像或照片' }}</text>
+            <view class="login-avatar-body">
+              <AccountAvatar :size="46" :preview="avatar" />
+            </view>
           </button>
           <view class="login-nickname-field">
             <text class="login-field-label">昵称</text>
-            <input
-              id="login-nickname"
-              class="login-nickname-input"
-              name="nickname"
-              type="nickname"
-              :always-embed="true"
-              maxlength="40"
-              placeholder="微信昵称或自行输入"
-              aria-label="昵称"
-              :disabled="loggingIn"
-            />
+            <view class="login-nickname-body">
+              <input
+                id="login-nickname"
+                class="login-nickname-input"
+                name="nickname"
+                type="nickname"
+                :always-embed="true"
+                maxlength="40"
+                placeholder="微信昵称或自行输入"
+                aria-label="昵称"
+                :disabled="loggingIn"
+              />
+            </view>
           </view>
         </view>
         <text v-if="loginError" class="error" role="status">{{ loginError }}</text>
@@ -104,7 +107,7 @@ async function signIn(event: Event) {
   text-align: center;
 }
 .login-field-label { display: block; color: #33290d; font-size: 13px; font-weight: 750; text-align: center; }
-.login-field-sub { margin-top: 1px; font-size: 11px; line-height: 1.35; text-align: center; }
+.login-avatar-body { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; }
 .login-nickname-field {
   display: flex;
   flex-direction: column;
@@ -118,6 +121,7 @@ async function signIn(event: Event) {
   border: 0;
   text-align: center;
 }
+.login-nickname-body { display: flex; flex: 1; align-items: center; justify-content: center; width: 100%; }
 .login-nickname-input { width: 100%; padding: 0; border: 0; background: transparent; font-size: 13px; text-align: center; }
 .login-button { width: 100%; margin-top: 14px; border-radius: 12px; }
 .privacy-guide { display: flex; width: 100%; margin-top: 5px; font-size: 12px; text-align: center; }
