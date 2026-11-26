@@ -21,7 +21,7 @@ button { font: inherit; }
 .nav-inner { width: min(1410px, calc(100% - 72px)); height: 100%; margin: 0 auto; display: flex; align-items: center; gap: 46px; }
 .brand { color: #17202b; text-decoration: none; display: flex; align-items: center; gap: 13px; flex: 0 0 auto; }
 .brand-mark { height: 48px; width: 48px; flex: none; display: grid; place-items: center; overflow: hidden; border-radius: 8px; color: var(--gold-bright); background: #ffd900; font-size: 24px; }
-.brand-mark img { display: block; height: 100%; width: 100%; object-fit: contain; mix-blend-mode: screen; }
+.brand-mark img { display: block; height: 100%; width: 100%; object-fit: cover; border-radius: 8px; }
 .brand-name { font-family: 'Noto Serif SC', serif; font-size: 21px; font-weight: 600; letter-spacing: .06em; white-space: nowrap; }
 .main-nav, .nav-actions { display: flex; align-items: center; }
 .main-nav { gap: 32px; flex: 1; }
@@ -41,7 +41,7 @@ button { font: inherit; }
 .auth-panel::after { content: ''; position: absolute; z-index: -1; right: -26%; bottom: -47%; width: 100%; height: 90%; border: 1px solid rgba(255,255,255,.66); border-radius: 50%; transform: rotate(-28deg); pointer-events: none; }
 .auth-panel-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
 .auth-brand-mark { width: 44px; height: 44px; overflow: hidden; border-radius: 13px; background: #ffd900; box-shadow: 0 8px 22px rgba(196,158,0,.2); }
-.auth-brand-mark img { width: 100%; height: 100%; object-fit: contain; mix-blend-mode: screen; }
+.auth-brand-mark img { width: 100%; height: 100%; object-fit: cover; border-radius: 13px; }
 .auth-close { width: 36px; height: 36px; color: #525c68; border: 1px solid rgba(45,55,67,.12); border-radius: 50%; background: rgba(255,255,255,.5); font-size: 23px; line-height: 1; cursor: pointer; transition: background .2s, transform .2s; }
 .auth-close:hover { background: #fff; transform: rotate(90deg); }
 .auth-fields { display: grid; gap: 14px; }

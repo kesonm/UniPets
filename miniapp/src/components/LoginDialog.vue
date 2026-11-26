@@ -2,7 +2,6 @@
 import { ref } from 'vue'
 import { login, loginError, loggingIn, openPrivacyGuide } from '../lib/client'
 import AccountAvatar from './AccountAvatar.vue'
-import UiIcon from './UiIcon.vue'
 
 const emit = defineEmits<{ close: [] }>()
 const avatar = ref('')
@@ -27,12 +26,12 @@ async function signIn(event: Event) {
 <template>
   <view class="modal-scrim" @tap="close" @touchmove.stop.prevent>
     <view class="modal-panel login-panel" role="dialog" aria-label="登录宠云" @tap.stop>
-      <view class="spread">
+      <view class="login-head">
+        <button class="text-button login-cancel" :disabled="loggingIn" @tap="close">取消</button>
         <view class="login-brand">
           <image class="login-mark" src="/static/brand-mark.png" mode="aspectFit" aria-hidden="true" />
           <text class="heading login-heading">登录宠云</text>
         </view>
-        <button class="text-button" :disabled="loggingIn" @tap="close">取消</button>
       </view>
       <text class="sub login-description">首次登录自动注册，头像和昵称选填。</text>
       <form @submit="signIn">
@@ -44,12 +43,9 @@ async function signIn(event: Event) {
             :disabled="loggingIn"
             @chooseavatar="chooseAvatar"
           >
+            <text class="login-field-label">头像</text>
             <AccountAvatar :size="46" :preview="avatar" />
-            <view class="login-avatar-copy">
-              <text class="login-field-label">头像</text>
-              <text class="sub">{{ avatar ? '更换头像' : '选择微信头像或照片' }}</text>
-            </view>
-            <UiIcon name="right" :size="13" />
+            <text class="sub login-field-sub">{{ avatar ? '更换头像' : '选择微信头像或照片' }}</text>
           </button>
           <view class="login-nickname-field">
             <text class="login-field-label">昵称</text>
@@ -60,7 +56,7 @@ async function signIn(event: Event) {
               type="nickname"
               :always-embed="true"
               maxlength="40"
-              placeholder="使用微信昵称或自行输入"
+              placeholder="微信昵称或自行输入"
               aria-label="昵称"
               :disabled="loggingIn"
             />
@@ -78,34 +74,51 @@ async function signIn(event: Event) {
 
 <style scoped>
 .login-panel { max-width: 360px; padding: 18px; border-radius: 20px; }
-.login-brand { display: flex; align-items: center; gap: 9px; }
-.login-mark { width: 34px; height: 34px; border-radius: 9px; }
-.login-heading { margin: 0; }
-.login-description { margin-top: 10px; }
-.login-fields { margin-top: 14px; border: 1px solid #efe6cf; border-radius: 14px; background: #fffdf6; }
+.login-head { position: relative; display: flex; justify-content: center; }
+.login-cancel { position: absolute; top: -2px; right: 0; min-height: 30px; padding: 0; }
+.login-brand { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.login-mark { width: 48px; height: 48px; border-radius: 13px; box-shadow: 0 5px 14px rgba(167, 120, 3, 0.14); }
+.login-heading { margin: 0; text-align: center; }
+.login-description { display: block; margin-top: 8px; text-align: center; }
+.login-fields {
+  display: flex;
+  width: 100%;
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid #efe6cf;
+  border-radius: 14px;
+  background: #fffdf6;
+}
 .login-avatar-picker {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 12px;
+  justify-content: flex-start;
+  gap: 5px;
+  width: 50%;
+  padding: 10px 8px 12px;
   border: 0;
-  border-radius: 14px 14px 0 0;
+  border-right: 1px solid #efe6cf;
+  border-radius: 0;
   background: transparent;
-  text-align: left;
+  text-align: center;
 }
-.login-avatar-copy { flex: 1; min-width: 0; }
-.login-field-label { display: block; color: #33290d; font-size: 13px; font-weight: 750; }
+.login-field-label { display: block; color: #33290d; font-size: 13px; font-weight: 750; text-align: center; }
+.login-field-sub { margin-top: 1px; font-size: 11px; line-height: 1.35; text-align: center; }
 .login-nickname-field {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  min-height: 43px;
-  margin: 0 12px;
-  border-top: 1px solid #efe6cf;
+  justify-content: flex-start;
+  gap: 5px;
+  width: 50%;
+  min-height: 104px;
+  margin: 0;
+  padding: 10px 8px 12px;
+  border: 0;
+  text-align: center;
 }
-.login-nickname-field .login-field-label { flex: none; }
-.login-nickname-input { flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; }
+.login-nickname-input { width: 100%; padding: 0; border: 0; background: transparent; font-size: 13px; text-align: center; }
 .login-button { width: 100%; margin-top: 14px; border-radius: 12px; }
-.privacy-guide { display: flex; width: 100%; margin-top: 5px; font-size: 12px; }
+.privacy-guide { display: flex; width: 100%; margin-top: 5px; font-size: 12px; text-align: center; }
 </style>
