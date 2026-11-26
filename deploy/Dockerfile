@@ -31,5 +31,6 @@ COPY server/migrations/ server/migrations/
 COPY server/data/china-districts.json.gz server/data/
 COPY server/noseprint/scan.py server/noseprint/
 COPY shared/*.mjs shared/
+COPY scripts/desk-pet-ai/compose-sprites.py scripts/desk-pet-ai/
 USER node
 CMD ["sh", "-ec", "node server/dist/migrate.js && exec node server/dist/index.js"]

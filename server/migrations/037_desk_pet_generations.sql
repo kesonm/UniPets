@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS desk_pet_generations (
+  id CHAR(36) PRIMARY KEY,
+  user_id CHAR(36) NOT NULL,
+  pet_id CHAR(36) NOT NULL,
+  reference_asset_id CHAR(36) NOT NULL,
+  reference_version VARCHAR(64) NOT NULL,
+  status ENUM('queued','running','completed','failed') NOT NULL DEFAULT 'queued',
+  stage VARCHAR(24) NOT NULL DEFAULT 'queued',
+  error VARCHAR(500) NULL,
+  breathe_asset_id CHAR(36) NULL,
+  lick_asset_id CHAR(36) NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  started_at DATETIME(3) NULL,
+  completed_at DATETIME(3) NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE,
+  FOREIGN KEY (reference_asset_id) REFERENCES assets(id) ON DELETE CASCADE,
+  INDEX idx_desk_pet_generations_user (user_id, created_at),
+  INDEX idx_desk_pet_generations_pet (pet_id, status, completed_at),
+  INDEX idx_desk_pet_generations_queue (status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

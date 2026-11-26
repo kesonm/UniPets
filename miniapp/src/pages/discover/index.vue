@@ -37,7 +37,7 @@ function open(link: { page: string; module?: string }) {
 </script>
 <template>
   <view class="screen">
-    <image src="/static/h5-products.webp" class="hero" mode="aspectFill" />
+    <image src="/static/h5-products.jpg" class="hero" mode="aspectFill" />
     <view v-for="section in sections" :key="section.title" class="stack">
       <text class="heading">{{ section.title }}</text>
       <view class="tile-grid">

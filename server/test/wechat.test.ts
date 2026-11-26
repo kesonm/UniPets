@@ -21,9 +21,11 @@ test('WeChat code exchange, concurrent registration and private pet sessions', a
   ])
   const publicFetch = globalThis.fetch
   const originalApp = config.wechatAppId,
-    originalSecret = config.wechatAppSecret
+    originalSecret = config.wechatAppSecret,
+    originalDeskPetGeneration = config.deskPetGeneration
   config.wechatAppId = appId
   config.wechatAppSecret = 'test-only'
+  config.deskPetGeneration = false
   const exchange = t.mock.method(globalThis, 'fetch', async (input: URL, options: RequestInit) => {
     assert.equal(input.origin + input.pathname, 'https://api.weixin.qq.com/sns/jscode2session')
     assert.equal(input.searchParams.get('appid'), appId)
@@ -166,6 +168,46 @@ test('WeChat code exchange, concurrent registration and private pet sessions', a
       [appId],
     )
     assert.equal(profiles[0].n, 2)
+    const initialDeskPet = (await request('/desktop/miniapp', 'GET', undefined, again.data.token)).data
+    assert.deepEqual(initialDeskPet.deskPet, { petId: 'system-tabby-cat', enabled: true })
+    assert.equal(initialDeskPet.capabilities.generate, false)
+    assert.deepEqual(
+      (await request('/desktop/miniapp', 'PUT', { petId: 'system-ragdoll-cat', enabled: false }, again.data.token)).data,
+      { deskPet: { petId: 'system-ragdoll-cat', enabled: false } },
+    )
+    assert.deepEqual((await request('/desktop/miniapp', 'GET', undefined, again.data.token)).data.deskPet, {
+      petId: 'system-ragdoll-cat', enabled: false,
+    })
+    assert.equal(
+      (await request('/desktop/miniapp', 'PUT', { petId: 'unknown-pet' }, again.data.token)).status,
+      400,
+    )
+    assert.equal(
+      (await request('/desktop/miniapp', 'PUT', { petId: 'pet:' + id }, again.data.token)).status,
+      409,
+    )
+    assert.deepEqual((await request('/desktop/miniapp', 'GET', undefined, other.data.token)).data.deskPet, {
+      petId: 'system-tabby-cat', enabled: true,
+    })
+    const deskPets = (await request('/desktop/miniapp/pets', 'GET', undefined, again.data.token)).data
+    assert.equal(deskPets.pets[0].deskPet, null)
+    assert.equal(deskPets.capabilities.generate, false)
+    assert.equal(
+      (await request('/desktop/miniapp/generations', 'POST', { petId: id }, again.data.token)).status,
+      503,
+    )
+    assert.equal(
+      (await request('/desktop/miniapp/pet/' + id, 'GET', undefined, again.data.token)).status,
+      404,
+    )
+    const companion = await request('/companion/next', 'POST', {
+      petId: 'system-tabby-cat', scene: 'open', recent: [],
+    }, again.data.token)
+    assert.equal(companion.status, 200)
+    assert.match(companion.data.message.text, /主人/)
+    assert.match(companion.data.message.id, /^cat-/)
+    assert.equal(typeof companion.data.nextIntervalMs, 'number')
+    assert.equal((await request('/companion/next', 'POST', { petId: 'unknown', scene: 'open' }, again.data.token)).status, 400)
     assert.equal((await request('/pets/' + id, 'DELETE', {}, again.data.token)).status, 200)
     assert.equal(
       (await request('/dashboard', 'GET', undefined, again.data.token)).data.generationEnabled,
@@ -178,6 +220,7 @@ test('WeChat code exchange, concurrent registration and private pet sessions', a
   } finally {
     config.wechatAppId = originalApp
     config.wechatAppSecret = originalSecret
+    config.deskPetGeneration = originalDeskPetGeneration
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await db.execute('DELETE FROM users WHERE wechat_appid=?', [appId])
     await db.end()
