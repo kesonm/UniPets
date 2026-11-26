@@ -32,7 +32,7 @@ const kinds = {
 const filters = [{id:'',label:'全部内容'}, ...Object.entries(kinds).map(([id,item])=>({id,label:item.label}))]
 
 onLoad(options => { id.value = options?.id || '' })
-onShareAppMessage(() => ({title:store.value?.name || '宠云门店',path:'/pages/storefront/index?id='+encodeURIComponent(id.value)}))
+onShareAppMessage(() => ({title:store.value?.name || '拼宠宠门店',path:'/pages/storefront/index?id='+encodeURIComponent(id.value)}))
 
 async function fetchPage(page: number) {
   if (!id.value) throw new Error('门店不存在')

@@ -71,7 +71,7 @@ onLoad((q) => {
   if (q?.tab === 'favorites') mineTab.value = 'favorites'
 })
 onShareAppMessage(() => ({
-  title: current.value?.title || '宠云社区',
+  title: current.value?.title || '拼宠宠社区',
   path: '/pages/feed/index' + (id.value ? '?id=' + id.value : ''),
 }))
 async function fetchPage(n: number) {

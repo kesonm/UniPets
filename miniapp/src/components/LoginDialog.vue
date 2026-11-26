@@ -25,12 +25,12 @@ async function signIn(event: Event) {
 
 <template>
   <view class="modal-scrim" @tap="close" @touchmove.stop.prevent>
-    <view class="modal-panel login-panel" role="dialog" aria-label="登录宠云" @tap.stop>
+    <view class="modal-panel login-panel" role="dialog" aria-label="登录拼宠宠" @tap.stop>
       <view class="login-head">
         <button class="text-button login-cancel" :disabled="loggingIn" @tap="close">取消</button>
         <view class="login-brand">
           <image class="login-mark" src="/static/brand-mark.png" mode="aspectFit" aria-hidden="true" />
-          <text class="heading login-heading">登录宠云</text>
+          <text class="heading login-heading">登录拼宠宠</text>
         </view>
       </view>
       <text class="sub login-description">首次登录自动注册，头像和昵称选填。</text>

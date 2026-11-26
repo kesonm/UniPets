@@ -96,7 +96,7 @@ export function api<T>(path: string, method: Method = 'GET', data?: Record<strin
         if (r.statusCode === 401 && usedToken) forget()
         reject(new Error((r.data as { error?: string })?.error || '请求失败（' + r.statusCode + '）'))
       },
-      fail: () => reject(new Error('无法连接宠云，请检查网络或服务域名')),
+      fail: () => reject(new Error('无法连接拼宠宠，请检查网络或服务域名')),
     }),
   )
 }
