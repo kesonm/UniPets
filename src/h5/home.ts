@@ -4,7 +4,7 @@ export const homeEntries = [
   { id: 'immortality', label: '宠物数字永生', icon: 'Sunny', tone: 'gold' },
   { id: 'services', label: '宠物周边服务', icon: 'LocationFilled', tone: 'cyan' },
   { id: 'friends', label: '宠物相亲交友', icon: 'ChatDotRound', tone: 'pink' },
-  { id: 'stories', label: '宠物漫剧短剧', icon: 'Film', tone: 'violet' },
+  { id: 'stories', label: '宠物创作', icon: 'Film', tone: 'violet' },
   { id: 'charity', label: '宠物公益慈善', icon: 'Star', tone: 'coral' },
   { id: 'shop', label: '宠物品牌超市', icon: 'ShoppingBag', tone: 'orange' },
   { id: 'medical', label: '宠物医疗医药', icon: 'FirstAidKit', tone: 'green' },

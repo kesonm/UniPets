@@ -158,7 +158,7 @@ watch([query, kind, () => browseDistrict.value?.id, retry], async ([term, target
     <view v-if="!query" class="market-content">
       <button id="entry-stories" class="stories-link" @tap="go('stories')">
         <view class="stories-link-icon"><UiIcon name="entry-stories" :size="18" /></view>
-        <text>宠物短剧漫剧</text>
+        <text>宠物创作</text>
         <UiIcon name="right" :size="12" />
       </button>
       <HomeRecommendations :active="active" />

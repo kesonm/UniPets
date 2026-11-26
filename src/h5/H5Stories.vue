@@ -164,7 +164,7 @@ async function share() {
   <div>
     <div class="h5-page-head h5-page-head--yellow h5-program-head">
       <button type="button" class="h5-program-back" aria-label="返回首页" @click="emit('back')"><el-icon><ArrowLeft /></el-icon></button>
-      <h1>宠物漫剧短剧</h1>
+      <h1>宠物创作</h1>
     </div>
     <div class="h5-page-content h5-program-stack">
       <div class="h5-business-toolbar">
