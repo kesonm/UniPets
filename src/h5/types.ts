@@ -98,7 +98,7 @@ export interface MerchantStoreProfile {
   cityCode?: string
 }
 
-export type PersonalContentTab = 'published' | 'likes' | 'favorites'
+export type PersonalContentTab = 'published' | 'likes' | 'favorites' | 'receivedLikes'
 export type PersonalContentCounts = Record<PersonalContentTab, number>
 export interface PersonalContentItem {
   id: string
@@ -106,6 +106,7 @@ export interface PersonalContentItem {
   kind: 'post' | 'story' | 'service'
   visible: boolean | number
   activityAt: string
+  receivedLikes?: number
 }
 
 export type Recommendation = { kind: 'post'; post: H5Post } | { kind: 'service'; post: ServicePost }

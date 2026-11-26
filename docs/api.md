@@ -88,8 +88,8 @@
 | POST | /h5/catalog/stores/bind | 提交 `code`、`name`、`address`、`phone`、`location`，创建门店并绑定当前账号 |
 | PUT | /h5/catalog/stores/mine/:id | 修改自己已绑定门店的资料和位置 |
 | GET | /h5/posts | 交友使用 `sort=latest`，可组合 `petType`、`breed`、`q` 和 `page` |
-| GET | /h5/posts/mine/counts | 当前账号的发布、点赞和收藏计数 |
-| GET | /h5/posts/mine | 按 `tab=published`、`likes` 或 `favorites` 读取对应列表，支持 `page` |
+| GET | /h5/posts/mine/counts | 当前账号的发布、主动点赞、收藏和获赞数（`receivedLikes`） |
+| GET | /h5/posts/mine | 按 `tab=published`、`likes`、`favorites` 或 `receivedLikes` 分页读取对应内容 |
 | GET | /h5/posts/breeds | 获取公开帖子使用的品种，可按 `petType` 筛选 |
 | GET | /h5/posts/recommendations | 混排服务帖与动态，支持区县 `district` 和访客随机种子 `seed` |
 
@@ -104,6 +104,8 @@
 管理员可用 `POST /admin/stores/binding-codes/:slot/refresh` 提交当前 `code`，原子地作废这一位置的旧码并返回新码和二维码。页面提交的码已更换时返回 `409`。
 
 发布记录包括动态、已发布的宠物故事和用户发出的门店服务帖。点赞列表包括三种内容，收藏列表包括动态和宠物故事。点赞和收藏只统计当前可打开的公开内容。
+
+获赞统计其他用户给本账号公开动态、创作和门店服务帖留下的有效点赞。获赞列表按每条内容收到的赞数降序排列，同一条内容展示一次。
 
 周边服务的 `sort` 默认是 `recommended`，根据用户宠物档案和近 30 天公开求助排序。还支持 `likes-desc`、`likes-asc`、`distance-asc` 和 `distance-desc`。距离使用设备取整后的 WGS84 坐标和门店坐标计算，响应中的 `distanceMeters` 是直线距离。无坐标的门店排在最后。未选择地区时查询全国。
 

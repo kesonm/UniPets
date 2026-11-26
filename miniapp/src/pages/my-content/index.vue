@@ -12,6 +12,7 @@ const labels = {
   published:{title:'我的发布',empty:'暂无发布'},
   likes:{title:'我的点赞',empty:'暂无点赞'},
   favorites:{title:'我的收藏',empty:'暂无收藏'},
+  receivedLikes:{title:'收到的赞',empty:'你的内容暂未收到点赞'},
 }
 const kindLabels = {post:'动态',service:'服务帖',story:'宠物故事'}
 const tab = ref<PersonalContentTab>('published')
@@ -21,7 +22,7 @@ const more = ref(false)
 let version = 0
 
 onLoad(options => {
-  if (options?.tab === 'likes' || options?.tab === 'favorites') tab.value = options.tab
+  if (options?.tab === 'likes' || options?.tab === 'favorites' || options?.tab === 'receivedLikes') tab.value = options.tab
   uni.setNavigationBarTitle({title:labels[tab.value].title})
 })
 
@@ -60,6 +61,7 @@ function open(item: PersonalContentItem) {
           <text class="sub">{{ kindLabels[item.kind] }}{{ item.visible ? '' : item.kind === 'service' ? ' · 已下架' : ' · 已隐藏' }}</text>
           <text class="personal-title">{{ item.title }}</text>
         </view>
+        <text v-if="tab === 'receivedLikes'" class="received-count">获赞 {{ item.receivedLikes }}</text>
         <UiIcon v-if="item.visible || item.kind === 'post'" name="right" :size="13" />
       </button>
       <view v-if="!loading && !error && !items.length" class="card empty-card">{{ labels[tab].empty }}</view>
@@ -73,5 +75,6 @@ function open(item: PersonalContentItem) {
 .personal-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
 .personal-copy { flex: 1; min-width: 0; }
 .personal-title { display: block; margin-top: 4px; overflow-wrap: anywhere; font-size: 15px; font-weight: 700; }
+.received-count { flex: none; color: var(--gold-ink); font-size: 12px; }
 .personal-more { width: 100%; }
 </style>

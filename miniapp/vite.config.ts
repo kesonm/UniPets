@@ -2,7 +2,7 @@ import { defineConfig, type Plugin } from 'vite'
 import uni from '@dcloudio/vite-plugin-uni'
 
 function injectFloatingDeskPet(): Plugin {
-  const pagePattern = /[\\/]src[\\/]pages[\\/](?!profile[\\/])[^\\/]+[\\/]index\.vue$/
+  const pagePattern = /[\\/]src[\\/]pages[\\/](?!(?:account|profile)[\\/])[^\\/]+[\\/]index\.vue$/
   return {
     name: 'petcloud-floating-desk-pet',
     enforce: 'pre',
