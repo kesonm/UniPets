@@ -11,7 +11,7 @@ server/src/           账号、宠物、资产、生成任务和成长记忆接�
 server/migrations/    MySQL 表结构与迁移记录
 server/test/          真实 MySQL + 本地模型模拟服务的接口集成测试
 shared/               动作定义、精灵帧布局和跳跃帧合成逻辑
-scripts/              开发启动和独立本地 MySQL 初始化
+scripts/              开发启动、独立本地 MySQL 初始化和桌宠动作合成
 docs/                 API 说明、部署配置
 ```
 
@@ -117,9 +117,29 @@ pnpm preview --host 192.168.1.10
 
 「动作素材」可以预览已保存的动作，主人可下载帧图。原视频和帧图保存在私有素材目录中，MySQL 记录所属账号和宠物。
 
-AI 生图、图生视频、动作生成接口和后台队列处理已暂停。旧版环境变量 `PETCLOUD_GENERATION_ENABLED` 已失效。生成路由的挂载和 Worker 启动已在源码中注释，旧实现保存在 `server/src/generation-routes.ts` 和 `server/src/jobs.ts`。
+除桌宠生成外，AI 生图、图生视频和旧动作生成接口及后台队列已暂停。旧版环境变量 `PETCLOUD_GENERATION_ENABLED` 已失效。生成路由的挂载和 Worker 启动已在源码中注释，旧实现保存在 `server/src/generation-routes.ts` 和 `server/src/jobs.ts`。
 
 已有原视频可以按任务重新处理。先完成数据库迁移，再运行 `pnpm --dir server video:cutout <视频任务 ID>`。成功后使用原素材 ID 提供更新的透明帧图和原视频。
+
+## 桌宠
+
+小程序「我的 → 编辑资料 → 我的桌宠」默认展示两只系统猫。点「添加桌宠」可从自己的宠物档案中选择，用档案封面照作为参考生成「正面坐着呼吸」和「坐着舔前爪」两套 6 帧透明动作；生成后作为悬浮桌宠显示，可拖动、点击互动和切换。
+
+桌宠会主动陪伴：打开小程序时先说一句，浏览期间每 3–5 分钟再说一句；点一下桌宠会得到短回应。猫和狗的语气分开，统一称呼「主人」。关闭小程序后不推送，只在小程序打开时互动；接口不可用时使用客户端内置语料。天气话术已预留，未配置天气服务时不会编造天气。
+
+生成是异步任务：`POST /desktop/miniapp/generations` 入队，服务端依次生成 1 张正面坐姿基准图、2 张 3×2 动作图，再用 OpenCV 去背景、对齐并压成 672×448 PNG；小程序轮询 `GET /desktop/miniapp/generations/:id` 显示阶段。每只宠物约 3 次生图调用，24 小时默认最多 2 次（`DESK_PET_DAILY_LIMIT`）。同一封面照生成成功后会复用，不重复计费。
+
+启用条件：
+
+- `UNIWORK_KEY` 可访问 `UNIWORK_IMAGE_URL` 指向的生图服务。
+- 设置 `PETCLOUD_DESK_PET_GENERATION=1`；未设置时接口返回 503，小程序显示「暂未开放」。Docker 部署写入 `.runtime.env`。
+- Python 环境含 `opencv-python-headless`，默认复用 `PET_NOSEPRINT_PYTHON` 的虚拟环境。
+- 部署时保留 `scripts/desk-pet-ai/compose-sprites.py`；Docker 镜像已包含该脚本。
+- 可选：设置 `WEATHER_PROVIDER`、`WEATHER_API_KEY` 和 `WEATHER_BASE_URL` 后启用陪伴里的下雨/高温/降温提醒；当前代码只保留接口，不请求天气。
+
+生成结果保存为 `desk_breathe` / `desk_lick_paw` 动作素材，计入账号 500 张 / 512MB 配额。生成时会把宠物封面照发送给生图服务，需在小程序隐私保护指引中披露。
+
+如果线上小程序提示「该功能暂未在公网开放」，说明公网网关只放行了旧的 `/api/desktop/miniapp`，还没有加入 `/api/desktop/miniapp/*`；同时确认 API 已更新并执行 `037` 迁移。
 
 ## 构建与检查
 
@@ -148,7 +168,7 @@ pnpm test:video-jobs
 5. 用独立应用账号连接 MySQL，持久挂载并同时备份数据库和素材目录。账号头像保存在数据库，宠物照片和动作素材保存在素材目录。
 6. 服务默认按直接连接 IP 限流。只有 API 位于一层受控代理后且 API 端口未公开时，才设置 `TRUST_PROXY=1`。
 
-旧版网页在阿里云配置中与 API 共用一个入口。运行 `VITE_API_BASE_URL='' pnpm build:web` 和 `pnpm --dir server build` 后，将 `dist/`、`server/dist/`、`server/migrations/`、`server/noseprint/`、`shared/`、`deploy/` 以及工作区的包清单和锁文件同步到服务器。小程序服务端从 `.runtime.env` 读取 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`。[Docker Compose 配置](deploy/compose.yaml)
+旧版网页在阿里云配置中与 API 共用一个入口。运行 `VITE_API_BASE_URL='' pnpm build:web` 和 `pnpm --dir server build` 后，将 `dist/`、`server/dist/`、`server/migrations/`、`server/noseprint/`、`shared/`、`scripts/desk-pet-ai/`、`deploy/` 以及工作区的包清单和锁文件同步到服务器。小程序服务端从 `.runtime.env` 读取 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`。[Docker Compose 配置](deploy/compose.yaml)
 
 - 根目录的 `.env` 设置 `DB_PASSWORD`、`MYSQL_ROOT_PASSWORD`、`FRONTEND_ORIGINS`。模型和共享宠物设置放在 `.runtime.env`。两份文件仅供部署账户读取。
 - 将 FFmpeg 压缩包保存为 `deploy/ffmpeg-linux-amd64.tar.xz`。镜像构建时会校验文件的 SHA-256。[下载 FFmpeg Linux x86-64 构建](https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-11-16-15-29/ffmpeg-n8.1.3-35-gf1acb0a266-linux64-gpl-8.1.tar.xz)

@@ -77,7 +77,7 @@ function open(item: (typeof entries)[number]) {
           <text v-else-if="!user" class="account-caption">点击头像登录</text>
         </view>
         <button v-if="!user" id="open-wechat-login" class="small primary account-action account-login" @tap="loginDialog = true">登录 / 注册</button>
-        <button v-else id="edit-account-profile" class="text-button account-action" @tap="editProfile"><UiIcon name="account-settings" :size="13" />编辑资料</button>
+        <button v-else id="edit-account-profile" class="text-button account-action account-settings" aria-label="设置" @tap="editProfile"><UiIcon name="account-settings" :size="20" /></button>
       </view>
       <view class="account-stats">
         <button v-for="item in contentLinks" :id="'account-stat-'+item.id" :key="item.id" class="account-stat"
@@ -133,6 +133,7 @@ function open(item: (typeof entries)[number]) {
 .account-caption { overflow: hidden; text-overflow: ellipsis; }
 .account-action { flex: none; min-height: 32px; white-space: nowrap; }
 .account-login { padding-inline: 9px; }
+.account-settings { width: 36px; height: 36px; padding: 0; border-radius: 50%; }
 .account-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0,1fr));

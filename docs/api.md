@@ -123,6 +123,28 @@
 
 发布课程时填写 `h5_training_courses` 的 `id`（UUID）、`title`、`learning_format`、`exam_location`、`eligibility`、`credential`（证书名称）和 `issuer`。已确认的开课和考试时间写入 `starts_at` 和 `exam_at`。日期为空时页面显示「待公布」。两个表的 `published` 默认关闭，核对后设为 `TRUE`。
 
+## 桌宠生成
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| GET | /desktop/miniapp | 当前桌宠设置；`capabilities.generate` 表示生成是否启用 |
+| GET | /desktop/miniapp/pets | 宠物档案列表及各自最近一次生成状态 |
+| GET | /desktop/miniapp/pet/:petId | 已生成的两套动作、素材 ID 与 3×2×6 帧参数 |
+| POST | /desktop/miniapp/generations | 入队生成，提交 `petId` 和可选 `assetId`（必须是该宠物的照片）；返回 202 和 `generation` |
+| GET | /desktop/miniapp/generations/:id | 查询 `status`、`stage`、`error`；完成后返回 `actions` |
+
+生成状态为 `queued → running → completed / failed`，阶段为 `anchor`（正面坐姿）、`actions`（呼吸/舔爪）、`compose`（去背景与基线对齐）。每只宠物约 3 次生图调用，24 小时默认最多 2 次；同一封面素材生成成功后直接复用，不重复计费。未设置 `PETCLOUD_DESK_PET_GENERATION=1` 时创建接口返回 503；生成失败保留原桌宠，不自动重试。
+
+## 桌宠陪伴
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| POST | /companion/next | 读取下一句陪伴话术；提交 `petId`、`scene`（open/interval）、`recent` 消息 ID 数组和可选 `cityCode`，返回 `message`、`weather` 和下一次建议间隔 |
+
+`message` 包含 `id`、`text`、`action`（`breathe` 或 `lick_paw`）和 `durationMs`。服务端按猫/狗、打开/浏览、早晚时段、生日、认识天数和最近消息去重选句；`recent` 由客户端保存最近 12 条。猫狗语料在 `shared/companion.mjs`，接口不可用时小程序使用同一份语料本地兜底。
+
+`weather` 目前始终为 `null`。天气提醒规则和 `WEATHER_PROVIDER` / `WEATHER_API_KEY` 接口已预留，未配置或请求失败时不会编造天气。关闭小程序后不发送订阅消息，陪伴只在小程序打开期间发生。
+
 ## 旧版客户端兼容
 
 旧版本地客户端可通过 `X-PetCloud-Client: desktop` 登录，以 `Authorization: Bearer <token>` 鉴权。`/desktop` 保留历史配置读写，`/desktop/action` 和 `/desktop/action/:id` 保留旧版指令协议。

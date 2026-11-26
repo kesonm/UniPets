@@ -5,6 +5,7 @@ import { authRouter, requireAuth } from './auth.js'
 import { adminRouter } from './admin.js'
 import { apiRouter } from './routes.js'
 import { h5Router } from './h5.js'
+import { companionRouter } from './companion.js'
 import { config } from './config.js'
 import { db } from './db.js'
 import { HttpError } from './errors.js'
@@ -39,6 +40,7 @@ export function createApp(privateRoutes = apiRouter) {
   app.use('/api/auth',authRouter)
   app.use('/api/admin',adminRouter)
   app.use('/api/h5',h5Router)
+  app.use('/api/companion',requireAuth,companionRouter)
   app.use('/api',requireAuth,privateRoutes)
   app.use((_req,res) => res.status(404).json({ error: '接口不存在' }))
   const handler: ErrorRequestHandler = (error,_req,res,next) => {

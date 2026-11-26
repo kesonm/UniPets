@@ -84,6 +84,26 @@ export async function saveImage(input: ImageInput) {
   }catch{throw new HttpError(400,'图片无法读取，请使用有效的 JPG、PNG 或 WebP；动作图需为等宽四帧')}
   return persist(input,{...image,frames:action?4:1,columns:action?4:1,rows:1,fps:1000/240,duration:null})
 }
+export type DeskSpriteAction = 'desk_breathe' | 'desk_lick_paw'
+export async function saveDeskSprite(input: {
+  userId:string; petId:string; name:string; action:DeskSpriteAction
+  bytes:Buffer; width:number; height:number; frames:number; columns:number; rows:number; fps:number
+}) {
+  return persist(
+    { userId:input.userId, petId:input.petId, name:input.name, bytes:input.bytes, action:input.action as Action },
+    {
+      bytes:input.bytes, width:input.width, height:input.height, frames:input.frames,
+      columns:input.columns, rows:input.rows, fps:input.fps, duration:null, backgroundRemoved:true,
+    },
+  )
+}
+export async function discardAsset(userId:string, assetId:string) {
+  const asset = await ownedAsset(userId, assetId)
+  await transaction(async conn=>{
+    await conn.execute('DELETE FROM assets WHERE id=? AND user_id=?',[assetId,userId])
+  })
+  await removeFile(asset.fileKey,asset.videoKey)
+}
 export async function saveSprite(input: ImageInput & {action:Action;jobId:string}, sheet: VideoSprite, videoPath?:string) {
   const [existing]=await rows<Asset>(`SELECT ${assetSelect} FROM assets WHERE job_id=? AND action=? AND user_id=?`,[input.jobId,input.action,input.userId])
   if(existing)return existing

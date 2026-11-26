@@ -21,3 +21,7 @@ server/*
 !shared/
 shared/*
 !shared/*.mjs
+!scripts/
+scripts/*
+!scripts/desk-pet-ai/
+!scripts/desk-pet-ai/compose-sprites.py

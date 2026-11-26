@@ -8,7 +8,13 @@
   "uniStatistics": { "enable": false },
   "mp-weixin": {
     "appid": "wx0baf7b9e0883ba2f",
-    "setting": { "urlCheck": true, "es6": true, "minified": true },
+    "setting": {
+      "urlCheck": true,
+      "es6": true,
+      "minified": true,
+      "ignoreUploadUnusedFiles": false
+    },
+    "packOptions": { "include": [{ "type": "folder", "value": "static" }] },
     "usingComponents": true,
     "permission": {
       "scope.userLocation": { "desc": "用于显示所在区县、计算门店距离和在地图上标记位置。" }

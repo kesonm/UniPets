@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import { onLaunch } from '@dcloudio/uni-app'
+import { onHide, onLaunch, onShow } from '@dcloudio/uni-app'
 import { restoreSession } from './lib/client'
+import { startCompanion, stopCompanion } from './lib/companion'
+import { syncDeskPet } from './lib/desk-pet'
 onLaunch(() => {
-  void restoreSession()
+  void restoreSession().then(() => syncDeskPet())
+})
+onShow(() => {
+  startCompanion()
+})
+onHide(() => {
+  stopCompanion()
 })
 </script>
 <style>

@@ -3,10 +3,12 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 import { canFollowCursor, canonicalCatAction, catClips, catDefaultAction, catFollowAction, catStopFollowAction, resolveCatAction } from '../../shared/cat-motion.mjs'
+import { defaultDeskPetId, isSystemDeskPetId, parseCustomDeskPetId } from '../../shared/desk-pets.mjs'
 import { db, rows, transaction } from './db.js'
 import { config } from './config.js'
 import { HttpError } from './errors.js'
 import { assetSelect, ownedAsset, ownedPet, removeFile, saveImage, storagePath, type Asset } from './assets.js'
+import { createDeskPetGeneration, deskPetCapabilities, getDeskPetGeneration, getPetDeskSpec, listDeskPetProfiles } from './desk-pet-generation.js'
 // import { generationRouter } from './generation-routes.js'
 import { checkVideoTools, supportsMotionVideo, VIDEO_FPS } from './video.js'
 import { supportsForegroundRemoval } from './foreground.js'
@@ -294,4 +296,74 @@ apiRouter.put('/desktop', async (req, res) => {
   }
   await db.execute('UPDATE desktop_profiles SET pet_id=?,size=?,enabled=?,idle_asset_id=?,happy_asset_id=?,walk_asset_id=?,sleep_asset_id=? WHERE user_id=?', [data.petId,data.size,data.enabled,data.idleAssetId,data.happyAssetId,data.walkAssetId,data.sleepAssetId,req.user.id])
   res.json({ ok: true })
+})
+async function resolveMiniappDeskPetId(userId: string, candidate?: string | null) {
+  if (!candidate || isSystemDeskPetId(candidate)) return candidate && isSystemDeskPetId(candidate) ? candidate : defaultDeskPetId
+  const petId = parseCustomDeskPetId(candidate)
+  if (!petId) return defaultDeskPetId
+  const [match] = await rows<{ id: string }>(
+    `SELECT p.id FROM pets p
+     WHERE p.id=? AND p.user_id=?
+       AND EXISTS (SELECT 1 FROM desk_pet_generations g
+         WHERE g.pet_id=p.id AND g.user_id=p.user_id AND g.status='completed')
+     LIMIT 1`,
+    [petId, userId],
+  )
+  return match ? candidate : defaultDeskPetId
+}
+apiRouter.get('/desktop/miniapp/pets', async (req, res) => {
+  res.json(await listDeskPetProfiles(req.user.id))
+})
+apiRouter.get('/desktop/miniapp/pet/:petId', async (req, res) => {
+  res.json({ deskPet: await getPetDeskSpec(req.user.id, uuid.parse(req.params.petId)) })
+})
+apiRouter.post('/desktop/miniapp/generations', async (req, res) => {
+  const data = z.object({ petId:uuid, assetId:uuid.optional() }).strict().parse(req.body)
+  const generation = await createDeskPetGeneration(req.user.id, data.petId, data.assetId)
+  res.status(202).json({ generation })
+})
+apiRouter.get('/desktop/miniapp/generations/:id', async (req, res) => {
+  res.json({ generation: await getDeskPetGeneration(req.user.id, uuid.parse(req.params.id)) })
+})
+apiRouter.get('/desktop/miniapp', async (req, res) => {
+  const [profile] = await rows<{ petId: string; enabled: number }>(
+    'SELECT miniapp_pet_id AS petId, miniapp_enabled AS enabled FROM desktop_profiles WHERE user_id=?',
+    [req.user.id],
+  )
+  const petId = await resolveMiniappDeskPetId(req.user.id, profile?.petId)
+  res.json({ deskPet: { petId, enabled: profile ? Boolean(profile.enabled) : true }, capabilities: deskPetCapabilities() })
+})
+apiRouter.put('/desktop/miniapp', async (req, res) => {
+  const data = z.object({
+    petId: z.string().trim().min(1).max(64).optional(),
+    enabled: z.boolean().optional(),
+  }).refine(value => value.petId !== undefined || value.enabled !== undefined, '请提供要更新的桌宠设置').parse(req.body)
+  let nextPetId: string | undefined
+  if (data.petId !== undefined) {
+    if (isSystemDeskPetId(data.petId)) {
+      nextPetId = data.petId
+    } else {
+      const customPetId = parseCustomDeskPetId(data.petId)
+      if (!customPetId) throw new HttpError(400, '请选择有效的桌宠')
+      await ownedPet(req.user.id, customPetId)
+      const [sprite] = await rows<{ id: string }>(
+        `SELECT id FROM desk_pet_generations WHERE user_id=? AND pet_id=? AND status='completed' LIMIT 1`,
+        [req.user.id, customPetId],
+      )
+      if (!sprite) throw new HttpError(409, '这只宠物还没有生成桌宠')
+      nextPetId = data.petId
+    }
+  }
+  const [existing] = await rows<{ petId: string; enabled: number }>(
+    'SELECT miniapp_pet_id AS petId, miniapp_enabled AS enabled FROM desktop_profiles WHERE user_id=?',
+    [req.user.id],
+  )
+  const petId = nextPetId ?? await resolveMiniappDeskPetId(req.user.id, existing?.petId)
+  const enabled = data.enabled ?? (existing ? Boolean(existing.enabled) : true)
+  await db.execute(
+    `INSERT INTO desktop_profiles (user_id, miniapp_pet_id, miniapp_enabled) VALUES (?, ?, ?)
+     ON DUPLICATE KEY UPDATE miniapp_pet_id=VALUES(miniapp_pet_id), miniapp_enabled=VALUES(miniapp_enabled)`,
+    [req.user.id, petId, enabled],
+  )
+  res.json({ deskPet: { petId, enabled } })
 })

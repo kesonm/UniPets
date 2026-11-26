@@ -92,7 +92,7 @@ function when(value: string) {
       <view v-else class="post">
         <button class="post-open" :aria-label="'查看动态 ' + entry.post.title" @tap="emit('view', entry.post)">
           <view class="post-cover">
-            <image v-if="entry.post.exampleImage" :src="'/static/' + entry.post.id + '.webp'" mode="aspectFill" />
+            <image v-if="entry.post.exampleImage" :src="'/static/' + entry.post.id + '.jpg'" mode="aspectFill" />
             <image v-else-if="entry.post.hasImage" :src="publicImage('/h5/posts/' + entry.post.id + '/image')" mode="aspectFill" lazy-load />
             <UiIcon v-else name="picture" :size="26" />
             <text v-if="entry.post.exampleImage" class="post-example">示例动态</text>
