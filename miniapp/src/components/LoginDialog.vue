@@ -85,8 +85,9 @@ async function signIn(event: Event) {
 .login-description { display: block; margin-top: 8px; text-align: center; }
 .login-fields {
   display: flex;
-  width: 100%;
-  margin-top: 14px;
+  flex-direction: column;
+  width: 50%;
+  margin: 14px auto 0;
   overflow: hidden;
   border: 1px solid #efe6cf;
   border-radius: 14px;
@@ -98,10 +99,10 @@ async function signIn(event: Event) {
   align-items: center;
   justify-content: flex-start;
   gap: 5px;
-  width: 50%;
+  width: 100%;
   padding: 10px 8px 12px;
   border: 0;
-  border-right: 1px solid #efe6cf;
+  border-bottom: 1px solid #efe6cf;
   border-radius: 0;
   background: transparent;
   text-align: center;
@@ -114,8 +115,8 @@ async function signIn(event: Event) {
   align-items: center;
   justify-content: flex-start;
   gap: 5px;
-  width: 50%;
-  min-height: 104px;
+  width: 100%;
+  min-height: 70px;
   margin: 0;
   padding: 10px 8px 12px;
   border: 0;
